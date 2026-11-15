@@ -899,8 +899,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.0.1' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.0.1', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.0.2' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.0.2', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -1483,7 +1483,7 @@ class Shipping_Desk_Plugin {
             ] );
         }
         ?>
-                <tr data-order-id="<?php echo esc_attr( $order_id ); ?>" data-nonce="<?php echo esc_attr( $order_nonce ); ?>" data-items-weight="<?php echo esc_attr( number_format( $items_weight, 2, '.', '' ) ); ?>"<?php if ( '' !== $quote_data ) : ?> data-quotes="<?php echo esc_attr( $quote_data ); ?>"<?php endif; ?>>
+                <tr data-order-id="<?php echo esc_attr( $order_id ); ?>" data-nonce="<?php echo esc_attr( $order_nonce ); ?>" data-provider="<?php echo esc_attr( $provider ); ?>" data-items-weight="<?php echo esc_attr( number_format( $items_weight, 2, '.', '' ) ); ?>"<?php if ( '' !== $quote_data ) : ?> data-quotes="<?php echo esc_attr( $quote_data ); ?>"<?php endif; ?>>
                     <td class="shipping-desk-select-column"><input type="checkbox" class="shipping-desk-order-select" name="shipping_desk_order_ids[]" value="<?php echo esc_attr( $order_id ); ?>" aria-label="<?php echo esc_attr( sprintf( __( 'Select order #%s', 'shipping-desk' ), $order->get_order_number() ) ); ?>" /></td>
                     <td class="shipping-desk-order-customer">
                         <a href="<?php echo esc_url( $order->get_edit_order_url() ); ?>" target="_blank" rel="noopener noreferrer" class="shipping-desk-order-link">

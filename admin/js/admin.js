@@ -918,8 +918,59 @@
         return deferred.promise();
     }
 
+    /**
+     * What is about to be bought, in words, for the confirmation.
+     *
+     * The rate column cannot show the insurance charge - EasyPost prices cover at
+     * purchase, not at quote time - so this is the last moment to see that a value was
+     * entered before the money moves. A blank field is called out explicitly: an
+     * uninsured label is easy to create by forgetting the field, and there is no way to
+     * insure it afterwards.
+     */
+    function describePurchase($row) {
+        var rate = $row.data('selected-rate');
+        if (!rate) {
+            return '';
+        }
+
+        var provider = ($row.attr('data-provider') || '').toLowerCase();
+        var totals = typeof computedRateTotal === 'function' ? computedRateTotal($row) : null;
+        var price = (totals && isFinite(totals.total)) ? totals.total : parseFloat(rate.total_charge);
+        if (isNaN(price)) {
+            price = null;
+        }
+
+        var lines = [];
+        lines.push(
+            'Buy ' + (rate.service_name || 'this rate') +
+            (price === null ? '' : ' for $' + price.toFixed(2)) +
+            ' on order #' + $row.data('order-id') + '?'
+        );
+
+        var liability = parseFloat($row.find('.shipping-desk-liability-amount').val());
+        if (!isNaN(liability) && liability > 0) {
+            var cover = 'Insurance to request: $' + liability.toFixed(2);
+            if (provider === 'easypost') {
+                // EasyPost's published rule, shown as an estimate because account-level
+                // markups exist; the actual premium is recorded after the buy.
+                var premium = Math.max(1, liability * 0.01);
+                cover += '\nEasyPost charges about $' + premium.toFixed(2) +
+                    ' for this (1% of the value, $1.00 minimum), on top of the label price.';
+            }
+            lines.push(cover);
+        } else {
+            lines.push('No insurance value entered: this label will not be insured.');
+        }
+
+        return lines.join('\n\n');
+    }
+
     $(document).on('click', '.shipping-desk-buy-label', function () {
         var $row = $(this).closest('tr');
+        var summary = describePurchase($row);
+        if (summary && !window.confirm(summary)) {
+            return;
+        }
         purchaseLabel($row)
             .done(function (resp) {
                 var data = (resp && resp.data) ? resp.data : {};

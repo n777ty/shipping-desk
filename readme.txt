@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,11 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.0.2 =
+* New: buying a label now asks for confirmation and states the insurance that will be requested, with EasyPost's estimated charge. A blank insurance field is called out at that moment, because an uninsured label cannot be insured afterwards.
+* Changed: the orders row carries the current provider, so the confirmation can be provider-specific without leaking one provider's vocabulary into the other.
+
 
 = 1.0.1 =
 * Fixed: an insured EasyPost label could record the insurance premium alone as the label's cost, because the postage fee was recognised under one spelling and not the other. Both are accepted now, and the test covers each spelling plus an uncharged premium.
