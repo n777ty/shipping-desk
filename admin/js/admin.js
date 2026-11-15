@@ -195,19 +195,80 @@
         return { base: base, extra: extra, total: base + extra };
     }
 
+    /**
+     * EasyPost's insurance premium for the value in the Insurance field, in dollars.
+     *
+     * EasyPost charges one cent per dollar of declared value with a $1.00 minimum, and
+     * rounds half up: $249.49 insures for $2.49, $249.50 for $2.50. Whole dollars are
+     * counted directly (Math.round(amount) *is* the cent count) so floating-point cents
+     * cannot produce 2.49 where EasyPost will charge 2.50.
+     *
+     * Returns 0 for providers that price cover into the rate (Shippo) or quote it after
+     * the rates (Veeqo): for those there is nothing to add here.
+     */
+    function insurancePremium($row) {
+        if (($row.attr('data-provider') || '').toLowerCase() !== 'easypost') {
+            return 0;
+        }
+
+        var amount = parseFloat($row.find('.shipping-desk-liability-amount').val());
+        if (isNaN(amount) || amount <= 0) {
+            return 0;
+        }
+
+        return Math.max(1, Math.round(amount) / 100);
+    }
+
+    /**
+     * Rate price, plus anything priced outside the quote.
+     *
+     * Veeqo prices services after the quotes; EasyPost prices insurance at purchase, so
+     * its premium is an estimate added here. Both are shown as a breakdown against the
+     * carrier's own base, so the number the operator sees is what the label will cost.
+     */
     function refreshRateTotals($row) {
-        var totals = computedRateTotal($row);
-        var $checked = $row.find('.shipping-desk-rate-choice').filter(':checked');
-        if (!totals || !$checked.length) {
+        var $rates = $row.find('.shipping-desk-rate-choice');
+        if (!$rates.length) {
             $row.find('.shipping-desk-rate-price').text('');
             return;
         }
-        var $price = $checked.closest('.shipping-desk-rate-option').find('.shipping-desk-rate-price');
-        var text = '$' + totals.total.toFixed(2);
-        if (totals.extra > 0) {
-            text += ' (base $' + totals.base.toFixed(2) + ' + $' + totals.extra.toFixed(2) + ')';
-        }
-        $price.text(text);
+
+        // The premium is the same whichever carrier is chosen - it depends only on the
+        // declared value - so every rate row shows it and the rows stay comparable.
+        var premium = insurancePremium($row);
+        var selected = computedRateTotal($row);
+
+        $rates.each(function () {
+            var $radio = $(this);
+            var rate = $radio.data('rate') || {};
+            var base = parseFloat(rate.total_charge);
+            var extra = 0;
+
+            if (this.checked && selected) {
+                base = selected.base;
+                extra = selected.extra;
+            }
+
+            var $price = $radio.closest('.shipping-desk-rate-option').find('.shipping-desk-rate-price');
+            if (isNaN(base)) {
+                $price.text('');
+                return;
+            }
+
+            var parts = [];
+            if (extra > 0) {
+                parts.push('$' + extra.toFixed(2));
+            }
+            if (premium > 0) {
+                parts.push('$' + premium.toFixed(2) + ' est. insurance');
+            }
+
+            var text = '$' + (base + extra + premium).toFixed(2);
+            if (parts.length) {
+                text += ' (base $' + base.toFixed(2) + ' + ' + parts.join(' + ') + ')';
+            }
+            $price.text(text);
+        });
     }
 
     function updateTotalWeight($row) {
@@ -345,10 +406,13 @@
     });
 
     /**
-     * Insurance is sent with the rate request and affects the quoted price, so
-     * changing it invalidates any loaded rates (same rule as box and weight).
-     * Only invalidate when the value actually differs from the one used for the
-     * last rate run, so re-entering the same amount keeps the rates.
+     * Insurance pricing differs by provider, so the reaction to a change differs too.
+     *
+     * Shippo prices XCover into the quote, so a changed value invalidates the rates (the
+     * same rule as box and weight). EasyPost prices cover at purchase, so its quotes are
+     * unaffected by it: keep them, and just restate the combined price rather than
+     * throwing away quotes the operator is looking at. Nothing happens when the value
+     * matches the one used for the last rate run.
      */
     $(document).on('change', '.shipping-desk-liability-amount', function () {
         var $row = $(this).closest('tr');
@@ -359,9 +423,15 @@
         var applied = parseFloat($row.data('liability-applied'));
         if (isNaN(applied)) applied = 0;
 
-        if (current !== applied) {
-            resetRates($row, 'Insurance changed. Get rates to refresh quotes.');
+        if (current === applied) return;
+
+        if (($row.attr('data-provider') || '').toLowerCase() === 'easypost') {
+            $row.data('liability-applied', current);
+            refreshRateTotals($row);
+            return;
         }
+
+        resetRates($row, 'Insurance changed. Get rates to refresh quotes.');
     });
 
     /**
@@ -933,29 +1003,27 @@
             return '';
         }
 
-        var provider = ($row.attr('data-provider') || '').toLowerCase();
-        var totals = typeof computedRateTotal === 'function' ? computedRateTotal($row) : null;
+        var totals = computedRateTotal($row);
+        var premium = insurancePremium($row);
         var price = (totals && isFinite(totals.total)) ? totals.total : parseFloat(rate.total_charge);
         if (isNaN(price)) {
             price = null;
         }
+        var total = price === null ? null : price + premium;
 
         var lines = [];
         lines.push(
             'Buy ' + (rate.service_name || 'this rate') +
-            (price === null ? '' : ' for $' + price.toFixed(2)) +
+            (total === null ? '' : ' for $' + total.toFixed(2)) +
             ' on order #' + $row.data('order-id') + '?'
         );
 
         var liability = parseFloat($row.find('.shipping-desk-liability-amount').val());
         if (!isNaN(liability) && liability > 0) {
             var cover = 'Insurance to request: $' + liability.toFixed(2);
-            if (provider === 'easypost') {
-                // EasyPost's published rule, shown as an estimate because account-level
-                // markups exist; the actual premium is recorded after the buy.
-                var premium = Math.max(1, liability * 0.01);
-                cover += '\nEasyPost charges about $' + premium.toFixed(2) +
-                    ' for this (1% of the value, $1.00 minimum), on top of the label price.';
+            if (premium > 0) {
+                cover += '\n$' + premium.toFixed(2) + ' of the total above is the estimated premium' +
+                    ' (1% of the value, $1.00 minimum, charged at purchase).';
             }
             lines.push(cover);
         } else {

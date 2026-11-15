@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.0.2
+Stable tag: 1.0.3
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,11 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.0.3 =
+* New: EasyPost rates now show the insurance premium alongside the postage, e.g. "$10.70 (base $8.20 + $2.50 est. insurance)", so the rate column answers "what will this cost" before buying. The premium follows EasyPost's rule: one cent per dollar of declared value, rounded half up, with a $1.00 minimum.
+* Changed: changing the declared value on an EasyPost order no longer discards the loaded quotes, because its quotes do not depend on insurance. Shippo still re-quotes.
+
 
 = 1.0.2 =
 * New: buying a label now asks for confirmation and states the insurance that will be requested, with EasyPost's estimated charge. A blank insurance field is called out at that moment, because an uninsured label cannot be insured afterwards.
