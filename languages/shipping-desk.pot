@@ -665,7 +665,17 @@ msgid "No processing orders found."
 msgstr ""
 
 #: includes/class-plugin.php:1469
-msgid "Declared value for EasyPost insurance. It is priced at purchase and added to the recorded label cost, not to the quote."
+msgid "Declared value for EasyPost insurance. EasyPost charges 1% of this with a $1.00 minimum (maximum $5,000), prices it at purchase, and adds it to the recorded label cost rather than to the quotes."
+msgstr ""
+
+#: includes/class-plugin.php:2929
+#. translators: %s: insured value, formatted with currency.
+msgid "Insured for %s"
+msgstr ""
+
+#: includes/class-plugin.php:2935
+#. translators: %s: insurance premium, formatted with currency.
+msgid "(premium %s)"
 msgstr ""
 
 #: includes/class-plugin.php:1470

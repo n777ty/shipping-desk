@@ -1684,6 +1684,9 @@ class Shipping_Desk_EasyPost_Client implements Shipping_Desk_Provider_Interface,
             'total_charge'       => $charge,
             'currency'           => $currency,
             'insurance'          => isset( $shipment['insurance'] ) ? (string) $shipment['insurance'] : '',
+            // What the cover itself cost. Empty when no insurance was bought; on its
+            // own so the order can say "insured for X, fee Y" instead of only a total.
+            'insurance_fee'      => $this->fee_by_type( $shipment, 'InsuranceFee' ),
             'fees'               => isset( $shipment['fees'] ) && is_array( $shipment['fees'] ) ? $shipment['fees'] : [],
         ];
     }
@@ -1714,7 +1717,13 @@ class Shipping_Desk_EasyPost_Client implements Shipping_Desk_Provider_Interface,
             $type = isset( $fee['type'] ) ? (string) $fee['type'] : '';
             // Only the label and its insurance; EasyPost can list unrelated fees
             // on the account, which are not part of this label's cost.
-            if ( ! in_array( $type, [ 'PostageLabelFee', 'InsuranceFee' ], true ) ) {
+            //
+            // EasyPost's fee docs enumerate exactly two types, `PostageFee` and
+            // `InsuranceFee` (docs.easypost.com/docs/fees). Some responses spell the
+            // postage one `PostageLabelFee`. Both are accepted because getting this
+            // wrong is expensive in a quiet way: an insured buy whose postage fee is
+            // not recognised records *only the premium* as the label's total cost.
+            if ( ! in_array( $type, [ 'PostageFee', 'PostageLabelFee', 'InsuranceFee' ], true ) ) {
                 continue;
             }
             $charged += (float) $fee['amount'];
@@ -1726,6 +1735,45 @@ class Shipping_Desk_EasyPost_Client implements Shipping_Desk_Provider_Interface,
         }
 
         return number_format( round( $charged, 2 ), 2, '.', '' );
+    }
+
+    /**
+     * Total for one fee type, or '' when that fee is absent.
+     *
+     * Kept separate from fees_total() so the premium can be shown on its own: the
+     * operator needs to see that cover was bought and what it cost, not just a
+     * combined figure.
+     *
+     * @param array  $shipment Shipment object after the buy.
+     * @param string $type     Fee type, e.g. InsuranceFee.
+     * @return string Amount, 2dp, or ''.
+     */
+    protected function fee_by_type( array $shipment, $type ) {
+        if ( empty( $shipment['fees'] ) || ! is_array( $shipment['fees'] ) ) {
+            return '';
+        }
+
+        $sum  = 0.0;
+        $seen = false;
+        foreach ( $shipment['fees'] as $fee ) {
+            if ( ! is_array( $fee ) || ! isset( $fee['amount'] ) || ! is_numeric( $fee['amount'] ) ) {
+                continue;
+            }
+            if ( isset( $fee['charged'] ) && false === $fee['charged'] ) {
+                continue;
+            }
+            if ( $type !== ( isset( $fee['type'] ) ? (string) $fee['type'] : '' ) ) {
+                continue;
+            }
+            $sum += (float) $fee['amount'];
+            $seen = true;
+        }
+
+        if ( ! $seen ) {
+            return '';
+        }
+
+        return number_format( round( $sum, 2 ), 2, '.', '' );
     }
 
     /**

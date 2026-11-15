@@ -922,7 +922,17 @@
         var $row = $(this).closest('tr');
         purchaseLabel($row)
             .done(function (resp) {
-                alert('Label purchased. Tracking: ' + ((resp.data && resp.data.tracking) || ''));
+                var data = (resp && resp.data) ? resp.data : {};
+                var msg = 'Label purchased. Tracking: ' + (data.tracking || '');
+                // Insurance is priced at purchase, so this is the first and often only
+                // place the cover becomes visible.
+                if (data.insurance) {
+                    msg += '\nInsured for $' + data.insurance;
+                    if (data.insurance_fee) {
+                        msg += ' (premium $' + data.insurance_fee + ')';
+                    }
+                }
+                alert(msg);
             })
             .fail(function (error) {
                 alert((error && error.message) ? error.message : 'Error buying label.');

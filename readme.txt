@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,11 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.0.1 =
+* Fixed: an insured EasyPost label could record the insurance premium alone as the label's cost, because the postage fee was recognised under one spelling and not the other. Both are accepted now, and the test covers each spelling plus an uncharged premium.
+* New: the order now records what was insured and what the cover cost; the order note says "Insured for $X (premium $Y)" and the purchase confirmation repeats it.
+* Changed: the insurance field's tooltip states EasyPost's pricing (1% of the declared value, $1.00 minimum, $5,000 maximum, charged at purchase).
 
 = 1.0.0 =
 * First public release. Formerly an internal plugin built around Veeqo, now provider-neutral: EasyPost, Shippo and Veeqo.

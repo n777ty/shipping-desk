@@ -277,7 +277,8 @@ function gate_bought( array $overrides = [] ) {
                 'label_file_type' => 'image/png',
             ],
             'fees'          => [
-                [ 'object' => 'Fee', 'type' => 'PostageLabelFee', 'amount' => '8.20000', 'charged' => true ],
+                // The spelling EasyPost's fee docs enumerate.
+                [ 'object' => 'Fee', 'type' => 'PostageFee', 'amount' => '8.20000', 'charged' => true ],
                 [ 'object' => 'Fee', 'type' => 'InsuranceFee', 'amount' => '0.50000', 'charged' => true ],
             ],
             'insurance'     => '249.99',
@@ -676,6 +677,38 @@ gate_reset();
 $GLOBALS['gate_responses'][] = gate_canned( 201, gate_bought() );
 gate_client()->book_shipment( 'shp_123', 'rate_1', [], 1042, [ 'liability_amount' => 249.99 ] );
 gate_same( '249.99', gate_body()['insurance'], 'the declared value is sent as the insurance string' );
+
+// The premium is reported on its own, so the order can say what the cover cost.
+gate_reset();
+$GLOBALS['gate_responses'][] = gate_canned( 201, gate_bought() );
+$insured = gate_client()->book_shipment( 'shp_123', 'rate_1', [], 1042, [ 'liability_amount' => 249.99 ] );
+gate_same( '0.50', $insured['successful']['shp_123']['insurance_fee'], 'the insurance premium is reported separately' );
+gate_same( '249.99', $insured['successful']['shp_123']['insurance'], 'the declared value is kept on the transaction' );
+
+// EasyPost's docs say `PostageFee`; some responses say `PostageLabelFee`. Either has
+// to count, because an insured buy whose postage fee is unrecognised records only the
+// premium as the label's cost - a silently wrong figure in the profit figures.
+gate_reset();
+$GLOBALS['gate_responses'][] = gate_canned( 201, gate_bought( [
+	'fees' => [
+		[ 'object' => 'Fee', 'type' => 'PostageLabelFee', 'amount' => '8.20000', 'charged' => true ],
+		[ 'object' => 'Fee', 'type' => 'InsuranceFee', 'amount' => '0.50000', 'charged' => true ],
+	],
+] ) );
+$old_spelling = gate_client()->book_shipment( 'shp_123', 'rate_1', [], 1042 );
+gate_same( '8.70', $old_spelling['successful']['shp_123']['total_charge'], 'the older PostageLabelFee spelling also counts' );
+
+// A fee EasyPost did not charge is not part of the cost.
+gate_reset();
+$GLOBALS['gate_responses'][] = gate_canned( 201, gate_bought( [
+	'fees' => [
+		[ 'object' => 'Fee', 'type' => 'PostageFee', 'amount' => '8.20000', 'charged' => true ],
+		[ 'object' => 'Fee', 'type' => 'InsuranceFee', 'amount' => '0.50000', 'charged' => false ],
+	],
+] ) );
+$uncharged = gate_client()->book_shipment( 'shp_123', 'rate_1', [], 1042 );
+gate_same( '8.20', $uncharged['successful']['shp_123']['total_charge'], 'an uncharged insurance fee is excluded from the cost' );
+gate_same( '', $uncharged['successful']['shp_123']['insurance_fee'], 'and no premium is reported' );
 
 gate_reset();
 $result = gate_client()->book_shipment( 'shp_123', 'rate_1', [], 1042, [ 'liability_amount' => 5000.01 ] );

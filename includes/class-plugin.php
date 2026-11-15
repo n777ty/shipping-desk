@@ -899,8 +899,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.0.0' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.0.0', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.0.1' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.0.1', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -1466,7 +1466,7 @@ class Shipping_Desk_Plugin {
         $provider          = $this->provider();
         $quotes_signature  = in_array( $provider, [ 'shippo', 'easypost' ], true );
         $insurance_title   = 'easypost' === $provider
-            ? __( 'Declared value for EasyPost insurance. It is priced at purchase and added to the recorded label cost, not to the quote.', 'shipping-desk' )
+            ? __( 'Declared value for EasyPost insurance. EasyPost charges 1% of this with a $1.00 minimum (maximum $5,000), prices it at purchase, and adds it to the recorded label cost rather than to the quotes.', 'shipping-desk' )
             : __( 'Declared value for insurance. Set before getting rates.', 'shipping-desk' );
 
         // Quotes stored by the last Get Rates, when they are still usable, so a reload
@@ -2860,6 +2860,19 @@ class Shipping_Desk_Plugin {
         if ( ! empty( $carrier_id ) ) {
             $order->update_meta_data( $m['carrier'], $carrier_id );
         }
+
+        // Insurance actually attached to this label. EasyPost reports the declared
+        // value on the shipment and the premium as a fee; storing both is what makes
+        // "was this order covered, and what did it cost?" answerable afterwards.
+        $insured     = isset( $shipment['insurance'] ) ? trim( (string) $shipment['insurance'] ) : '';
+        $insured_fee = isset( $shipment['insurance_fee'] ) ? trim( (string) $shipment['insurance_fee'] ) : '';
+        if ( '' !== $insured ) {
+            $order->update_meta_data( $m['insurance'], $insured );
+        }
+        if ( '' !== $insured_fee ) {
+            $order->update_meta_data( $m['insurance_fee'], $insured_fee );
+        }
+
         // Applies an accepted address correction (and the optional order update)
         // before this save, so the label meta and the address land together.
         $address_note = $this->apply_address_decision( $order );
@@ -2906,6 +2919,26 @@ class Shipping_Desk_Plugin {
                 esc_html( $reference_label ),
                 esc_html( $reference_value )
             );
+
+            // Say the cover out loud. The quote cannot show it (the provider prices
+            // insurance at purchase), so without this line the only evidence that a
+            // shipment was insured is its cost being higher than the quote.
+            if ( '' !== $insured ) {
+                $cover = sprintf(
+                    /* translators: %s: insured value, formatted with currency. */
+                    __( 'Insured for %s', 'shipping-desk' ),
+                    wc_price( (float) $insured, [ 'currency' => $order->get_currency() ] )
+                );
+                if ( '' !== $insured_fee ) {
+                    $cover .= ' ' . sprintf(
+                        /* translators: %s: insurance premium, formatted with currency. */
+                        __( '(premium %s)', 'shipping-desk' ),
+                        wc_price( (float) $insured_fee, [ 'currency' => $order->get_currency() ] )
+                    );
+                }
+                $note .= '<br>' . $cover . '.';
+            }
+
             $order->add_order_note( $note );
         }
 
@@ -2943,6 +2976,10 @@ class Shipping_Desk_Plugin {
             'label_id'  => $label_id,
             'label_url' => $label_url,
             'tracking'  => $tracking,
+            // So the confirmation can name the cover rather than leaving the operator
+            // to infer it from a total that is larger than the quote.
+            'insurance'     => $insured,
+            'insurance_fee' => $insured_fee,
             'reship_notified' => $reship_notified,
         ] );
     }

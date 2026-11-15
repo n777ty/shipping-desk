@@ -553,6 +553,13 @@ class Shipping_Desk_Helpers {
             // What the label cost, as recorded at purchase. Kept for the refund rule
             // (only a value we wrote is cleared) and for support questions.
             'cost_paid' => '_shipping_desk_cost_paid',
+            // Insurance bought with the current label: the declared value and the
+            // premium EasyPost charged for it. Separate from cost_paid because the
+            // order needs to show *what was covered*, which a combined total hides —
+            // and because "was this shipment insured?" was previously unanswerable
+            // once the purchase screen was gone.
+            'insurance'     => '_shipping_desk_insurance',
+            'insurance_fee' => '_shipping_desk_insurance_fee',
         ];
     }
 
