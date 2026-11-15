@@ -1,0 +1,650 @@
+/* Provider indicator in the page header: small, always visible, click to switch. */
+.shipping-desk-wrap .shipping-desk-header {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 14px;
+}
+
+.shipping-desk-wrap .shipping-desk-provider-switch {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 12px;
+	line-height: 1;
+	color: #646970;
+}
+
+.shipping-desk-wrap .shipping-desk-provider-btn {
+	height: auto;
+	min-height: 0;
+	padding: 3px 9px;
+	font-size: 12px;
+	line-height: 1.7;
+	border: 1px solid #c3c4c7;
+	border-radius: 3px;
+	background: #f6f7f7;
+	color: #50575e;
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.shipping-desk-wrap .shipping-desk-provider-btn:hover {
+	border-color: #2271b1;
+	color: #2271b1;
+}
+
+.shipping-desk-wrap .shipping-desk-provider-btn.is-active {
+	background: #2271b1;
+	border-color: #2271b1;
+	color: #fff;
+	cursor: default;
+}
+
+.shipping-desk-wrap .shipping-desk-mode-chip {
+	padding: 3px 7px;
+	border: 0;
+	border-radius: 9px;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	line-height: 1.7;
+	text-transform: uppercase;
+	cursor: pointer;
+}
+
+.shipping-desk-wrap .shipping-desk-mode-chip:hover {
+	box-shadow: 0 0 0 1px currentColor;
+}
+
+.shipping-desk-wrap .shipping-desk-mode-chip:focus-visible {
+	outline: 2px solid #2271b1;
+	outline-offset: 1px;
+}
+
+.shipping-desk-wrap .shipping-desk-mode-chip:disabled {
+	cursor: default;
+	opacity: 0.7;
+}
+
+.shipping-desk-wrap .shipping-desk-mode-chip.is-test {
+	background: #fcf0d4;
+	color: #8a5b00;
+}
+
+.shipping-desk-wrap .shipping-desk-mode-chip.is-live {
+	background: #e5f5e9;
+	color: #125c26;
+}
+
+.shipping-desk-wrap .shipping-desk-provider-msg {
+	font-size: 12px;
+	color: #646970;
+}
+
+.shipping-desk-wrap .shipping-desk-provider-msg.is-error {
+	color: #b32d2e;
+}
+
+.shipping-desk-wrap .shipping-desk-provider-switch.is-busy {
+	opacity: 0.6;
+}
+
+.shipping-desk-wrap .shipping-desk-tabs {
+	display: flex;
+	gap: 0;
+	margin: 16px 0;
+	border-bottom: 1px solid #d1d5db;
+}
+.shipping-desk-wrap .shipping-desk-tab {
+    padding: 8px 16px;
+    text-decoration: none;
+    color: #374151;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    margin-bottom: -1px;
+}
+.shipping-desk-wrap .shipping-desk-tab.active {
+    background: #fff;
+    border-color: #d1d5db;
+    font-weight: 600;
+    color: #2563eb;
+}
+.shipping-desk-wrap .shipping-desk-tab-count {
+    margin-left: 4px;
+    font-weight: 400;
+    color: #6b7280;
+}
+.shipping-desk-wrap .shipping-desk-tab.active .shipping-desk-tab-count {
+    color: #4b5563;
+}
+
+.shipping-desk-table {
+    width: 100%;
+    table-layout: fixed;
+}
+.shipping-desk-table th, .shipping-desk-table td {
+    vertical-align: middle;
+    overflow-wrap: break-word;
+}
+
+.shipping-desk-bulk-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0;
+}
+.shipping-desk-bulk-action-select {
+    height: 28px;
+    padding: 0 6px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+    color: #374151;
+    font-size: 12px;
+}
+.shipping-desk-bulk-apply {
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+    color: #374151;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 28px;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.shipping-desk-bulk-apply:hover:not(:disabled) {
+    background: #4b5563;
+    color: #fff;
+    border-color: #4b5563;
+}
+.shipping-desk-bulk-apply:disabled {
+    background: #c3c4c7;
+    color: #50575e;
+    opacity: .8;
+    cursor: not-allowed;
+}
+.shipping-desk-bulk-status {
+    color: #50575e;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.shipping-desk-box-select,
+.shipping-desk-total-weight {
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    height: 28px;
+    line-height: 28px;
+    font-size: 12px;
+    background: #fff;
+    color: #374151;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+.shipping-desk-box-select:focus,
+.shipping-desk-total-weight:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37,99,235,.15);
+    outline: none;
+}
+
+.shipping-desk-get-rates,
+.shipping-desk-buy-label,
+.shipping-desk-print-label,
+.shipping-desk-refund-label,
+.shipping-desk-reship,
+.shipping-desk-reset-shipping {
+    border: none;
+    border-radius: 8px;
+    height: 28px;
+    line-height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    cursor: pointer;
+    transition: all .15s ease;
+    margin-right: 4px;
+}
+.shipping-desk-get-rates {
+    background: #fff;
+    color: #374151;
+    border: 1px solid #d1d5db;
+}
+.shipping-desk-buy-label { background: #16a34a; }
+.shipping-desk-print-label { background: #2563eb; }
+.shipping-desk-refund-label { background: #dc2626; }
+/* Reship: another purchase, so adjacent to Buy in meaning, but distinct from
+   the Reset button it sits next to. */
+.shipping-desk-reship { background: #0891b2; }
+.shipping-desk-reset-shipping { background: #7c3aed; }
+
+.shipping-desk-get-rates:hover:not(:disabled),
+.shipping-desk-buy-label:hover:not(:disabled),
+.shipping-desk-print-label:hover:not(:disabled),
+.shipping-desk-refund-label:hover:not(:disabled),
+.shipping-desk-reship:hover:not(:disabled),
+.shipping-desk-reset-shipping:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,.16);
+}
+.shipping-desk-get-rates:hover:not(:disabled) {
+    background: #4b5563;
+    color: #fff;
+    border-color: #4b5563;
+}
+.shipping-desk-buy-label:hover:not(:disabled) { background: #22863a; }
+.shipping-desk-print-label:hover:not(:disabled) { background: #135e96; }
+.shipping-desk-refund-label:hover:not(:disabled) { background: #b32d2e; }
+.shipping-desk-reship:hover:not(:disabled) { background: #0e7490; }
+.shipping-desk-reset-shipping:hover:not(:disabled) { background: #6d28d9; }
+.shipping-desk-buy-label:disabled,
+.shipping-desk-print-label:disabled,
+.shipping-desk-refund-label:disabled,
+.shipping-desk-reship:disabled,
+.shipping-desk-reset-shipping:disabled {
+    background: #c3c4c7;
+    color: #50575e;
+    opacity: .8;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+.shipping-desk-total-weight { width: 90px; }
+
+.shipping-desk-table td { padding: 10px 8px; }
+.shipping-desk-order-link { display: inline-block; line-height: 1.5; white-space: nowrap; }
+.shipping-desk-address {
+    margin-top: 7px;
+    color: #50575e;
+    font-size: 12px;
+    line-height: 1.45;
+}
+.shipping-desk-order-total { margin-bottom: 6px; }
+.shipping-desk-shipping-paid {
+    color: #50575e;
+    font-size: 11px;
+    white-space: nowrap;
+}
+/* Column widths are percentage-based so the table scales with any screen
+   resolution. Ratios approximate the previous 1600px design:
+   customer 200px, totals 100px, method 120px,
+   box/weight 176px, services 200px, rates 380px, actions flexible. */
+.shipping-desk-table .shipping-desk-rates { width: 23.75%; }
+.shipping-desk-table .shipping-desk-method { width: 7.5%; }
+.shipping-desk-table .shipping-desk-order-totals { width: 6.25%; }
+.shipping-desk-table .shipping-desk-services-column { width: 14%; }
+.shipping-desk-table .shipping-desk-order-customer { width: 12.5%; }
+.shipping-desk-table .shipping-desk-box-column { width: 9.5%; }
+
+.shipping-desk-box-weight-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #e5e7eb;
+}
+.shipping-desk-weight-label {
+    color: #50575e;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.shipping-desk-box-weight-row .shipping-desk-total-weight,
+.shipping-desk-box-weight-row .shipping-desk-liability-amount {
+    flex: 0 0 90px;
+    width: 90px;
+    padding: 0 8px;
+    text-align: left;
+}
+.shipping-desk-liability-amount {
+    box-sizing: border-box;
+    height: 28px;
+    line-height: 28px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+    color: #374151;
+    font-size: 12px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+.shipping-desk-services {
+    font-size: 12px;
+    line-height: 1.45;
+}
+.shipping-desk-services > em { color: #787c82; }
+.shipping-desk-service-group {
+    margin-bottom: 8px;
+}
+.shipping-desk-service-group:last-child { margin-bottom: 0; }
+.shipping-desk-service-group .shipping-desk-service-name,
+.shipping-desk-box-column .shipping-desk-service-name {
+    display: block;
+    color: #50575e;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.45;
+    margin-bottom: 2px;
+}
+/* Confirmation group dropdown. Insurance lives in the Box/Weight column. */
+.shipping-desk-service-select,
+.shipping-desk-signature-confirmation {
+    box-sizing: border-box;
+    width: 100%;
+    height: 26px;
+    padding: 0 4px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    color: #374151;
+    font-size: 11px;
+}
+.shipping-desk-service-select:focus,
+.shipping-desk-signature-confirmation:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+    outline: none;
+}
+/* Insurance row in the Services column: label left, 90px input right. */
+.shipping-desk-service-amount-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #e5e7eb;
+}
+.shipping-desk-service-amount-row .shipping-desk-liability-amount {
+    flex: 0 0 90px;
+    width: 90px;
+    padding: 0 8px;
+    text-align: left;
+}
+.shipping-desk-liability-amount {
+    box-sizing: border-box;
+    height: 28px;
+    line-height: 28px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+    color: #374151;
+    font-size: 12px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+.shipping-desk-liability-amount:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+    outline: none;
+}
+/* Reship detail row on the Completed tab: a nested table holding the same
+   purchase UI as the Processing tab. */
+.shipping-desk-reship-detail-cell {
+    background: #f6f7f7;
+    padding: 0;
+}
+.shipping-desk-reship-table {
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+}
+.shipping-desk-reship-table > tbody > tr > td {
+    padding: 12px;
+}
+.shipping-desk-reship-table thead {
+    display: none;
+}
+.shipping-desk-service-cost {
+    color: #50575e;
+    font-size: 11px;
+}
+.shipping-desk-service-free {
+    color: #16733a;
+    font-weight: 600;
+}
+.shipping-desk-box-select {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+}
+.shipping-desk-rates-container {
+    max-height: 180px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 12px 14px 6px 6px;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+}
+.shipping-desk-rates-container > em { color: #787c82; }
+.shipping-desk-rate-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 0 0 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    cursor: pointer;
+}
+.shipping-desk-rate-option:last-child { margin-bottom: 0; }
+.shipping-desk-rate-choice { margin: 2px 0 0; }
+.shipping-desk-rate-details {
+    display: block;
+    flex: 1;
+    min-width: 0;
+}
+.shipping-desk-rate-primary {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-start;
+    gap: 6ch;
+}
+.shipping-desk-rate-service {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.shipping-desk-rate-price {
+    flex: 0 0 auto;
+    margin-left: auto;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.shipping-desk-rate-delivery,
+.shipping-desk-rate-match { display: block; }
+.shipping-desk-rate-delivery {
+    color: #50575e;
+    white-space: nowrap;
+}
+.shipping-desk-rate-match {
+    color: #16733a;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.shipping-desk-table .shipping-desk-select-column {
+    width: 2%;
+    min-width: 28px;
+    text-align: center;
+}
+.shipping-desk-select-column input { margin: 0; }
+.shipping-desk-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 16px 0;
+}
+.shipping-desk-pagination .tablenav-pages {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.shipping-desk-pagination .displaying-num,
+.shipping-desk-page-summary {
+    color: #374151;
+    font-size: 13px;
+    font-weight: 600;
+}
+.shipping-desk-pagination .displaying-num { margin-right: 8px; }
+.shipping-desk-page-form {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.shipping-desk-page-jump {
+    box-sizing: border-box;
+    width: 70px !important;
+    height: 28px !important;
+    padding: 0 6px;
+    border: 1px solid #d1d5db !important;
+    border-radius: 8px !important;
+    text-align: center;
+}
+.shipping-desk-pagination .page-numbers,
+.shipping-desk-pagination .shipping-desk-page-go {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-width: 28px;
+    height: 28px !important;
+    margin: 0;
+    padding: 0 10px !important;
+    border: none !important;
+    border-radius: 8px !important;
+    background: #2563eb !important;
+    color: #fff !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    line-height: 28px !important;
+    text-decoration: none !important;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.shipping-desk-pagination a.page-numbers:hover,
+.shipping-desk-pagination .shipping-desk-page-go:hover {
+    background: #1d4ed8 !important;
+    color: #fff !important;
+}
+.shipping-desk-pagination .page-numbers.current {
+    background: #1d4ed8 !important;
+    color: #fff !important;
+    cursor: default;
+}
+.shipping-desk-pagination .page-numbers.disabled {
+    background: #c3c4c7 !important;
+    color: #50575e !important;
+    opacity: .8;
+    cursor: not-allowed;
+}
+.shipping-desk-pagination .page-numbers.dots {
+    min-width: 12px;
+    padding: 0 !important;
+    background: transparent !important;
+    color: #50575e !important;
+    cursor: default;
+}
+
+/* Address decision panel: shown in the rates cell when a quote needs an address choice. */
+.shipping-desk-wrap .shipping-desk-address-panel {
+	max-width: 520px;
+	margin: 2px 0 8px;
+	padding: 8px 10px;
+	border: 1px solid #dcdcde;
+	border-left: 3px solid #dba617;
+	border-radius: 4px;
+	background: #fffdf6;
+	font-size: 12px;
+}
+
+.shipping-desk-wrap .shipping-desk-address-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin-bottom: 4px;
+}
+
+.shipping-desk-wrap .shipping-desk-address-changes {
+	color: #8a5b00;
+}
+
+.shipping-desk-wrap .shipping-desk-address-type {
+	margin-left: auto;
+	color: #646970;
+	font-size: 11px;
+	text-transform: lowercase;
+}
+
+.shipping-desk-wrap .shipping-desk-address-reason {
+	margin: 2px 0 6px;
+	color: #b32d2e;
+}
+
+.shipping-desk-wrap .shipping-desk-address-option {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 2px 0;
+	cursor: pointer;
+}
+
+.shipping-desk-wrap .shipping-desk-address-option-name {
+	min-width: 70px;
+	font-weight: 600;
+}
+
+.shipping-desk-wrap .shipping-desk-address-option-value {
+	color: #50575e;
+}
+
+.shipping-desk-wrap .shipping-desk-address-update {
+	display: block;
+	margin: 6px 0;
+	color: #50575e;
+}
+
+.shipping-desk-wrap .shipping-desk-address-apply {
+	margin-top: 2px !important;
+}
+
+.shipping-desk-wrap .shipping-desk-address-badge {
+	margin-bottom: 4px;
+	font-size: 11px;
+	color: #646970;
+}
+
+.shipping-desk-wrap .shipping-desk-address-badge.is-corrected {
+	color: #125c26;
+}
+
+.shipping-desk-wrap .shipping-desk-address-flag {
+	height: auto;
+	min-height: 0;
+	margin-right: 4px;
+	padding: 1px 6px;
+	border: 1px solid #dba617;
+	border-radius: 9px;
+	background: #fcf0d4;
+	color: #8a5b00;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.shipping-desk-wrap .shipping-desk-review-flagged {
+	margin-left: 6px;
+}
+

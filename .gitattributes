@@ -1,0 +1,4 @@
+# WordPress code and the translation template are LF; keep them that way on
+# every platform, so a check-out cannot change what a release zip contains.
+* text=auto eol=lf
+*.zip binary

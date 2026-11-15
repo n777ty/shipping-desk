@@ -1,0 +1,22 @@
+# Build artifacts
+*.zip
+
+# Spike output (downloaded test labels)
+tools/spike-output/
+
+# Never commit API keys used by the spike
+tools/.easypost-test-key
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/
+
+# Logs
+*.log
+# Scratch files
+.tmp-*
