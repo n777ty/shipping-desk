@@ -2,495 +2,21 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: Shipping Desk 1.0.0\n"
+"Project-Id-Version: Shipping Desk 1.3.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/shipping-desk\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-15T18:52:37+00:00\n"
+"POT-Creation-Date: 2026-11-16T18:32:18+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: shipping-desk\n"
 
-#. Plugin Name of the plugin
-#: shipping-desk.php
-#: includes/class-plugin.php:76
-#: includes/class-plugin.php:77
-#: includes/class-plugin.php:1309
-msgid "Shipping Desk"
-msgstr ""
-
-#. Plugin URI of the plugin
-#. Author URI of the plugin
-#: shipping-desk.php
-msgid "https://t.me/Jailbreak777"
-msgstr ""
-
-#. Description of the plugin
-#: shipping-desk.php
-msgid "Buy, print and refund Veeqo, Shippo and EasyPost shipping labels from the WooCommerce orders screen, with box presets, bulk buy/print and optional PrintNode server-side printing."
-msgstr ""
-
-#. Author of the plugin
-#: shipping-desk.php
-msgid "Jailbreak777"
-msgstr ""
-
-#: includes/class-api-client.php:21
-msgid "Veeqo API key is not set."
-msgstr ""
-
-#: includes/class-api-client.php:91
-#, php-format
-msgid "Unexpected Veeqo rates response: %d"
-msgstr ""
-
-#: includes/class-api-client.php:187
-#: includes/class-api-client.php:214
-#, php-format
-msgid "Unexpected Veeqo book response: %d"
-msgstr ""
-
-#: includes/class-api-client.php:232
-msgid "Shipment not found in Veeqo."
-msgstr ""
-
-#: includes/class-api-client.php:237
-#, php-format
-msgid "Unexpected Veeqo response: %d"
-msgstr ""
-
-#: includes/class-api-client.php:259
-#, php-format
-msgid "Veeqo refund failed: %d"
-msgstr ""
-
-#: includes/class-api-client.php:281
-msgid "Veeqo did not return a label URL."
-msgstr ""
-
-#: includes/class-easypost-client.php:293
-#: includes/class-easypost-client.php:686
-#: includes/class-easypost-client.php:1031
-msgid "EasyPost API key is not set."
-msgstr ""
-
-#: includes/class-easypost-client.php:300
-msgid "EasyPost needs a street address and a weight before it can rate a shipment."
-msgstr ""
-
-#: includes/class-easypost-client.php:345
-msgid "EasyPost did not return a shipment object."
-msgstr ""
-
-#: includes/class-easypost-client.php:364
-msgid "EasyPost returned no rates for this shipment."
-msgstr ""
-
-#: includes/class-easypost-client.php:396
-#: includes/class-easypost-client.php:506
-#: includes/class-easypost-client.php:537
-#: includes/class-easypost-client.php:617
-msgid "No EasyPost shipment ID was supplied."
-msgstr ""
-
-#: includes/class-easypost-client.php:399
-msgid "No EasyPost rate was selected."
-msgstr ""
-
-#: includes/class-easypost-client.php:448
-#: includes/class-plugin.php:3105
-#: includes/class-shippo-client.php:313
-msgid "No shipments to book."
-msgstr ""
-
-#: includes/class-easypost-client.php:514
-msgid "Shipment not found in EasyPost."
-msgstr ""
-
-#: includes/class-easypost-client.php:545
-msgid "Label not found in EasyPost."
-msgstr ""
-
-#: includes/class-easypost-client.php:556
-msgid "This EasyPost label has already been refunded."
-msgstr ""
-
-#: includes/class-easypost-client.php:563
-#: includes/class-shippo-client.php:429
-msgid "A refund for this label is already pending with the carrier."
-msgstr ""
-
-#: includes/class-easypost-client.php:592
-msgid "EasyPost has no label for this shipment. Buy the label again."
-msgstr ""
-
-#: includes/class-easypost-client.php:655
-msgid "EasyPost did not return a PDF version of this label."
-msgstr ""
-
-#: includes/class-easypost-client.php:692
-msgid "The address does not have enough detail to verify."
-msgstr ""
-
-#. translators: %d: HTTP status code
-#: includes/class-easypost-client.php:721
-#: includes/class-easypost-client.php:1084
-#, php-format
-msgid "EasyPost returned an unreadable response (HTTP %d)."
-msgstr ""
-
-#: includes/class-easypost-client.php:808
-msgid "EasyPost returned no verification result."
-msgstr ""
-
-#. translators: %d: HTTP status code
-#: includes/class-easypost-client.php:868
-#: includes/class-easypost-client.php:1148
-#, php-format
-msgid "EasyPost request failed (HTTP %d)."
-msgstr ""
-
-#. translators: %s: the correction EasyPost suggests
-#: includes/class-easypost-client.php:978
-#, php-format
-msgid "Suggested: %s"
-msgstr ""
-
-#: includes/class-easypost-client.php:1396
-msgid "EasyPost accepted the request but returned no label. Check the EasyPost dashboard before trying again; the label may already have been bought."
-msgstr ""
-
-#: includes/class-easypost-client.php:1435
-msgid "The EasyPost request timed out and the shipment could not be read back. Check the EasyPost dashboard before retrying; the label may already exist."
-msgstr ""
-
-#: includes/class-easypost-client.php:1449
-msgid "The EasyPost request timed out and the shipment shows no label, so nothing was charged. It is safe to try again."
-msgstr ""
-
-#. translators: %d: HTTP status code
-#: includes/class-easypost-client.php:1812
-#, php-format
-msgid "Could not download the label PDF from EasyPost (HTTP %d)."
-msgstr ""
-
-#. translators: %s: maximum insured amount, e.g. 5,000.00
-#: includes/class-easypost-client.php:2288
-#, php-format
-msgid "EasyPost insures a maximum of $%s per shipment. Lower the declared value or leave insurance off."
-msgstr ""
-
-#: includes/class-plugin.php:87
-#: includes/class-plugin.php:88
-#: includes/class-plugin.php:1686
-msgid "Shipment Lookup"
-msgstr ""
-
-#: includes/class-plugin.php:96
-#: includes/class-plugin.php:97
-#: includes/class-plugin.php:1854
-msgid "Box Settings"
-msgstr ""
-
-#: includes/class-plugin.php:105
-#: includes/class-plugin.php:106
-#: includes/class-plugin.php:1931
-msgid "Settings"
-msgstr ""
-
-#: includes/class-plugin.php:114
-#: includes/class-plugin.php:115
-#: includes/class-plugin.php:787
-msgid "PrintNode Settings"
-msgstr ""
-
-#: includes/class-plugin.php:153
-msgid "Label Provider"
-msgstr ""
-
-#: includes/class-plugin.php:154
-msgid "Active provider"
-msgstr ""
-
-#: includes/class-plugin.php:155
-msgid "Shippo mode"
-msgstr ""
-
-#: includes/class-plugin.php:156
-msgid "Shippo API keys"
-msgstr ""
-
-#: includes/class-plugin.php:157
-msgid "EasyPost mode"
-msgstr ""
-
-#: includes/class-plugin.php:158
-msgid "EasyPost API keys"
-msgstr ""
-
-#: includes/class-plugin.php:160
-msgid "Veeqo API Settings"
-msgstr ""
-
-#: includes/class-plugin.php:161
-msgid "Veeqo API Key"
-msgstr ""
-
-#: includes/class-plugin.php:163
-msgid "From Address (Optional)"
-msgstr ""
-
-#: includes/class-plugin.php:164
-msgid "Shipment Origin"
-msgstr ""
-
-#: includes/class-plugin.php:260
-msgid "You do not have permission to export settings."
-msgstr ""
-
-#: includes/class-plugin.php:300
-msgid "You do not have permission to import settings."
-msgstr ""
-
-#: includes/class-plugin.php:459
-msgid "phone number"
-msgstr ""
-
-#: includes/class-plugin.php:460
-msgid "email address"
-msgstr ""
-
-#: includes/class-plugin.php:486
-#: includes/class-plugin.php:710
-#: includes/class-plugin.php:1235
-msgid "Test"
-msgstr ""
-
-#: includes/class-plugin.php:490
-#: includes/class-plugin.php:714
-#: includes/class-plugin.php:1235
-msgid "Production"
-msgstr ""
-
-#: includes/class-plugin.php:493
-msgid "Test buys test labels with no money spent; Production spends real money. Both keys are kept, so switching back and forth does not lose either. The selected key is also the one used for EasyPost address validation."
-msgstr ""
-
-#: includes/class-plugin.php:510
-#: includes/class-plugin.php:728
-msgid "Test API key"
-msgstr ""
-
-#: includes/class-plugin.php:515
-#: includes/class-plugin.php:733
-msgid "Production API key"
-msgstr ""
-
-#: includes/class-plugin.php:520
-msgid "Used for both EasyPost labels and address validation. Insurance is EasyPost's own and is priced at purchase, not in the quote."
-msgstr ""
-
-#: includes/class-plugin.php:545
-msgid "The Test API key does not start with \"EZTK\". Check which key was pasted."
-msgstr ""
-
-#: includes/class-plugin.php:549
-msgid "The Production API key does not start with \"EZAK\". Check which key was pasted."
-msgstr ""
-
-#: includes/class-plugin.php:554
-msgid "EasyPost is the active provider but no Production API key is set, so rate and label requests will fail."
-msgstr ""
-
-#: includes/class-plugin.php:555
-msgid "EasyPost is the active provider but no Test API key is set, so rate and label requests will fail."
-msgstr ""
-
-#: includes/class-plugin.php:633
-#: includes/class-plugin.php:1860
-msgid "Name"
-msgstr ""
-
-#: includes/class-plugin.php:634
-msgid "Company"
-msgstr ""
-
-#: includes/class-plugin.php:635
-msgid "Phone"
-msgstr ""
-
-#: includes/class-plugin.php:636
-msgid "Email"
-msgstr ""
-
-#: includes/class-plugin.php:637
-msgid "Address"
-msgstr ""
-
-#: includes/class-plugin.php:638
-msgid "City"
-msgstr ""
-
-#: includes/class-plugin.php:639
-msgid "State / Region"
-msgstr ""
-
-#: includes/class-plugin.php:640
-msgid "ZIP / Postcode"
-msgstr ""
-
-#: includes/class-plugin.php:641
-msgid "Country Code"
-msgstr ""
-
-#: includes/class-plugin.php:644
-msgid "Optional. Leave any field blank to use the existing WooCommerce store value. Phone is expected by both carriers and USPS refuses a label without it; Email is required by USPS. Blanks fall back to the admin phone (or store phone) and the WordPress admin email."
-msgstr ""
-
-#. translators: %s: list of missing fields, e.g. "phone number / email address"
-#: includes/class-plugin.php:652
-#, php-format
-msgid "No %s is available from either this form or the store settings. Carriers expect a phone number and USPS requires both, so label purchases will fail until one is set here."
-msgstr ""
-
-#: includes/class-plugin.php:677
-msgid "Stored in wp_options; used for all Veeqo API calls."
-msgstr ""
-
-#: includes/class-plugin.php:687
-msgid "Veeqo"
-msgstr ""
-
-#: includes/class-plugin.php:691
-msgid "Shippo"
-msgstr ""
-
-#: includes/class-plugin.php:695
-msgid "EasyPost"
-msgstr ""
-
-#: includes/class-plugin.php:698
-msgid "Used for new rate requests and new purchases. Switching back is one radio button; labels already bought keep the provider that sold them."
-msgstr ""
-
-#: includes/class-plugin.php:717
-msgid "Test buys test labels with no money spent; Production spends real money. Both keys are kept, so switching back and forth does not lose either."
-msgstr ""
-
-#: includes/class-plugin.php:759
-msgid "The Test API key does not start with \"shippo_test_\". Check which key was pasted."
-msgstr ""
-
-#: includes/class-plugin.php:763
-msgid "The Production API key does not start with \"shippo_live_\". Check which key was pasted."
-msgstr ""
-
-#: includes/class-plugin.php:768
-msgid "Shippo is the active provider but no Production API key is set, so rate and label requests will fail."
-msgstr ""
-
-#: includes/class-plugin.php:769
-msgid "Shippo is the active provider but no Test API key is set, so rate and label requests will fail."
-msgstr ""
-
-#: includes/class-plugin.php:779
-#: includes/class-plugin.php:1053
-#: includes/class-plugin.php:1247
-#: includes/class-plugin.php:1633
-#: includes/class-plugin.php:1846
-#: includes/class-plugin.php:1927
-#: includes/class-plugin.php:3398
-msgid "Permission denied."
-msgstr ""
-
-#: includes/class-plugin.php:792
-msgid "PrintNode API Key"
-msgstr ""
-
-#: includes/class-plugin.php:796
-msgid "Printers"
-msgstr ""
-
-#: includes/class-plugin.php:801
-#: includes/class-plugin.php:826
-#: includes/class-plugin.php:830
-msgid "Refresh Printers"
-msgstr ""
-
-#: includes/class-plugin.php:802
-msgid "Select the printer that will receive labels from this plugin."
-msgstr ""
-
-#: includes/class-plugin.php:806
-#: includes/class-plugin.php:809
-msgid "Print Mode"
-msgstr ""
-
-#: includes/class-plugin.php:810
-msgid "Browser Print  -  open label in browser for the user to print"
-msgstr ""
-
-#: includes/class-plugin.php:811
-msgid "Server Print (PrintNode)  -  send directly to a printer"
-msgstr ""
-
-#: includes/class-plugin.php:824
-msgid "Loading..."
-msgstr ""
-
-#: includes/class-plugin.php:828
-#: includes/class-plugin.php:831
-msgid "Error refreshing printers."
-msgstr ""
-
-#: includes/class-plugin.php:842
-msgid "Enter an API key and save, then refresh printers."
-msgstr ""
-
-#: includes/class-plugin.php:852
-#: includes/class-plugin.php:868
-msgid "No printers found."
-msgstr ""
-
-#: includes/class-plugin.php:862
-msgid "Unknown Computer"
-msgstr ""
-
-#: includes/class-plugin.php:880
-msgid "Unnamed Printer"
-msgstr ""
-
 #: includes/class-plugin.php:882
 #, php-format
 msgid "%s (offline)"
-msgstr ""
-
-#: includes/class-plugin.php:1074
-#: includes/class-plugin.php:1644
-#: includes/class-plugin.php:2063
-#: includes/class-plugin.php:2962
-#: includes/class-plugin.php:2969
-#: includes/class-plugin.php:3087
-#: includes/class-plugin.php:3492
-#: includes/class-plugin.php:3549
-#: includes/class-plugin.php:3641
-msgid "Invalid nonce."
-msgstr ""
-
-#: includes/class-plugin.php:1079
-msgid "Unknown provider."
-msgstr ""
-
-#: includes/class-plugin.php:1087
-msgid "Switch provider first, then change its mode."
-msgstr ""
-
-#: includes/class-plugin.php:1090
-#: includes/class-plugin.php:1144
-msgid "Veeqo has no test or production mode."
 msgstr ""
 
 #. translators: %s: provider name, e.g. EasyPost
@@ -505,81 +31,106 @@ msgstr ""
 msgid "%s has no Test API key. Add one under Settings → Label Provider first."
 msgstr ""
 
-#: includes/class-plugin.php:1176
-msgid "Shippo is set to Production but has no Production API key. Add one under Settings → Label Provider first."
-msgstr ""
-
-#: includes/class-plugin.php:1177
-msgid "Shippo has no Test API key. Add one under Settings → Label Provider first."
-msgstr ""
-
-#: includes/class-plugin.php:1185
-msgid "EasyPost is set to Production but has no Production API key. Add one under Settings → Label Provider first."
-msgstr ""
-
-#: includes/class-plugin.php:1186
-msgid "EasyPost has no Test API key. Add one under Settings → Label Provider first."
-msgstr ""
-
-#: includes/class-plugin.php:1190
-msgid "Veeqo has no API key. Add one under Settings → Label Provider first."
-msgstr ""
-
-#: includes/class-plugin.php:1209
-msgid "Label provider"
-msgstr ""
-
-#: includes/class-plugin.php:1224
-msgid "Production: labels are bought with real money. Click to switch to Test."
-msgstr ""
-
-#: includes/class-plugin.php:1225
-msgid "Test: labels cost nothing. Click to switch to Production."
-msgstr ""
-
-#. translators: %s: the mode a click would switch to, e.g. Production
-#: includes/class-plugin.php:1234
-#, php-format
-msgid "Switch to %s"
-msgstr ""
-
-#: includes/class-plugin.php:1238
-msgid "live"
-msgstr ""
-
-#: includes/class-plugin.php:1238
-#: includes/class-plugin.php:1696
-#: includes/class-plugin.php:1706
-msgid "test"
-msgstr ""
-
 #. translators: %s: provider name, e.g. EasyPost
 #: includes/class-plugin.php:1318
 #, php-format
 msgid "%s is in TEST mode: rates and labels come from your test account and no money is spent. Switch to Production under Settings when you are ready to buy real labels."
 msgstr ""
 
-#. translators: 1: missing from-address fields, 2: settings link
-#: includes/class-plugin.php:1333
+#: includes/class-plugin.php
+#. translators: %s: number of labels bought today.
 #, php-format
-msgid "The shipment origin has no %1$s. Carriers expect a phone number, and USPS refuses a label without a phone and email, so some label purchases will fail until it is set in <a href=\"%2$s\">Settings → From Address</a>."
+msgid "%s label"
+msgid_plural "%s labels"
+msgstr[0] ""
+msgstr[1] ""
+
+#: includes/class-plugin.php:1404
+#, php-format
+msgid "%s order"
+msgid_plural "%s orders"
+msgstr[0] ""
+msgstr[1] ""
+
+#: includes/class-plugin.php:1390
+msgid "&laquo; Previous"
 msgstr ""
 
-#: includes/class-plugin.php:1343
-msgid "Processing"
+#: includes/class-plugin.php:2935
+#. translators: %s: insurance premium, formatted with currency.
+msgid "(premium %s)"
 msgstr ""
 
-#: includes/class-plugin.php:1344
-msgid "Completed"
+#: includes/class-plugin.php:1432
+#: includes/class-plugin.php:1571
+msgid "Actions"
+msgstr ""
+
+#: includes/class-plugin.php:154
+msgid "Active provider"
+msgstr ""
+
+#: includes/class-plugin.php:1893
+msgid "Add Box"
+msgstr ""
+
+#: includes/class-plugin.php:637
+msgid "Address"
+msgstr ""
+
+#. translators: 1: verified address, 2: what changed
+#: includes/class-plugin.php:2697
+#, php-format
+msgid "Address verified with Shippo: %1$s (%2$s). The label uses the verified address; the saved order address was left as entered."
+msgstr ""
+
+#: includes/class-plugin.php:1535
+msgid "Adult signature"
+msgstr ""
+
+#: includes/class-plugin.php:2126
+msgid "Advanced Shipment Tracking is installed: tracking numbers are written to its shipment tracking fields, which feed its emails and the customer account page."
+msgstr ""
+
+#: includes/class-plugin.php:2153
+msgid "Applies to every purchase, whichever tracking plugin is installed: the order moves to Completed and WooCommerce sends its \"Completed order\" email. Orders that are already Completed are left alone. With no tracking plugin the customer also gets a note with the tracking number, so that shop sees two emails. Untick this if you complete orders yourself."
+msgstr ""
+
+#: includes/class-plugin.php:1373
+msgid "Apply"
+msgstr ""
+
+#: includes/class-easypost-client.php:563
+#: includes/class-shippo-client.php:429
+msgid "A refund for this label is already pending with the carrier."
+msgstr ""
+
+#: includes/class-plugin.php:1942
+msgid "Backup / Restore Settings"
+msgstr ""
+
+#: includes/class-plugin.php:1507
+#: includes/class-plugin.php:1568
+msgid "Box"
+msgstr ""
+
+#: includes/class-plugin.php:1429
+msgid "Box / Weight (oz)"
+msgstr ""
+
+#: includes/class-plugin.php:96
+#: includes/class-plugin.php:97
+#: includes/class-plugin.php:1854
+msgid "Box Settings"
+msgstr ""
+
+#: includes/class-plugin.php:810
+msgid "Browser Print  -  open label in browser for the user to print"
 msgstr ""
 
 #: includes/class-plugin.php:1363
 #: includes/class-plugin.php:1365
 msgid "Bulk Actions"
-msgstr ""
-
-#: includes/class-plugin.php:1367
-msgid "Bulk Get Rates"
 msgstr ""
 
 #: includes/class-plugin.php:1368
@@ -590,172 +141,34 @@ msgstr ""
 msgid "Bulk Buy Label"
 msgstr ""
 
+#: includes/class-plugin.php:1367
+msgid "Bulk Get Rates"
+msgstr ""
+
 #: includes/class-plugin.php:1371
 msgid "Bulk Print"
 msgstr ""
 
-#: includes/class-plugin.php:1373
-msgid "Apply"
+#: includes/class-update-checker.php
+msgid "Buy, print and refund shipping labels from WooCommerce orders."
 msgstr ""
 
-#: includes/class-plugin.php:1390
-msgid "&laquo; Previous"
-msgstr ""
-
-#: includes/class-plugin.php:1391
-msgid "Next &raquo;"
-msgstr ""
-
-#: includes/class-plugin.php:1404
-#, php-format
-msgid "%s order"
-msgid_plural "%s orders"
-msgstr[0] ""
-msgstr[1] ""
-
-#: includes/class-plugin.php:1408
-#, php-format
-msgid "Page %1$s of %2$s"
-msgstr ""
-
-#: includes/class-plugin.php:1412
-msgid "Page number"
-msgstr ""
-
-#: includes/class-plugin.php:1414
-msgid "Go"
-msgstr ""
-
-#: includes/class-plugin.php:1425
-#: includes/class-plugin.php:1563
-msgid "Select all orders on this page"
-msgstr ""
-
-#: includes/class-plugin.php:1426
-msgid "Order / Customer"
-msgstr ""
-
-#: includes/class-plugin.php:1427
-msgid "Total Spent"
-msgstr ""
-
-#: includes/class-plugin.php:1428
-msgid "Shipping Method"
-msgstr ""
-
-#: includes/class-plugin.php:1429
-msgid "Box / Weight (oz)"
-msgstr ""
-
-#: includes/class-plugin.php:1430
-msgid "Services"
-msgstr ""
-
-#: includes/class-plugin.php:1431
-msgid "Rates"
-msgstr ""
-
-#: includes/class-plugin.php:1432
-#: includes/class-plugin.php:1571
-msgid "Actions"
-msgstr ""
-
-#: includes/class-plugin.php:1436
-msgid "No processing orders found."
-msgstr ""
-
-#: includes/class-plugin.php:1469
-msgid "Declared value for EasyPost insurance. EasyPost charges 1% of this with a $1.00 minimum (maximum $5,000), prices it at purchase, and adds it to the recorded label cost rather than to the quotes."
-msgstr ""
-
-#: includes/class-plugin.php:2929
-#. translators: %s: insured value, formatted with currency.
-msgid "Insured for %s"
-msgstr ""
-
-#: includes/class-plugin.php:2935
-#. translators: %s: insurance premium, formatted with currency.
-msgid "(premium %s)"
-msgstr ""
-
-#: includes/class-plugin.php:1470
-msgid "Declared value for insurance. Set before getting rates."
-msgstr ""
-
-#: includes/class-plugin.php:1487
-#: includes/class-plugin.php:1605
-#, php-format
-msgid "Select order #%s"
-msgstr ""
-
-#: includes/class-plugin.php:1503
-msgid "Shipping:"
-msgstr ""
-
-#: includes/class-plugin.php:1507
-#: includes/class-plugin.php:1568
-msgid "Box"
-msgstr ""
-
-#: includes/class-plugin.php:1509
-msgid "Select box..."
-msgstr ""
-
-#: includes/class-plugin.php:1517
-msgid "Weight"
-msgstr ""
-
-#: includes/class-plugin.php:1518
-msgid "Calculated from items and box weight; edit to override"
-msgstr ""
-
-#: includes/class-plugin.php:1531
-msgid "Signature"
-msgstr ""
-
-#: includes/class-plugin.php:1532
-msgid "Signature confirmation is priced into the quote, so it is chosen before getting rates."
-msgstr ""
-
-#: includes/class-plugin.php:1533
-#: includes/class-plugin.php:1543
-msgid "None"
-msgstr ""
-
-#: includes/class-plugin.php:1534
-msgid "Signature required"
-msgstr ""
-
-#: includes/class-plugin.php:1535
-msgid "Adult signature"
-msgstr ""
-
-#: includes/class-plugin.php:1539
-msgid "Get rates first"
-msgstr ""
-
-#: includes/class-plugin.php:1542
-msgid "Insurance"
-msgstr ""
-
-#: includes/class-plugin.php:1547
-msgid "Rates not loaded. Select a box and choose Get Rates."
-msgstr ""
-
-#: includes/class-plugin.php:1550
-msgid "Get Rates"
+#. Description of the plugin
+#: shipping-desk.php
+msgid "Buy, print and refund Veeqo, Shippo and EasyPost shipping labels from the WooCommerce orders screen, with box presets, bulk buy/print and optional PrintNode server-side printing."
 msgstr ""
 
 #: includes/class-plugin.php:1551
 msgid "Buy Label"
 msgstr ""
 
-#: includes/class-plugin.php:1564
-msgid "Order"
+#: includes/class-plugin.php:1518
+msgid "Calculated from items and box weight; edit to override"
 msgstr ""
 
-#: includes/class-plugin.php:1565
-msgid "Customer"
+#: includes/class-plugin.php:1819
+#, php-format
+msgid "Cancelled at: %s"
 msgstr ""
 
 #: includes/class-plugin.php:1566
@@ -763,65 +176,341 @@ msgstr ""
 msgid "Carrier"
 msgstr ""
 
-#: includes/class-plugin.php:1567
-msgid "Tracking"
+#: includes/class-plugin.php:638
+msgid "City"
 msgstr ""
 
-#: includes/class-plugin.php:1569
-msgid "Weight Used (oz)"
+#: includes/helpers.php:208
+msgid "city corrected"
 msgstr ""
 
-#: includes/class-plugin.php:1570
-msgid "Label ID"
+#: includes/class-plugin.php:634
+msgid "Company"
 msgstr ""
 
-#: includes/class-plugin.php:1575
-msgid "No completed orders found."
+#: includes/helpers.php:212
+msgid "company standardised"
 msgstr ""
 
-#: includes/class-plugin.php:1615
-#: includes/class-plugin.php:1800
-msgid "Print"
+#: includes/class-plugin.php:1344
+msgid "Completed"
 msgstr ""
 
-#: includes/class-plugin.php:1616
-#: includes/class-plugin.php:1802
-msgid "Refund"
+#: includes/class-plugin.php:1980
+msgid "Completed email on reship"
 msgstr ""
 
-#: includes/class-plugin.php:1618
-msgid "Reset Shipping"
+#: includes/class-plugin.php:2141
+msgid "Complete on purchase"
 msgstr ""
 
-#: includes/class-plugin.php:1620
-msgid "Reship"
+#. translators: %d: HTTP status code
+#: includes/class-easypost-client.php:1812
+#, php-format
+msgid "Could not download the label PDF from EasyPost (HTTP %d)."
 msgstr ""
 
-#: includes/class-plugin.php:1648
-msgid "Please enter a shipment ID."
+#: includes/class-shippo-client.php:1310
+msgid "Could not encode the Shippo request payload."
 msgstr ""
 
-#: includes/class-plugin.php:1677
-msgid "No transaction or shipment with that id on the Shippo account and mode shown above."
+#: includes/class-plugin.php:641
+msgid "Country Code"
+msgstr ""
+
+#: includes/helpers.php:210
+msgid "country corrected"
+msgstr ""
+
+#: includes/class-plugin.php:1565
+msgid "Customer"
+msgstr ""
+
+#: includes/class-plugin.php:1469
+msgid "Declared value for EasyPost insurance. EasyPost charges 1% of this with a $1.00 minimum (maximum $5,000), prices it at purchase, and adds it to the recorded label cost rather than to the quotes."
+msgstr ""
+
+#: includes/class-plugin.php:1470
+msgid "Declared value for insurance. Set before getting rates."
+msgstr ""
+
+#: includes/class-plugin.php:2012
+msgid "Delete all plugin settings and order shipping meta when this plugin is deleted."
+msgstr ""
+
+#: includes/class-plugin.php:1952
+msgid "Download JSON"
+msgstr ""
+
+#: includes/class-plugin.php:695
+msgid "EasyPost"
+msgstr ""
+
+#: includes/class-easypost-client.php:1396
+msgid "EasyPost accepted the request but returned no label. Check the EasyPost dashboard before trying again; the label may already have been bought."
+msgstr ""
+
+#: includes/class-easypost-client.php:293
+#: includes/class-easypost-client.php:686
+#: includes/class-easypost-client.php:1031
+msgid "EasyPost API key is not set."
+msgstr ""
+
+#: includes/class-plugin.php:158
+msgid "EasyPost API keys"
+msgstr ""
+
+#: includes/class-easypost-client.php:655
+msgid "EasyPost did not return a PDF version of this label."
+msgstr ""
+
+#: includes/class-easypost-client.php:345
+msgid "EasyPost did not return a shipment object."
+msgstr ""
+
+#: includes/class-easypost-client.php:592
+msgid "EasyPost has no label for this shipment. Buy the label again."
+msgstr ""
+
+#: includes/class-plugin.php:1186
+msgid "EasyPost has no Test API key. Add one under Settings → Label Provider first."
+msgstr ""
+
+#. translators: %s: maximum insured amount, e.g. 5,000.00
+#: includes/class-easypost-client.php:2288
+#, php-format
+msgid "EasyPost insures a maximum of $%s per shipment. Lower the declared value or leave insurance off."
+msgstr ""
+
+#: includes/class-plugin.php:1185
+msgid "EasyPost is set to Production but has no Production API key. Add one under Settings → Label Provider first."
+msgstr ""
+
+#: includes/class-plugin.php:554
+msgid "EasyPost is the active provider but no Production API key is set, so rate and label requests will fail."
+msgstr ""
+
+#: includes/class-plugin.php:555
+msgid "EasyPost is the active provider but no Test API key is set, so rate and label requests will fail."
+msgstr ""
+
+#: includes/class-plugin.php:3479
+msgid "EasyPost label refund requested."
+msgstr ""
+
+#: includes/class-plugin.php:157
+msgid "EasyPost mode"
+msgstr ""
+
+#: includes/class-easypost-client.php:300
+msgid "EasyPost needs a street address and a weight before it can rate a shipment."
+msgstr ""
+
+#. translators: %d: HTTP status code
+#: includes/class-easypost-client.php:868
+#: includes/class-easypost-client.php:1148
+#, php-format
+msgid "EasyPost request failed (HTTP %d)."
+msgstr ""
+
+#. translators: %d: HTTP status code
+#: includes/class-easypost-client.php:721
+#: includes/class-easypost-client.php:1084
+#, php-format
+msgid "EasyPost returned an unreadable response (HTTP %d)."
+msgstr ""
+
+#: includes/class-easypost-client.php:364
+msgid "EasyPost returned no rates for this shipment."
+msgstr ""
+
+#: includes/class-easypost-client.php:808
+msgid "EasyPost returned no verification result."
+msgstr ""
+
+#: includes/class-plugin.php:2894
+#: includes/class-plugin.php:3233
+msgid "EasyPost Shipment ID:"
+msgstr ""
+
+#: includes/class-plugin.php:636
+msgid "Email"
+msgstr ""
+
+#: includes/class-plugin.php:460
+msgid "email address"
+msgstr ""
+
+#: includes/helpers.php:214
+msgid "email formatted"
+msgstr ""
+
+#: includes/class-plugin.php:842
+msgid "Enter an API key and save, then refresh printers."
+msgstr ""
+
+#: includes/class-plugin.php:1700
+msgid "Enter the EasyPost shipment id from the order note."
 msgstr ""
 
 #: includes/class-plugin.php:1690
 msgid "Enter the Shippo transaction id from the order note. A shipment id also works if you have one."
 msgstr ""
 
-#. translators: %s: Shippo key mode
-#: includes/class-plugin.php:1695
-#, php-format
-msgid "Looking up on Shippo (%s)."
+#: includes/class-plugin.php:1710
+msgid "Enter the Veeqo remote shipment id recorded on the order."
 msgstr ""
 
-#: includes/class-plugin.php:1696
-#: includes/class-plugin.php:1706
-msgid "production"
+#: includes/class-plugin.php:828
+#: includes/class-plugin.php:831
+msgid "Error refreshing printers."
 msgstr ""
 
-#: includes/class-plugin.php:1700
-msgid "Enter the EasyPost shipment id from the order note."
+#: includes/class-plugin.php:1949
+msgid "Export"
+msgstr ""
+
+#: includes/class-plugin.php:1944
+msgid "Export all plugin settings (API keys, box sizes, origin address and print mode) to a JSON file. Import restores them after a reinstall or on another site."
+msgstr ""
+
+#: includes/class-plugin.php:163
+msgid "From Address (Optional)"
+msgstr ""
+
+#: includes/class-plugin.php:1550
+msgid "Get Rates"
+msgstr ""
+
+#: includes/class-plugin.php:1539
+msgid "Get rates first"
+msgstr ""
+
+#: includes/class-plugin.php:1414
+msgid "Go"
+msgstr ""
+
+#: includes/class-tracking-relay.php:104
+msgid "Good news: your order is on its way"
+msgstr ""
+
+#: includes/class-plugin.php
+msgid "Got it"
+msgstr ""
+
+#: includes/class-plugin.php:1863
+msgid "Height (in)"
+msgstr ""
+
+#. Plugin URI of the plugin
+#. Author URI of the plugin
+#: shipping-desk.php
+msgid "https://t.me/Jailbreak777"
+msgstr ""
+
+#: includes/class-plugin.php:1958
+msgid "Import"
+msgstr ""
+
+#: includes/class-plugin.php:1966
+msgid "Imported values replace the current settings."
+msgstr ""
+
+#: includes/class-plugin.php:1542
+msgid "Insurance"
+msgstr ""
+
+#: includes/class-plugin.php:2929
+#. translators: %s: insured value, formatted with currency.
+msgid "Insured for %s"
+msgstr ""
+
+#: includes/class-plugin.php:1074
+#: includes/class-plugin.php:1644
+#: includes/class-plugin.php:2063
+#: includes/class-plugin.php:2962
+#: includes/class-plugin.php:2969
+#: includes/class-plugin.php:3087
+#: includes/class-plugin.php:3492
+#: includes/class-plugin.php:3549
+#: includes/class-plugin.php:3641
+msgid "Invalid nonce."
+msgstr ""
+
+#. Author of the plugin
+#: shipping-desk.php
+msgid "Jailbreak777"
+msgstr ""
+
+#: includes/class-plugin.php:1798
+msgid "Label Actions"
+msgstr ""
+
+#: includes/class-plugin.php:2795
+#: includes/class-plugin.php:3130
+msgid "Label already purchased."
+msgstr ""
+
+#: includes/class-tracking-relay.php:541
+msgid "Label bought via %s."
+msgstr ""
+
+#: includes/class-plugin.php:1806
+msgid "Label cancelled."
+msgstr ""
+
+#: includes/class-plugin.php:1570
+msgid "Label ID"
+msgstr ""
+
+#: includes/class-easypost-client.php:545
+msgid "Label not found in EasyPost."
+msgstr ""
+
+#: includes/class-shippo-client.php:409
+#: includes/class-shippo-client.php:531
+msgid "Label not found in Shippo."
+msgstr ""
+
+#: includes/class-plugin.php:153
+msgid "Label Provider"
+msgstr ""
+
+#: includes/class-plugin.php:1209
+msgid "Label provider"
+msgstr ""
+
+#: includes/class-plugin.php:3264
+msgid "Label purchase failed."
+msgstr ""
+
+#: includes/class-plugin.php:1806
+msgid "Label refunded."
+msgstr ""
+
+#: includes/class-plugin.php:3346
+#: includes/class-plugin.php:3682
+msgid "Label sent to PrintNode."
+msgstr ""
+
+#: includes/class-plugin.php:2015
+msgid "Left unchecked (recommended), deleting the plugin keeps your API keys, box presets and settings so they survive a reinstall. Deleting a stray duplicate copy of the plugin will also leave your live settings untouched."
+msgstr ""
+
+#: includes/class-plugin.php:1990
+msgid "Left unchecked (recommended). Shipment tracking plugins such as Advanced Shipment Tracking already email the customer when they detect new tracking, so ticking this as well sends the email twice. Tick it only if nothing else notifies your customers."
+msgstr ""
+
+#: includes/class-plugin.php:1861
+msgid "Length (in)"
+msgstr ""
+
+#: includes/class-plugin.php:1238
+msgid "live"
+msgstr ""
+
+#: includes/class-plugin.php:824
+msgid "Loading..."
 msgstr ""
 
 #. translators: %s: EasyPost key mode
@@ -830,48 +519,78 @@ msgstr ""
 msgid "Looking up on EasyPost (%s)."
 msgstr ""
 
-#: includes/class-plugin.php:1710
-msgid "Enter the Veeqo remote shipment id recorded on the order."
-msgstr ""
-
-#: includes/class-plugin.php:1718
-msgid "Shipment ID"
+#. translators: %s: Shippo key mode
+#: includes/class-plugin.php:1695
+#, php-format
+msgid "Looking up on Shippo (%s)."
 msgstr ""
 
 #: includes/class-plugin.php:1722
 msgid "Look up"
 msgstr ""
 
-#: includes/class-plugin.php:1785
-msgid "Transaction details"
-msgstr ""
-
-#: includes/class-plugin.php:1786
-msgid "Shipment details"
-msgstr ""
-
-#: includes/class-plugin.php:1791
-msgid "Matched a transaction id. The parent shipment id is listed below if you need it."
+#: includes/class-plugin.php:2150
+msgid "Mark the order Completed when a label is bought."
 msgstr ""
 
 #: includes/class-plugin.php:1793
 msgid "Matched a shipment id rather than a transaction id."
 msgstr ""
 
-#: includes/class-plugin.php:1798
-msgid "Label Actions"
+#: includes/class-plugin.php:1791
+msgid "Matched a transaction id. The parent shipment id is listed below if you need it."
 msgstr ""
 
-#: includes/class-plugin.php:1804
-msgid "Refund pending with the carrier."
+#: includes/class-plugin.php:633
+#: includes/class-plugin.php:1860
+msgid "Name"
 msgstr ""
 
-#: includes/class-plugin.php:1806
-msgid "Label refunded."
+#: includes/helpers.php:211
+msgid "name standardised"
 msgstr ""
 
-#: includes/class-plugin.php:1806
-msgid "Label cancelled."
+#: includes/class-plugin.php:1391
+msgid "Next &raquo;"
+msgstr ""
+
+#. translators: %s: list of missing fields, e.g. "phone number / email address"
+#: includes/class-plugin.php:652
+#, php-format
+msgid "No %s is available from either this form or the store settings. Carriers expect a phone number and USPS requires both, so label purchases will fail until one is set here."
+msgstr ""
+
+#: includes/class-plugin.php:1575
+msgid "No completed orders found."
+msgstr ""
+
+#: includes/class-easypost-client.php:399
+msgid "No EasyPost rate was selected."
+msgstr ""
+
+#: includes/class-easypost-client.php:396
+#: includes/class-easypost-client.php:506
+#: includes/class-easypost-client.php:537
+#: includes/class-easypost-client.php:617
+msgid "No EasyPost shipment ID was supplied."
+msgstr ""
+
+#: includes/class-plugin.php:2044
+msgid "No file was uploaded."
+msgstr ""
+
+#: includes/class-plugin.php:1533
+#: includes/class-plugin.php:1543
+msgid "None"
+msgstr ""
+
+#: includes/class-plugin.php:852
+#: includes/class-plugin.php:868
+msgid "No printers found."
+msgstr ""
+
+#: includes/class-plugin.php:1436
+msgid "No processing orders found."
 msgstr ""
 
 #. translators: %s: provider status, e.g. WAITING
@@ -880,125 +599,55 @@ msgstr ""
 msgid "No refund available (status: %s)."
 msgstr ""
 
-#: includes/class-plugin.php:1819
+#: includes/class-easypost-client.php:448
+#: includes/class-plugin.php:3105
+#: includes/class-shippo-client.php:313
+msgid "No shipments to book."
+msgstr ""
+
+#: includes/class-plugin.php:2132
+msgid "No shipment tracking plugin was found: the customer is emailed a note with the tracking number when a label is bought."
+msgstr ""
+
+#: includes/class-shippo-client.php:235
+msgid "No Shippo rate was selected."
+msgstr ""
+
+#: includes/class-shippo-client.php:371
+msgid "No Shippo shipment ID was supplied."
+msgstr ""
+
+#: includes/class-shippo-client.php:401
+#: includes/class-shippo-client.php:496
+#: includes/class-shippo-client.php:523
+#: includes/class-shippo-client.php:678
+msgid "No Shippo transaction ID was supplied."
+msgstr ""
+
+#: includes/class-plugin.php:3353
+msgid "nothing"
+msgstr ""
+
+#: includes/class-plugin.php:1677
+msgid "No transaction or shipment with that id on the Shippo account and mode shown above."
+msgstr ""
+
+#. translators: %s: Shippo transaction status
+#: includes/class-shippo-client.php:438
 #, php-format
-msgid "Cancelled at: %s"
+msgid "Only a purchased label can be refunded (transaction status: %s)."
 msgstr ""
 
-#: includes/class-plugin.php:1837
-msgid "Raw response"
+#: includes/class-plugin.php:644
+msgid "Optional. Leave any field blank to use the existing WooCommerce store value. Phone is expected by both carriers and USPS refuses a label without it; Email is required by USPS. Blanks fall back to the admin phone (or store phone) and the WordPress admin email."
 msgstr ""
 
-#: includes/class-plugin.php:1861
-msgid "Length (in)"
+#: includes/class-plugin.php:1564
+msgid "Order"
 msgstr ""
 
-#: includes/class-plugin.php:1862
-msgid "Width (in)"
-msgstr ""
-
-#: includes/class-plugin.php:1863
-msgid "Height (in)"
-msgstr ""
-
-#: includes/class-plugin.php:1864
-msgid "Weight (oz)"
-msgstr ""
-
-#: includes/class-plugin.php:1865
-#: includes/class-plugin.php:1884
-msgid "Remove"
-msgstr ""
-
-#: includes/class-plugin.php:1893
-msgid "Add Box"
-msgstr ""
-
-#: includes/class-plugin.php:1894
-msgid "Save Boxes"
-msgstr ""
-
-#: includes/class-plugin.php:1942
-msgid "Backup / Restore Settings"
-msgstr ""
-
-#: includes/class-plugin.php:1944
-msgid "Export all plugin settings (API keys, box sizes, origin address and print mode) to a JSON file. Import restores them after a reinstall or on another site."
-msgstr ""
-
-#: includes/class-plugin.php:1949
-msgid "Export"
-msgstr ""
-
-#: includes/class-plugin.php:1952
-msgid "Download JSON"
-msgstr ""
-
-#: includes/class-plugin.php:1954
-msgid "The file contains secrets (API keys), so store it somewhere safe."
-msgstr ""
-
-#: includes/class-plugin.php:1958
-msgid "Import"
-msgstr ""
-
-#: includes/class-plugin.php:1964
-msgid "Upload and Restore"
-msgstr ""
-
-#: includes/class-plugin.php:1966
-msgid "Imported values replace the current settings."
-msgstr ""
-
-#: includes/class-plugin.php:1975
-msgid "Reship Notifications"
-msgstr ""
-
-#: includes/class-plugin.php:1980
-msgid "Completed email on reship"
-msgstr ""
-
-#: includes/class-plugin.php:1987
-msgid "Send the WooCommerce \"Completed order\" email when a completed order is reshipped."
-msgstr ""
-
-#: includes/class-plugin.php:1990
-msgid "Left unchecked (recommended). Shipment tracking plugins such as Advanced Shipment Tracking already email the customer when they detect new tracking, so ticking this as well sends the email twice. Tick it only if nothing else notifies your customers."
-msgstr ""
-
-#: includes/class-plugin.php:2000
-msgid "Uninstall Behaviour"
-msgstr ""
-
-#: includes/class-plugin.php:2005
-msgid "Remove data on uninstall"
-msgstr ""
-
-#: includes/class-plugin.php:2012
-msgid "Delete all plugin settings and order shipping meta when this plugin is deleted."
-msgstr ""
-
-#: includes/class-plugin.php:2015
-msgid "Left unchecked (recommended), deleting the plugin keeps your API keys, box presets and settings so they survive a reinstall. Deleting a stray duplicate copy of the plugin will also leave your live settings untouched."
-msgstr ""
-
-#: includes/class-plugin.php:2039
-#, php-format
-msgid "Settings imported (%d item)."
-msgid_plural "Settings imported (%d items)."
-msgstr[0] ""
-msgstr[1] ""
-
-#: includes/class-plugin.php:2042
-msgid "That file is not a valid settings export."
-msgstr ""
-
-#: includes/class-plugin.php:2044
-msgid "No file was uploaded."
-msgstr ""
-
-#: includes/class-plugin.php:2052
-msgid "Settings from the previous plugin version were detected and carried over automatically. Please review them below."
+#: includes/class-plugin.php:1426
+msgid "Order / Customer"
 msgstr ""
 
 #: includes/class-plugin.php:2067
@@ -1010,113 +659,72 @@ msgstr ""
 msgid "Order not found."
 msgstr ""
 
-#: includes/class-plugin.php:2661
-msgid "standardised"
-msgstr ""
-
-#. translators: 1: previous address, 2: verified address, 3: what changed
-#: includes/class-plugin.php:2688
-#, php-format
-msgid "Shipping address updated from Shippo verification: %1$s → %2$s (%3$s). The label uses the verified address."
-msgstr ""
-
-#. translators: 1: verified address, 2: what changed
-#: includes/class-plugin.php:2697
-#, php-format
-msgid "Address verified with Shippo: %1$s (%2$s). The label uses the verified address; the saved order address was left as entered."
-msgstr ""
-
-#. translators: 1: PHP error message, 2: file name, 3: line number
-#: includes/class-plugin.php:2750
-#, php-format
-msgid "The request was interrupted by a PHP error: %1$s (%2$s:%3$d). Check the Shippo dashboard before buying again."
-msgstr ""
-
-#: includes/class-plugin.php:2790
-msgid "Rate ID missing."
-msgstr ""
-
-#: includes/class-plugin.php:2795
-#: includes/class-plugin.php:3130
-msgid "Label already purchased."
-msgstr ""
-
-#: includes/class-plugin.php:2811
-msgid "These rates have expired: the dispatch day has moved on or the carrier quote timed out. Get rates again before buying."
-msgstr ""
-
-#: includes/class-plugin.php:2825
-msgid "That rate is no longer part of the stored quotes. Get rates again before buying."
-msgstr ""
-
-#: includes/class-plugin.php:2837
-msgid "The shipping provider did not return a successful shipment."
-msgstr ""
-
-#: includes/class-plugin.php:2890
-#: includes/class-plugin.php:3231
-msgid "Shippo Transaction ID:"
-msgstr ""
-
-#: includes/class-plugin.php:2894
-#: includes/class-plugin.php:3233
-msgid "EasyPost Shipment ID:"
-msgstr ""
-
-#: includes/class-plugin.php:2897
-#: includes/class-plugin.php:3234
-msgid "Veeqo Remote Shipment ID:"
-msgstr ""
-
 #: includes/class-plugin.php:2902
 #: includes/class-plugin.php:3240
 #, php-format
 msgid "Order shipped via %1$s with tracking number <a href=\"%2$s\" target=\"_blank\">%3$s</a><br><strong>%4$s</strong> %5$s"
 msgstr ""
 
-#: includes/class-plugin.php:2937
-msgid "Shipping Desk: reshipped completed order; customer \"Completed order\" email re-triggered."
+#: includes/class-plugin.php:1408
+#, php-format
+msgid "Page %1$s of %2$s"
 msgstr ""
 
-#: includes/class-plugin.php:2939
-msgid "Shipping Desk: reshipped completed order. No customer email sent (disabled in Settings)."
+#: includes/class-plugin.php:1412
+msgid "Page number"
 msgstr ""
 
-#: includes/class-plugin.php:2977
-msgid "Remote shipment ID missing."
+#: includes/class-plugin.php:779
+#: includes/class-plugin.php:1053
+#: includes/class-plugin.php:1247
+#: includes/class-plugin.php:1633
+#: includes/class-plugin.php:1846
+#: includes/class-plugin.php:1927
+#: includes/class-plugin.php:3398
+msgid "Permission denied."
 msgstr ""
 
-#: includes/class-plugin.php:3028
-msgid "This label was bought with Shippo in Production mode, but no Production API key is set."
+#: includes/class-plugin.php:635
+msgid "Phone"
 msgstr ""
 
-#: includes/class-plugin.php:3029
-msgid "This label was bought with Shippo in Test mode, but no Test API key is set."
+#: includes/helpers.php:213
+msgid "phone formatted"
 msgstr ""
 
-#: includes/class-plugin.php:3037
-msgid "This label was bought with EasyPost in Production mode, but no Production API key is set."
+#: includes/class-plugin.php:459
+msgid "phone number"
 msgstr ""
 
-#: includes/class-plugin.php:3038
-msgid "This label was bought with EasyPost in Test mode, but no Test API key is set."
+#: includes/class-plugin.php:1648
+msgid "Please enter a shipment ID."
 msgstr ""
 
-#: includes/class-plugin.php:3043
-msgid "This order has no stored label id."
+#: includes/class-plugin.php
+msgid "Postage bought since midnight, site time. Refunds are not deducted."
 msgstr ""
 
-#: includes/class-plugin.php:3134
-msgid "Rate or shipment ID missing."
+#: includes/class-plugin.php:1615
+#: includes/class-plugin.php:1800
+msgid "Print"
 msgstr ""
 
-#: includes/class-plugin.php:3264
-msgid "Label purchase failed."
+#: includes/class-plugin.php:796
+msgid "Printers"
 msgstr ""
 
-#: includes/class-plugin.php:3298
-#: includes/class-plugin.php:3666
-msgid "The shipping provider did not return a label URL."
+#: includes/class-plugin.php:806
+#: includes/class-plugin.php:809
+msgid "Print Mode"
+msgstr ""
+
+#: includes/class-plugin.php:792
+msgid "PrintNode API Key"
+msgstr ""
+
+#: includes/class-plugin.php:3625
+#: includes/class-printnode-client.php:25
+msgid "PrintNode API key is not set."
 msgstr ""
 
 #: includes/class-plugin.php:3306
@@ -1125,97 +733,257 @@ msgstr ""
 msgid "PrintNode printer not selected."
 msgstr ""
 
-#: includes/class-plugin.php:3346
-#: includes/class-plugin.php:3682
-msgid "Label sent to PrintNode."
-msgstr ""
-
-#: includes/class-plugin.php:3422
-msgid "The shipping provider did not return a label."
-msgstr ""
-
-#: includes/class-plugin.php:3477
-msgid "Shippo label refund requested."
-msgstr ""
-
-#: includes/class-plugin.php:3479
-msgid "EasyPost label refund requested."
-msgstr ""
-
-#: includes/class-plugin.php:3480
-msgid "Veeqo shipping label refunded/cancelled."
-msgstr ""
-
-#: includes/class-plugin.php:3504
-msgid "Shipping Desk: shipping state reset  -  a new label can now be purchased."
-msgstr ""
-
-#: includes/class-plugin.php:3625
-#: includes/class-printnode-client.php:25
-msgid "PrintNode API key is not set."
-msgstr ""
-
 #: includes/class-printnode-client.php:88
 #, php-format
 msgid "PrintNode returned HTTP %d."
 msgstr ""
 
-#: includes/class-shippo-client.php:161
-msgid "Shippo API key is not set."
+#: includes/class-plugin.php:114
+#: includes/class-plugin.php:115
+#: includes/class-plugin.php:787
+msgid "PrintNode Settings"
 msgstr ""
 
-#: includes/class-shippo-client.php:185
-msgid "Shippo did not return a shipment object."
+#: includes/class-plugin.php:1343
+msgid "Processing"
 msgstr ""
 
-#: includes/class-shippo-client.php:201
-msgid "Shippo returned no rates for this shipment."
+#: includes/class-plugin.php:490
+#: includes/class-plugin.php:714
+#: includes/class-plugin.php:1235
+msgid "Production"
 msgstr ""
 
-#: includes/class-shippo-client.php:235
-msgid "No Shippo rate was selected."
+#: includes/class-plugin.php:1696
+#: includes/class-plugin.php:1706
+msgid "production"
 msgstr ""
 
-#: includes/class-shippo-client.php:269
-msgid "Shippo did not return a transaction object."
+#: includes/class-plugin.php:1224
+msgid "Production: labels are bought with real money. Click to switch to Test."
 msgstr ""
 
-#: includes/class-shippo-client.php:371
-msgid "No Shippo shipment ID was supplied."
+#: includes/class-plugin.php:515
+#: includes/class-plugin.php:733
+msgid "Production API key"
+msgstr ""
+
+#: includes/class-plugin.php:2790
+msgid "Rate ID missing."
+msgstr ""
+
+#: includes/class-plugin.php:3134
+msgid "Rate or shipment ID missing."
+msgstr ""
+
+#: includes/class-plugin.php:1431
+msgid "Rates"
+msgstr ""
+
+#: includes/class-plugin.php:1547
+msgid "Rates not loaded. Select a box and choose Get Rates."
+msgstr ""
+
+#: includes/class-plugin.php:1837
+msgid "Raw response"
+msgstr ""
+
+#: includes/class-plugin.php:801
+#: includes/class-plugin.php:826
+#: includes/class-plugin.php:830
+msgid "Refresh Printers"
+msgstr ""
+
+#: includes/class-plugin.php:1616
+#: includes/class-plugin.php:1802
+msgid "Refund"
+msgstr ""
+
+#: includes/class-plugin.php:1804
+msgid "Refund pending with the carrier."
+msgstr ""
+
+#: includes/class-plugin.php:2977
+msgid "Remote shipment ID missing."
+msgstr ""
+
+#: includes/class-plugin.php:1865
+#: includes/class-plugin.php:1884
+msgid "Remove"
+msgstr ""
+
+#: includes/class-plugin.php:2005
+msgid "Remove data on uninstall"
+msgstr ""
+
+#: includes/class-plugin.php:1618
+msgid "Reset Shipping"
+msgstr ""
+
+#: includes/class-plugin.php:1620
+msgid "Reship"
+msgstr ""
+
+#: includes/class-plugin.php:1975
+msgid "Reship Notifications"
+msgstr ""
+
+#: includes/class-plugin.php:1894
+msgid "Save Boxes"
+msgstr ""
+
+#: includes/class-plugin.php:1425
+#: includes/class-plugin.php:1563
+msgid "Select all orders on this page"
+msgstr ""
+
+#: includes/class-plugin.php:1509
+msgid "Select box..."
+msgstr ""
+
+#: includes/class-plugin.php:1487
+#: includes/class-plugin.php:1605
+#, php-format
+msgid "Select order #%s"
+msgstr ""
+
+#: includes/class-plugin.php:802
+msgid "Select the printer that will receive labels from this plugin."
+msgstr ""
+
+#: includes/class-plugin.php:1987
+msgid "Send the WooCommerce \"Completed order\" email when a completed order is reshipped."
+msgstr ""
+
+#: includes/class-plugin.php:811
+msgid "Server Print (PrintNode)  -  send directly to a printer"
+msgstr ""
+
+#: includes/class-plugin.php:1430
+msgid "Services"
+msgstr ""
+
+#: includes/class-plugin.php:105
+#: includes/class-plugin.php:106
+#: includes/class-plugin.php:1931
+msgid "Settings"
+msgstr ""
+
+#: includes/class-plugin.php:2052
+msgid "Settings from the previous plugin version were detected and carried over automatically. Please review them below."
+msgstr ""
+
+#: includes/class-plugin.php:2039
+#, php-format
+msgid "Settings imported (%d item)."
+msgid_plural "Settings imported (%d items)."
+msgstr[0] ""
+msgstr[1] ""
+
+#: includes/class-plugin.php:1786
+msgid "Shipment details"
+msgstr ""
+
+#: includes/class-plugin.php:1718
+msgid "Shipment ID"
+msgstr ""
+
+#: includes/class-plugin.php:87
+#: includes/class-plugin.php:88
+#: includes/class-plugin.php:1686
+msgid "Shipment Lookup"
+msgstr ""
+
+#: includes/class-easypost-client.php:514
+msgid "Shipment not found in EasyPost."
 msgstr ""
 
 #: includes/class-shippo-client.php:379
 msgid "Shipment not found in Shippo."
 msgstr ""
 
-#: includes/class-shippo-client.php:401
-#: includes/class-shippo-client.php:496
-#: includes/class-shippo-client.php:523
-#: includes/class-shippo-client.php:678
-msgid "No Shippo transaction ID was supplied."
+#: includes/class-api-client.php:232
+msgid "Shipment not found in Veeqo."
 msgstr ""
 
-#: includes/class-shippo-client.php:409
-#: includes/class-shippo-client.php:531
-msgid "Label not found in Shippo."
+#: includes/class-plugin.php:164
+msgid "Shipment Origin"
 msgstr ""
 
-#: includes/class-shippo-client.php:420
-msgid "This Shippo label has already been refunded."
+#: includes/class-plugin.php:1503
+msgid "Shipping:"
+msgstr ""
+
+#. translators: 1: previous address, 2: verified address, 3: what changed
+#: includes/class-plugin.php:2688
+#, php-format
+msgid "Shipping address updated from Shippo verification: %1$s → %2$s (%3$s). The label uses the verified address."
+msgstr ""
+
+#. Plugin Name of the plugin
+#: shipping-desk.php
+#: includes/class-plugin.php:76
+#: includes/class-plugin.php:77
+#: includes/class-plugin.php:1309
+msgid "Shipping Desk"
+msgstr ""
+
+#: includes/class-plugin.php:3349
+msgid "Shipping Desk: insurance for %1$s was requested, but EasyPost reports this label insured for %2$s. It is not covered as ordered - check before shipping."
+msgstr ""
+
+#: includes/class-plugin.php:2798
+msgid "Shipping Desk: removed the refunded tracking number from %s."
+msgstr ""
+
+#: includes/class-plugin.php:2939
+msgid "Shipping Desk: reshipped completed order. No customer email sent (disabled in Settings)."
+msgstr ""
+
+#: includes/class-plugin.php:2937
+msgid "Shipping Desk: reshipped completed order; customer \"Completed order\" email re-triggered."
+msgstr ""
+
+#: includes/class-plugin.php:3504
+msgid "Shipping Desk: shipping state reset  -  a new label can now be purchased."
+msgstr ""
+
+#: includes/class-plugin.php:3369
+msgid "Shipping Desk: this label records insurance for %s, but EasyPost reported no premium for it. Confirm the cover in the EasyPost dashboard before shipping."
+msgstr ""
+
+#: includes/class-plugin.php:1428
+msgid "Shipping Method"
+msgstr ""
+
+#: includes/class-plugin.php:691
+msgid "Shippo"
+msgstr ""
+
+#: includes/class-shippo-client.php:161
+msgid "Shippo API key is not set."
+msgstr ""
+
+#: includes/class-plugin.php:156
+msgid "Shippo API keys"
 msgstr ""
 
 #. translators: %s: Shippo transaction status
-#: includes/class-shippo-client.php:438
+#: includes/class-shippo-client.php:804
 #, php-format
-msgid "Only a purchased label can be refunded (transaction status: %s)."
+msgid "Shippo did not buy the label (transaction status: %s)."
 msgstr ""
 
-#: includes/class-shippo-client.php:469
-msgid "Shippo rejected the refund request."
+#: includes/class-shippo-client.php:555
+msgid "Shippo did not return a label URL."
 msgstr ""
 
-#: includes/class-shippo-client.php:503
-msgid "Transaction not found in Shippo."
+#: includes/class-shippo-client.php:185
+msgid "Shippo did not return a shipment object."
+msgstr ""
+
+#: includes/class-shippo-client.php:269
+msgid "Shippo did not return a transaction object."
 msgstr ""
 
 #. translators: %s: Shippo transaction status
@@ -1224,24 +992,56 @@ msgstr ""
 msgid "Shippo has no printable label for this transaction (status: %s)."
 msgstr ""
 
-#: includes/class-shippo-client.php:555
-msgid "Shippo did not return a label URL."
-msgstr ""
-
-#: includes/class-shippo-client.php:567
-msgid "The Shippo label file has expired and can no longer be downloaded."
-msgstr ""
-
 #. translators: %1$s: transaction id, %2$s: transaction status
 #: includes/class-shippo-client.php:781
 #, php-format
 msgid "Shippo has not confirmed the label yet (transaction %1$s is %2$s). Do not buy this order again until Shippo shows the result."
 msgstr ""
 
-#. translators: %s: Shippo transaction status
-#: includes/class-shippo-client.php:804
+#: includes/class-plugin.php:1177
+msgid "Shippo has no Test API key. Add one under Settings → Label Provider first."
+msgstr ""
+
+#: includes/class-shippo-client.php:1338
+msgid "Shippo is rate limiting requests (HTTP 429). Please try again in a moment."
+msgstr ""
+
+#: includes/class-plugin.php:1176
+msgid "Shippo is set to Production but has no Production API key. Add one under Settings → Label Provider first."
+msgstr ""
+
+#: includes/class-plugin.php:768
+msgid "Shippo is the active provider but no Production API key is set, so rate and label requests will fail."
+msgstr ""
+
+#: includes/class-plugin.php:769
+msgid "Shippo is the active provider but no Test API key is set, so rate and label requests will fail."
+msgstr ""
+
+#: includes/class-plugin.php:3477
+msgid "Shippo label refund requested."
+msgstr ""
+
+#: includes/class-plugin.php:155
+msgid "Shippo mode"
+msgstr ""
+
+#: includes/class-shippo-client.php:469
+msgid "Shippo rejected the refund request."
+msgstr ""
+
+#: includes/class-shippo-client.php:1453
 #, php-format
-msgid "Shippo did not buy the label (transaction status: %s)."
+msgid "Shippo request failed (HTTP %d)."
+msgstr ""
+
+#: includes/class-shippo-client.php:1350
+#, php-format
+msgid "Shippo returned an unreadable response (HTTP %d)."
+msgstr ""
+
+#: includes/class-shippo-client.php:201
+msgid "Shippo returned no rates for this shipment."
 msgstr ""
 
 #: includes/class-shippo-client.php:923
@@ -1256,74 +1056,338 @@ msgstr ""
 msgid "Shippo timed out while requesting the refund and the label status could not be confirmed. Check the label in Shippo before asking again."
 msgstr ""
 
-#: includes/class-shippo-client.php:1055
-msgid "The address does not have enough detail to validate."
+#: includes/class-plugin.php:2890
+#: includes/class-plugin.php:3231
+msgid "Shippo Transaction ID:"
 msgstr ""
 
-#: includes/class-shippo-client.php:1310
-msgid "Could not encode the Shippo request payload."
+#: includes/class-plugin.php:1531
+msgid "Signature"
 msgstr ""
 
-#: includes/class-shippo-client.php:1338
-msgid "Shippo is rate limiting requests (HTTP 429). Please try again in a moment."
+#: includes/class-plugin.php:1532
+msgid "Signature confirmation is priced into the quote, so it is chosen before getting rates."
 msgstr ""
 
-#: includes/class-shippo-client.php:1350
-#, php-format
-msgid "Shippo returned an unreadable response (HTTP %d)."
+#: includes/class-plugin.php:1534
+msgid "Signature required"
 msgstr ""
 
-#: includes/class-shippo-client.php:1453
-#, php-format
-msgid "Shippo request failed (HTTP %d)."
+#: includes/class-plugin.php:2661
+msgid "standardised"
 msgstr ""
 
-#: includes/class-shippo-client.php:1459
-msgid "The from address comes from Settings - From Address; blank fields fall back to the store address and admin email."
-msgstr ""
-
-#: includes/class-shippo-client.php:1461
-msgid "The recipient details come from the order shipping address and billing phone or email."
-msgstr ""
-
-#: includes/helpers.php:205
-msgid "ZIP+4 added"
-msgstr ""
-
-#: includes/helpers.php:206
-msgid "street standardised"
-msgstr ""
-
-#: includes/helpers.php:207
-msgid "suite moved to line 2"
-msgstr ""
-
-#: includes/helpers.php:208
-msgid "city corrected"
+#: includes/class-plugin.php:639
+msgid "State / Region"
 msgstr ""
 
 #: includes/helpers.php:209
 msgid "state corrected"
 msgstr ""
 
-#: includes/helpers.php:210
-msgid "country corrected"
+#: includes/class-plugin.php:677
+msgid "Stored in wp_options; used for all Veeqo API calls."
 msgstr ""
 
-#: includes/helpers.php:211
-msgid "name standardised"
+#: includes/helpers.php:206
+msgid "street standardised"
 msgstr ""
 
-#: includes/helpers.php:212
-msgid "company standardised"
+#. translators: %s: the correction EasyPost suggests
+#: includes/class-easypost-client.php:978
+#, php-format
+msgid "Suggested: %s"
 msgstr ""
 
-#: includes/helpers.php:213
-msgid "phone formatted"
+#: includes/helpers.php:207
+msgid "suite moved to line 2"
 msgstr ""
 
-#: includes/helpers.php:214
-msgid "email formatted"
+#: includes/class-plugin.php:1087
+msgid "Switch provider first, then change its mode."
+msgstr ""
+
+#. translators: %s: the mode a click would switch to, e.g. Production
+#: includes/class-plugin.php:1234
+#, php-format
+msgid "Switch to %s"
+msgstr ""
+
+#: includes/class-plugin.php:486
+#: includes/class-plugin.php:710
+#: includes/class-plugin.php:1235
+msgid "Test"
+msgstr ""
+
+#: includes/class-plugin.php:1238
+#: includes/class-plugin.php:1696
+#: includes/class-plugin.php:1706
+msgid "test"
+msgstr ""
+
+#: includes/class-plugin.php:1225
+msgid "Test: labels cost nothing. Click to switch to Production."
+msgstr ""
+
+#: includes/class-plugin.php:510
+#: includes/class-plugin.php:728
+msgid "Test API key"
+msgstr ""
+
+#: includes/class-plugin.php:717
+msgid "Test buys test labels with no money spent; Production spends real money. Both keys are kept, so switching back and forth does not lose either."
+msgstr ""
+
+#: includes/class-plugin.php:493
+msgid "Test buys test labels with no money spent; Production spends real money. Both keys are kept, so switching back and forth does not lose either. The selected key is also the one used for EasyPost address validation."
+msgstr ""
+
+#: includes/class-plugin.php:2042
+msgid "That file is not a valid settings export."
+msgstr ""
+
+#: includes/class-plugin.php:2825
+msgid "That rate is no longer part of the stored quotes. Get rates again before buying."
+msgstr ""
+
+#: includes/class-shippo-client.php:1055
+msgid "The address does not have enough detail to validate."
+msgstr ""
+
+#: includes/class-easypost-client.php:692
+msgid "The address does not have enough detail to verify."
+msgstr ""
+
+#: includes/class-tracking-relay.php:503
+msgid "the carrier"
+msgstr ""
+
+#: includes/class-easypost-client.php:1435
+msgid "The EasyPost request timed out and the shipment could not be read back. Check the EasyPost dashboard before retrying; the label may already exist."
+msgstr ""
+
+#: includes/class-easypost-client.php:1449
+msgid "The EasyPost request timed out and the shipment shows no label, so nothing was charged. It is safe to try again."
+msgstr ""
+
+#: includes/class-plugin.php:1954
+msgid "The file contains secrets (API keys), so store it somewhere safe."
+msgstr ""
+
+#: includes/class-shippo-client.php:1459
+msgid "The from address comes from Settings - From Address; blank fields fall back to the store address and admin email."
+msgstr ""
+
+#: includes/class-plugin.php:3065
+msgid "The label was bought and its tracking number recorded, but a PHP error interrupted what followed: %1$s (%2$s:%3$d). Check the order - a customer email may not have been sent."
+msgstr ""
+
+#: includes/class-plugin.php:549
+msgid "The Production API key does not start with \"EZAK\". Check which key was pasted."
+msgstr ""
+
+#: includes/class-plugin.php:763
+msgid "The Production API key does not start with \"shippo_live_\". Check which key was pasted."
+msgstr ""
+
+#: includes/class-shippo-client.php:1461
+msgid "The recipient details come from the order shipping address and billing phone or email."
+msgstr ""
+
+#. translators: 1: PHP error message, 2: file name, 3: line number
+#: includes/class-plugin.php:2750
+#, php-format
+msgid "The request was interrupted by a PHP error: %1$s (%2$s:%3$d). Check the Shippo dashboard before buying again."
+msgstr ""
+
+#: includes/class-plugin.php:2811
+msgid "These rates have expired: the dispatch day has moved on or the carrier quote timed out. Get rates again before buying."
+msgstr ""
+
+#: includes/class-plugin.php:3146
+msgid "These rates were priced by a different provider or label mode. Get rates again before buying."
+msgstr ""
+
+#. translators: 1: missing from-address fields, 2: settings link
+#: includes/class-plugin.php:1333
+#, php-format
+msgid "The shipment origin has no %1$s. Carriers expect a phone number, and USPS refuses a label without a phone and email, so some label purchases will fail until it is set in <a href=\"%2$s\">Settings → From Address</a>."
+msgstr ""
+
+#: includes/class-plugin.php:3422
+msgid "The shipping provider did not return a label."
+msgstr ""
+
+#: includes/class-plugin.php:3298
+#: includes/class-plugin.php:3666
+msgid "The shipping provider did not return a label URL."
+msgstr ""
+
+#: includes/class-plugin.php:2837
+msgid "The shipping provider did not return a successful shipment."
+msgstr ""
+
+#: includes/class-shippo-client.php:567
+msgid "The Shippo label file has expired and can no longer be downloaded."
+msgstr ""
+
+#: includes/class-plugin.php:545
+msgid "The Test API key does not start with \"EZTK\". Check which key was pasted."
+msgstr ""
+
+#: includes/class-plugin.php:759
+msgid "The Test API key does not start with \"shippo_test_\". Check which key was pasted."
+msgstr ""
+
+#: includes/class-update-checker.php
+msgid "The update package did not match the checksum published with the release, so it was not installed. Try again later, or install the zip from the release page."
+msgstr ""
+
+#: includes/class-easypost-client.php:556
+msgid "This EasyPost label has already been refunded."
+msgstr ""
+
+#: includes/class-plugin.php:3037
+msgid "This label was bought with EasyPost in Production mode, but no Production API key is set."
+msgstr ""
+
+#: includes/class-plugin.php:3038
+msgid "This label was bought with EasyPost in Test mode, but no Test API key is set."
+msgstr ""
+
+#: includes/class-plugin.php:3028
+msgid "This label was bought with Shippo in Production mode, but no Production API key is set."
+msgstr ""
+
+#: includes/class-plugin.php:3029
+msgid "This label was bought with Shippo in Test mode, but no Test API key is set."
+msgstr ""
+
+#: includes/class-plugin.php:3043
+msgid "This order has no stored label id."
+msgstr ""
+
+#: includes/class-shippo-client.php:420
+msgid "This Shippo label has already been refunded."
+msgstr ""
+
+#: includes/class-plugin.php
+msgid "Today"
+msgstr ""
+
+#: includes/class-plugin.php:1427
+msgid "Total Spent"
+msgstr ""
+
+#: includes/class-plugin.php:1567
+msgid "Tracking"
+msgstr ""
+
+#: includes/class-plugin.php:1785
+msgid "Transaction details"
+msgstr ""
+
+#: includes/class-shippo-client.php:503
+msgid "Transaction not found in Shippo."
+msgstr ""
+
+#: includes/class-api-client.php:187
+#: includes/class-api-client.php:214
+#, php-format
+msgid "Unexpected Veeqo book response: %d"
+msgstr ""
+
+#: includes/class-api-client.php:91
+#, php-format
+msgid "Unexpected Veeqo rates response: %d"
+msgstr ""
+
+#: includes/class-api-client.php:237
+#, php-format
+msgid "Unexpected Veeqo response: %d"
+msgstr ""
+
+#: includes/class-plugin.php:2000
+msgid "Uninstall Behaviour"
+msgstr ""
+
+#: includes/class-plugin.php:862
+msgid "Unknown Computer"
+msgstr ""
+
+#: includes/class-plugin.php:1079
+msgid "Unknown provider."
+msgstr ""
+
+#: includes/class-plugin.php:880
+msgid "Unnamed Printer"
+msgstr ""
+
+#: includes/class-plugin.php:1964
+msgid "Upload and Restore"
+msgstr ""
+
+#: includes/class-plugin.php:520
+msgid "Used for both EasyPost labels and address validation. Insurance is EasyPost's own and is priced at purchase, not in the quote."
+msgstr ""
+
+#: includes/class-plugin.php:698
+msgid "Used for new rate requests and new purchases. Switching back is one radio button; labels already bought keep the provider that sold them."
+msgstr ""
+
+#: includes/class-plugin.php:687
+msgid "Veeqo"
+msgstr ""
+
+#: includes/class-plugin.php:161
+msgid "Veeqo API Key"
+msgstr ""
+
+#: includes/class-api-client.php:21
+msgid "Veeqo API key is not set."
+msgstr ""
+
+#: includes/class-plugin.php:160
+msgid "Veeqo API Settings"
+msgstr ""
+
+#: includes/class-api-client.php:281
+msgid "Veeqo did not return a label URL."
+msgstr ""
+
+#: includes/class-plugin.php:1190
+msgid "Veeqo has no API key. Add one under Settings → Label Provider first."
+msgstr ""
+
+#: includes/class-plugin.php:1090
+#: includes/class-plugin.php:1144
+msgid "Veeqo has no test or production mode."
+msgstr ""
+
+#: includes/class-api-client.php:259
+#, php-format
+msgid "Veeqo refund failed: %d"
+msgstr ""
+
+#: includes/class-plugin.php:2897
+#: includes/class-plugin.php:3234
+msgid "Veeqo Remote Shipment ID:"
+msgstr ""
+
+#: includes/class-plugin.php:3480
+msgid "Veeqo shipping label refunded/cancelled."
+msgstr ""
+
+#: includes/class-plugin.php:1517
+msgid "Weight"
+msgstr ""
+
+#: includes/class-plugin.php:1864
+msgid "Weight (oz)"
+msgstr ""
+
+#: includes/class-plugin.php:1569
+msgid "Weight Used (oz)"
 msgstr ""
 
 #: includes/class-plugin.php
@@ -1331,34 +1395,42 @@ msgstr ""
 msgid "What's new in Shipping Desk %s"
 msgstr ""
 
-#: includes/class-plugin.php
-msgid "Got it"
+#: includes/class-plugin.php:1862
+msgid "Width (in)"
+msgstr ""
+
+#: includes/class-plugin.php:2129
+msgid "WooCommerce Shipment Tracking is installed: tracking numbers are written to its shipment tracking panel."
 msgstr ""
 
 #: includes/class-plugin.php
 msgid "You do not have permission to do that."
 msgstr ""
 
-#: includes/class-update-checker.php
-msgid "Buy, print and refund shipping labels from WooCommerce orders."
+#: includes/class-plugin.php:260
+msgid "You do not have permission to export settings."
 msgstr ""
 
-#: includes/class-update-checker.php
-msgid "The update package did not match the checksum published with the release, so it was not installed. Try again later, or install the zip from the release page."
+#: includes/class-plugin.php:300
+msgid "You do not have permission to import settings."
 msgstr ""
 
-#: includes/class-plugin.php
-msgid "Today"
+#: includes/class-tracking-relay.php:88
+msgid "Your order has shipped"
 msgstr ""
 
-#: includes/class-plugin.php
-msgid "Postage bought since midnight, site time. Refunds are not deducted."
+#: includes/class-tracking-relay.php:521
+msgid "Your order has shipped via %1$s. Tracking number: %2$s"
 msgstr ""
 
-#: includes/class-plugin.php
-#. translators: %s: number of labels bought today.
-#, php-format
-msgid "%s label"
-msgid_plural "%s labels"
-msgstr[0] ""
-msgstr[1] ""
+#: includes/class-tracking-relay.php:512
+msgid "Your order has shipped via %1$s. Track it here: <a href=\"%2$s\" target=\"_blank\">%3$s</a>"
+msgstr ""
+
+#: includes/helpers.php:205
+msgid "ZIP+4 added"
+msgstr ""
+
+#: includes/class-plugin.php:640
+msgid "ZIP / Postcode"
+msgstr ""

@@ -287,5 +287,28 @@ $spend_read = Shipping_Desk_Helpers::daily_total( $spend_two, '2026-11-16', 'usd
 helper_same( 10.70, $spend_read['amount'], 'the currency is case-insensitive' );
 helper_same( 2, $spend_read['labels'], 'and the label count comes back with the total' );
 
+helper_section( 'insurance shortfall' );
+
+helper_same( false, Shipping_Desk_Helpers::insurance_shortfall( 0, '' ), 'no cover requested is never a shortfall' );
+helper_same( false, Shipping_Desk_Helpers::insurance_shortfall( 250, '250.00' ), 'the requested cover applied in full is fine' );
+helper_same( false, Shipping_Desk_Helpers::insurance_shortfall( 250, '249.99' ), 'a cent of rounding is not a shortfall' );
+helper_same( true, Shipping_Desk_Helpers::insurance_shortfall( 250, '' ), 'cover requested and none applied is a shortfall' );
+helper_same( true, Shipping_Desk_Helpers::insurance_shortfall( 250, '100.00' ), 'cover applied for less than asked is a shortfall' );
+helper_same( false, Shipping_Desk_Helpers::insurance_shortfall( 250, '2500' ), 'more cover than asked is not a shortfall' );
+
+helper_same( true, Shipping_Desk_Helpers::insurance_premium_missing( '250.00', '', true ), 'a labelled shipment with cover and no premium is flagged' );
+helper_same( false, Shipping_Desk_Helpers::insurance_premium_missing( '250.00', '2.50', true ), 'cover with a premium is not' );
+helper_same( false, Shipping_Desk_Helpers::insurance_premium_missing( '250.00', '', false ), 'cover with no label behind it is not - test mode omits fees' );
+helper_same( false, Shipping_Desk_Helpers::insurance_premium_missing( '', '', true ), 'no cover at all is not flagged' );
+
+helper_section( 'a stored quote belongs to the account that priced it' );
+
+$quote_easypost = [ 'provider' => 'easypost', 'mode' => 'test', 'rates' => [ [ 'rate_id' => 'rate_1' ] ] ];
+
+helper_same( true, Shipping_Desk_Helpers::quote_record_matches_provider( $quote_easypost, 'easypost', 'test' ), 'the same provider and mode still matches' );
+helper_same( false, Shipping_Desk_Helpers::quote_record_matches_provider( $quote_easypost, 'shippo', 'test' ), 'another provider does not' );
+helper_same( false, Shipping_Desk_Helpers::quote_record_matches_provider( $quote_easypost, 'easypost', 'live' ), 'nor does the other label mode' );
+helper_same( false, Shipping_Desk_Helpers::quote_record_matches_provider( [ 'rates' => [ [ 'rate_id' => 'rate_1' ] ] ], 'easypost', 'test' ), 'a record with no stamp cannot be trusted' );
+
 echo PHP_EOL . 'Checks: ' . $GLOBALS['helper_checks'] . ', failures: ' . $GLOBALS['helper_failures'] . PHP_EOL;
 exit( 0 === $GLOBALS['helper_failures'] ? 0 : 1 );

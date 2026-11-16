@@ -359,6 +359,85 @@ class Shipping_Desk_Helpers {
     }
 
     /**
+     * Is cover recorded without the premium that should accompany it?
+     *
+     * EasyPost charges insurance as its own fee, so a labelled shipment carrying a value
+     * with no `InsuranceFee` deserves a look.
+     *
+     * It only counts when there is a label: a shipment that carries a declared value but
+     * never produced one is a different problem, and EasyPost's test mode can return a
+     * bought shipment without populating the fee fields at all. Requiring the label keeps
+     * this honest instead of noisy.
+     *
+     * @param string $insured   Declared value reported on the shipment.
+     * @param string $fee       Premium reported as a fee, or ''.
+     * @param bool   $has_label Whether a label was actually produced.
+     * @return bool
+     */
+    public static function insurance_premium_missing( $insured, $fee, $has_label ) {
+        if ( round( (float) $insured, 2 ) <= 0 ) {
+            return false;
+        }
+
+        if ( '' !== trim( (string) $fee ) ) {
+            return false;
+        }
+
+        return (bool) $has_label;
+    }
+
+    /**
+     * Was this stored quote priced by the provider (and mode) now selected?
+     *
+     * Rates are only meaningful to the account that quoted them: the record also holds
+     * the provider's shipment id, and that id cannot be bought by another provider. A
+     * record written before the stamp existed cannot be trusted either — its ids belong
+     * to whichever provider was active when it was written.
+     *
+     * @param array  $record   Stored record.
+     * @param string $provider Provider now selected.
+     * @param string $mode     Label mode now selected.
+     * @return bool
+     */
+    public static function quote_record_matches_provider( array $record, $provider, $mode ) {
+        $stored_provider = isset( $record['provider'] ) ? (string) $record['provider'] : '';
+        $stored_mode     = isset( $record['mode'] ) ? (string) $record['mode'] : '';
+
+        if ( '' === $stored_provider ) {
+            return false;
+        }
+
+        if ( $stored_provider !== (string) $provider ) {
+            return false;
+        }
+
+        return $stored_mode === (string) $mode;
+    }
+
+    /**
+     * Did the bought label come back with the cover that was asked for?
+     *
+     * EasyPost accepts an `insurance` value whether or not the carrier applies it, so a
+     * successful buy is not evidence that the parcel is covered. The answer has to come
+     * from the bought shipment itself.
+     *
+     * One cent of tolerance absorbs the currency round-trip; anything larger is a real
+     * shortfall, and the operator needs to know before the parcel leaves.
+     *
+     * @param float  $requested Declared value sent with the buy call.
+     * @param string $applied   Declared value reported on the bought shipment.
+     * @return bool True when cover was asked for and is missing or short.
+     */
+    public static function insurance_shortfall( $requested, $applied ) {
+        $requested = round( (float) $requested, 2 );
+        if ( $requested <= 0 ) {
+            return false;
+        }
+
+        return round( (float) $applied, 2 ) + 0.01 < $requested;
+    }
+
+    /**
      * What a label actually cost, as reported by the provider that sold it.
      *
      * Shippo answers with the rate amount as a string on the bought transaction;

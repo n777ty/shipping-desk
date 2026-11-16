@@ -15,6 +15,7 @@ $shipping_desk_purge = get_option( 'shipping_desk_delete_data_on_uninstall', fal
 if ( $shipping_desk_purge ) {
     delete_option( 'shipping_desk_boxes' );
 delete_option( 'shipping_desk_daily_spend' );
+delete_option( 'shipping_desk_complete_order_on_label' );
     delete_option( 'shipping_desk_veeqo_api_key' );
     delete_option( 'shipping_desk_provider' );
     delete_option( 'shipping_desk_shippo_mode' );

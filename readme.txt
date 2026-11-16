@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.2.0
+Stable tag: 1.3.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,24 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.3.0 =
+
+* Changed: tracking numbers are handed to the site's tracking plugin instead of written into an order note. Advanced Shipment Tracking first, then WooCommerce Shipment Tracking; the customer is emailed a note only when neither is installed.
+* New: refunding a label removes its tracking number from the tracking plugin, so a replacement label's email shows only the live number instead of the void one beside it. Reshipping without a refund keeps both numbers, because both parcels really shipped. A reset removes the number only if that label was refunded - a label that is still valid stays on the order. A label refunded in the provider's own dashboard is removed too, as soon as the plugin learns of it.
+* New: the private note now records the provider reference (for example the EasyPost shipment id) and no longer repeats the carrier and tracking number, which AST's integrations parse and would import a second time.
+* New: a Tracking section in Settings shows which plugin is receiving tracking, plus a "Complete on purchase" option that moves the order to Completed on every purchase, whichever plugin is installed.
+* New: with no tracking plugin installed, the customer note carrying the tracking number is emailed with the subject "Your order has shipped" instead of WooCommerce's "A note has been added to your order".
+* New: the Insurance field states what the value costs ("~$2.50 premium"), or says plainly that nothing is insured. The EasyPost estimate no longer depends on rates having been fetched to appear.
+* New: a bought label is checked against the insurance that was asked for. EasyPost accepts the declared value whether or not the carrier applies cover, so the answer is read from the bought shipment: if it comes back uninsured or short, the order gets a note saying so and the operator is told straight away - in bulk runs too. Bulk purchases also record the insured value and premium now, which they previously ignored.
+* New: a label that records insurance with no premium behind it is flagged as well. EasyPost charges cover as its own fee, so a declared value with no fee means either the cover was never charged or the shipment was never bought - the order gets a note saying to check the dashboard, and a bulk run lists it in the summary. It only fires when a label was actually produced, so a test-mode shipment that omits the fee fields is left alone.
+
+* Fixed: saving one Settings section wiped the others. Every option on the page shared a single settings group, and WordPress saves a group by overwriting all of its options, setting to null any field missing from the submitted form - so ticking the reship checkbox erased the provider, every API key and the from address. Each form now has its own group, checkboxes post an explicit 0, and the legacy EasyPost key is no longer registered.
+* Fixed: a normal purchase on a Processing order was logged as "reshipped completed order", because the reship check ran after the new completion step. It now compares against the status from before the purchase. The label note is also written before the tracking hand-off, so the timeline reads in the order things happened.
+* Fixed: the rate column showed only the carrier's own price when the Insurance value was typed before Get Rates. The totals were restated only when that field changed, and the change handler ignores a value that has not moved since the quote - so the normal order of work never showed EasyPost's estimated premium. Rates are now restated as soon as they arrive.
+* Fixed: the reship panel never showed an insurance premium. It rebuilds the order row from the server's HTML but copied only three of the row's data attributes, dropping the one naming the provider - so the premium was treated as zero before the declared value was even read. The panel now copies the whole attribute set.
+* Fixed: switching provider - or its test/production mode - left the previous provider's rates in the Rates column, where they could still be bought with a shipment id the newly selected provider does not know. Quotes are now stamped with the account that priced them, ignored when that no longer matches, and cleared on the switch itself.
+* Fixed: a PHP error raised after a label was bought - by a notification hook or a third-party email template, for example - was reported as a failed purchase, inviting a second buy. The purchase is now reported as successful with the error named, because the label and its tracking number already exist.
 
 = 1.2.0 =
 * New: a "Today" badge in the header showing what has been spent on postage since midnight, with a label count. It resets by itself at midnight and costs one option read per page; nothing is queried and nothing is shown on a day with no purchases.

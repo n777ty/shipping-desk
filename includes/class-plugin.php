@@ -43,6 +43,17 @@ class Shipping_Desk_Plugin {
     /** @var Shipping_Desk_PrintNode_Client|null */
     protected $_printnode_client = null;
 
+    /**
+     * What was bought, once the purchase is durable.
+     *
+     * Set the moment the label meta is saved, so a fatal raised afterwards — by an email
+     * template, a notification hook, anything that runs on completion — can still report
+     * the purchase instead of looking like a failure.
+     *
+     * @var array
+     */
+    protected $committed_purchase = [];
+
     public function __construct( $file ) {
         $this->file = $file;
         $this->path = plugin_dir_path( $file );
@@ -265,9 +276,11 @@ class Shipping_Desk_Plugin {
         register_setting( 'shipping_desk_api_settings', 'shipping_desk_easypost_live_api_key' );
 
         register_setting( 'shipping_desk_api_settings', 'shipping_desk_veeqo_api_key' );
-        // Legacy single EasyPost key, kept registered so an upgrade never wipes it
-        // before maybe_migrate_easypost_key() has copied it into its slot.
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_easypost_api_key' );
+        // The legacy single EasyPost key is deliberately NOT registered. It has no field on
+        // this page, and any option registered to a settings group is set to null whenever a
+        // form in that group is saved without it - which would erase the key before
+        // maybe_migrate_easypost_key() could copy it into its slot. Unregistered, nothing
+        // here can touch it.
         register_setting( 'shipping_desk_api_settings', 'shipping_desk_from_address', [ 'sanitize_callback' => [ $this, 'sanitize_from_address' ] ] );
 
         add_settings_section( 'shipping_desk_provider_section', __( 'Label Provider', 'shipping-desk' ), '__return_false', 'shipping_desk_api_settings' );
@@ -289,11 +302,19 @@ class Shipping_Desk_Plugin {
             return in_array( $value, [ 'browser', 'printnode' ], true ) ? $value : 'browser';
         } ] );
 
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_delete_data_on_uninstall', [ 'sanitize_callback' => function ( $value ) {
+        // Each of these lives in its own settings group, because WordPress saves a *group*,
+        // not a form: every option registered to the submitted group is overwritten, and
+        // ones missing from the POST are set to null. Sharing one group across several
+        // forms meant saving the reship checkbox wiped the API keys and the provider.
+        register_setting( 'shipping_desk_uninstall_settings', 'shipping_desk_delete_data_on_uninstall', [ 'sanitize_callback' => function ( $value ) {
             return $value ? 1 : 0;
         } ] );
 
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_reship_send_completed_email', [ 'sanitize_callback' => function ( $value ) {
+        register_setting( 'shipping_desk_reship_settings', 'shipping_desk_reship_send_completed_email', [ 'sanitize_callback' => function ( $value ) {
+            return $value ? 1 : 0;
+        } ] );
+
+        register_setting( 'shipping_desk_tracking_settings', 'shipping_desk_complete_order_on_label', [ 'sanitize_callback' => function ( $value ) {
             return $value ? 1 : 0;
         } ] );
     }
@@ -1019,8 +1040,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.2.0' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.2.0', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.0' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.0', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -1217,6 +1238,7 @@ class Shipping_Desk_Plugin {
             }
 
             update_option( 'shipping_desk_' . $target . '_mode', $mode );
+            $this->clear_cached_quotes();
 
             wp_send_json_success( [
                 'provider' => $target,
@@ -1235,6 +1257,7 @@ class Shipping_Desk_Plugin {
         }
 
         update_option( 'shipping_desk_provider', $target );
+        $this->clear_cached_quotes();
 
         wp_send_json_success( [
             'provider' => $target,
@@ -1662,6 +1685,8 @@ class Shipping_Desk_Plugin {
                         <div class="shipping-desk-service-amount-row">
                             <label class="shipping-desk-weight-label" for="shipping-desk-liability-<?php echo esc_attr( $order_id ); ?>"><?php esc_html_e( 'Insurance', 'shipping-desk' ); ?></label>
                             <input type="number" step="0.01" min="0" id="shipping-desk-liability-<?php echo esc_attr( $order_id ); ?>" class="shipping-desk-liability-amount" value="" placeholder="<?php esc_attr_e( 'None', 'shipping-desk' ); ?>" title="<?php echo esc_attr( $insurance_title ); ?>" />
+                    <?php // States the premium, or that there is none, before any quote is fetched. ?>
+                    <span class="shipping-desk-liability-estimate" aria-live="polite"></span>
                         </div>
                     </td>
                     <td class="shipping-desk-rates">
@@ -2093,14 +2118,58 @@ class Shipping_Desk_Plugin {
 
             <hr />
 
+            <h2><?php esc_html_e( 'Tracking', 'shipping-desk' ); ?></h2>
+            <p class="description">
+                <?php
+                switch ( Shipping_Desk_Tracking_Relay::handler() ) {
+                    case Shipping_Desk_Tracking_Relay::AST:
+                        esc_html_e( 'Advanced Shipment Tracking is installed: tracking numbers are written to its shipment tracking fields, which feed its emails and the customer account page.', 'shipping-desk' );
+                        break;
+                    case Shipping_Desk_Tracking_Relay::ST:
+                        esc_html_e( 'WooCommerce Shipment Tracking is installed: tracking numbers are written to its shipment tracking panel.', 'shipping-desk' );
+                        break;
+                    default:
+                        esc_html_e( 'No shipment tracking plugin was found: the customer is emailed a note with the tracking number when a label is bought.', 'shipping-desk' );
+                        break;
+                }
+                ?>
+            </p>
+            <form method="post" action="options.php">
+                <?php settings_fields( 'shipping_desk_tracking_settings' ); ?>
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row"><?php esc_html_e( 'Complete on purchase', 'shipping-desk' ); ?></th>
+                        <td>
+                            <label>
+                                <?php // Hidden zero first: an unticked box posts nothing at all. ?>
+                                <input type="hidden" name="shipping_desk_complete_order_on_label" value="0" />
+                                <input type="checkbox"
+                                       name="shipping_desk_complete_order_on_label"
+                                       value="1"
+                                       <?php checked( 1, (int) get_option( 'shipping_desk_complete_order_on_label', 1 ) ); ?> />
+                                <?php esc_html_e( 'Mark the order Completed when a label is bought.', 'shipping-desk' ); ?>
+                            </label>
+                            <p class="description">
+                                <?php esc_html_e( 'Applies to every purchase, whichever tracking plugin is installed: the order moves to Completed and WooCommerce sends its "Completed order" email. Orders that are already Completed are left alone. With no tracking plugin the customer also gets a note with the tracking number, so that shop sees two emails. Untick this if you complete orders yourself.', 'shipping-desk' ); ?>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button(); ?>
+            </form>
+
+            <hr />
+
             <h2><?php esc_html_e( 'Reship Notifications', 'shipping-desk' ); ?></h2>
             <form method="post" action="options.php">
-                <?php settings_fields( 'shipping_desk_api_settings' ); ?>
+                <?php settings_fields( 'shipping_desk_reship_settings' ); ?>
                 <table class="form-table" role="presentation">
                     <tr>
                         <th scope="row"><?php esc_html_e( 'Completed email on reship', 'shipping-desk' ); ?></th>
                         <td>
                             <label>
+                                <?php // Hidden zero first: an unticked box posts nothing at all. ?>
+                                <input type="hidden" name="shipping_desk_reship_send_completed_email" value="0" />
                                 <input type="checkbox"
                                        name="shipping_desk_reship_send_completed_email"
                                        value="1"
@@ -2120,12 +2189,14 @@ class Shipping_Desk_Plugin {
 
             <h2><?php esc_html_e( 'Uninstall Behaviour', 'shipping-desk' ); ?></h2>
             <form method="post" action="options.php">
-                <?php settings_fields( 'shipping_desk_api_settings' ); ?>
+                <?php settings_fields( 'shipping_desk_uninstall_settings' ); ?>
                 <table class="form-table" role="presentation">
                     <tr>
                         <th scope="row"><?php esc_html_e( 'Remove data on uninstall', 'shipping-desk' ); ?></th>
                         <td>
                             <label>
+                                <?php // Hidden zero first: an unticked box posts nothing at all. ?>
+                                <input type="hidden" name="shipping_desk_delete_data_on_uninstall" value="0" />
                                 <input type="checkbox"
                                        name="shipping_desk_delete_data_on_uninstall"
                                        value="1"
@@ -2527,6 +2598,14 @@ class Shipping_Desk_Plugin {
             return [];
         }
 
+        $provider = null === $provider ? $this->provider() : (string) $provider;
+
+        // Switching provider or label mode must retire every stored quote: the rates and
+        // the shipment id in them belong to the account that priced them.
+        if ( ! Shipping_Desk_Helpers::quote_record_matches_provider( $record, $provider, $this->provider_mode( $provider ) ) ) {
+            return [];
+        }
+
         return Shipping_Desk_Helpers::quote_record_is_fresh( $record, $this->current_dispatch_day( $provider ) )
             ? $record
             : [];
@@ -2577,6 +2656,11 @@ class Shipping_Desk_Plugin {
     protected function store_quote_record( $order_id, array $record ) {
         $now = time();
 
+        // Stamped with the account that priced it, so a provider or mode change retires
+        // the record instead of offering its rates under someone else's name.
+        $record['provider'] = $this->provider();
+        $record['mode']     = $this->provider_mode( $record['provider'] );
+
         $record['expires_at'] = Shipping_Desk_Helpers::quote_record_expiry(
             $now,
             isset( $record['provider_expires_at'] ) ? $record['provider_expires_at'] : null,
@@ -2614,6 +2698,109 @@ class Shipping_Desk_Plugin {
      * @param array    $shipment Bought shipment.
      * @return void
      */
+    /**
+     * Hand a bought label's tracking to whoever owns tracking on this site, and record the
+     * provider reference in a private note.
+     *
+     * The tracking number deliberately does not appear in that note: AST PRO's EasyPost
+     * integration imports carrier + tracking it finds in notes, so repeating it there would
+     * add a second item on top of the one we just inserted. The reference id is the part
+     * worth keeping for refunds and support.
+     *
+     * @param WC_Order $order        Order.
+     * @param string   $provider     shippo|easypost|veeqo.
+     * @param string   $tracking     Tracking number.
+     * @param string   $carrier_id   Carrier as the provider reports it.
+     * @param string   $tracking_url Carrier tracking URL.
+     * @param string   $label_id     Provider label/transaction id.
+     * @param string   $remote_id    Remote shipment id.
+     * @param string   $insured      Declared value, if any.
+     * @param string   $insured_fee  Premium, if any.
+     * @return void
+     */
+    protected function record_label_tracking( WC_Order $order, $provider, $tracking, $carrier_id, $tracking_url, $label_id, $remote_id, $insured = '', $insured_fee = '' ) {
+        $reference_label = 'shippo' === $provider
+            ? __( 'Shippo Transaction ID:', 'shipping-desk' )
+            : ( 'easypost' === $provider
+                ? __( 'EasyPost Shipment ID:', 'shipping-desk' )
+                : __( 'Veeqo Remote Shipment ID:', 'shipping-desk' ) );
+
+        $reference_value = in_array( $provider, [ 'shippo', 'easypost' ], true ) ? $label_id : $remote_id;
+
+        // A carrier with no known URL leaves tracking_url() returning the number itself;
+        // treat anything that is not a URL as "no link" rather than printing a broken one.
+        if ( ! preg_match( '#^https?://#i', (string) $tracking_url ) ) {
+            $tracking_url = '';
+        }
+
+        // The private note goes in before the hand-off so the timeline reads in the order
+        // things happened: label bought, tracking added, status changed, email sent.
+        $extra = [];
+        if ( '' !== (string) $insured ) {
+            $cover = sprintf(
+                /* translators: %s: insured value, formatted with currency. */
+                __( 'Insured for %s', 'shipping-desk' ),
+                wc_price( (float) $insured, [ 'currency' => $order->get_currency() ] )
+            );
+            if ( '' !== (string) $insured_fee ) {
+                $cover .= ' ' . sprintf(
+                    /* translators: %s: insurance premium, formatted with currency. */
+                    __( '(premium %s)', 'shipping-desk' ),
+                    wc_price( (float) $insured_fee, [ 'currency' => $order->get_currency() ] )
+                );
+            }
+            $extra[] = $cover . '.';
+        }
+
+        $order->add_order_note(
+            Shipping_Desk_Tracking_Relay::private_note(
+                Shipping_Desk_Tracking_Relay::provider_label( $provider ),
+                $reference_label,
+                $reference_value,
+                $extra
+            )
+        );
+
+        Shipping_Desk_Tracking_Relay::record(
+            $order,
+            [
+                'number'  => $tracking,
+                'carrier' => $carrier_id,
+                'url'     => $tracking_url,
+            ]
+        );
+    }
+
+    /**
+     * Take a refunded label's tracking number back out of the tracking plugin.
+     *
+     * Both AST and Shipment Tracking append items, and the customer's email lists
+     * every item on the order — so a voided number has to go, or the replacement
+     * ships with the dead number displayed beside it.
+     *
+     * The note names the plugin and never the number: AST PRO's integrations parse
+     * order notes for carrier + tracking and would import it straight back.
+     *
+     * @param WC_Order $order  Order.
+     * @param string   $number Tracking number of the refunded label.
+     * @return void
+     */
+    protected function remove_dead_tracking( WC_Order $order, $number ) {
+        $report = Shipping_Desk_Tracking_Relay::forget( $order, (string) $number );
+
+        if ( $report['removed'] < 1 ) {
+            return;
+        }
+
+        $order->add_order_note(
+            sprintf(
+                /* translators: %s: tracking plugin name, e.g. Advanced Shipment Tracking. */
+                __( 'Shipping Desk: removed the refunded tracking number from %s.', 'shipping-desk' ),
+                $report['label']
+            )
+        );
+    }
+
     protected function record_shipping_cost( WC_Order $order, $provider, $mode, array $shipment ) {
         $key = $this->brikpanel_cost_meta();
         if ( '' === $key ) {
@@ -2864,6 +3051,27 @@ class Shipping_Desk_Plugin {
             if ( ! in_array( (int) $error['type'], $fatal, true ) || headers_sent() ) {
                 return;
             }
+
+            if ( ! empty( $this->committed_purchase ) ) {
+                // The label already exists, so this is not a failed purchase: something
+                // that runs after it broke. Saying "error" here would send the operator
+                // to re-buy a label they own.
+                wp_send_json_success(
+                    array_merge(
+                        $this->committed_purchase,
+                        [
+                            'warning' => sprintf(
+                                /* translators: 1: PHP error message, 2: file name, 3: line number */
+                                __( 'The label was bought and its tracking number recorded, but a PHP error interrupted what followed: %1$s (%2$s:%3$d). Check the order - a customer email may not have been sent.', 'shipping-desk' ),
+                                $error['message'],
+                                basename( (string) $error['file'] ),
+                                (int) $error['line']
+                            ),
+                        ]
+                    )
+                );
+                return;
+            }
             wp_send_json_error(
                 [
                     'message' => sprintf(
@@ -2900,6 +3108,10 @@ class Shipping_Desk_Plugin {
         $remote_id    = isset( $_POST['remote_id'] ) ? sanitize_text_field( wp_unslash( $_POST['remote_id'] ) ) : '';
         $rate         = isset( $_POST['rate'] ) ? $this->parse_rate_input( wp_unslash( $_POST['rate'] ) ) : [];
         $vas_input    = ( isset( $_POST['vas'] ) && is_array( $_POST['vas'] ) ) ? wp_unslash( $_POST['vas'] ) : [];
+
+        // What the operator asked to insure, kept so the bought shipment can be checked
+        // against it. EasyPost accepts the value whether or not the carrier applies it.
+        $requested_insurance = isset( $vas_input['liability_amount'] ) ? (float) $vas_input['liability_amount'] : 0.0;
         $total_weight = isset( $_POST['total_weight'] ) ? floatval( $_POST['total_weight'] ) : 0.0;
         $box          = ( isset( $_POST['box'] ) && is_array( $_POST['box'] ) ) ? $_POST['box'] : [];
 
@@ -2926,6 +3138,15 @@ class Shipping_Desk_Plugin {
         // at the carrier or print the wrong date — ask for fresh rates instead.
         $quote_record = $this->get_quote_record( $order_id );
         if ( ! empty( $quote_record ) ) {
+            if ( ! Shipping_Desk_Helpers::quote_record_matches_provider( $quote_record, $provider, $mode ) ) {
+                // Priced by the provider or label mode that has since been switched away
+                // from: its rate ids and shipment id cannot be bought by this account.
+                $this->delete_quote_record( $order_id );
+                wp_send_json_error( [
+                    'message' => __( 'These rates were priced by a different provider or label mode. Get rates again before buying.', 'shipping-desk' ),
+                ], 409 );
+            }
+
             if ( ! Shipping_Desk_Helpers::quote_record_is_fresh( $quote_record, $this->current_dispatch_day( $provider ) ) ) {
                 $this->delete_quote_record( $order_id );
                 wp_send_json_error( [
@@ -2994,73 +3215,66 @@ class Shipping_Desk_Plugin {
             $order->update_meta_data( $m['insurance_fee'], $insured_fee );
         }
 
+        // "Actually insured" is a question only the bought shipment can answer: EasyPost
+        // takes the declared value whether or not the carrier applies cover. Compare the
+        // two and say so, in the notes and to the operator, rather than leaving a parcel
+        // believed covered until it goes missing.
+        //
+        // EasyPost only: it reports the cover on the shipment, so a missing value there
+        // means it really is missing. Shippo prices XCover into the rate and Veeqo quotes
+        // it after the quotes, so neither returns a comparable field here.
+        $insurance_warning = '';
+        if ( 'easypost' === $provider ) {
+            if ( Shipping_Desk_Helpers::insurance_shortfall( $requested_insurance, $insured ) ) {
+                $insurance_warning = $this->insurance_shortfall_note( $order, $requested_insurance, $insured );
+            } elseif ( Shipping_Desk_Helpers::insurance_premium_missing( $insured, $insured_fee, '' !== $label_url ) ) {
+                // A declared value with no premium behind it: the shipment carries the
+                // value, EasyPost reports no charge for it. Sometimes that is a cover
+                // bought without a fee, sometimes a value recorded with no label — the
+                // operator can tell which in one glance at the dashboard.
+                $insurance_warning = $this->insurance_unpriced_note( $order, $insured );
+            }
+
+            if ( '' !== $insurance_warning ) {
+                $order->add_order_note( $insurance_warning );
+            }
+        }
+
         // Applies an accepted address correction (and the optional order update)
         // before this save, so the label meta and the address land together.
         $address_note = $this->apply_address_decision( $order );
         $order->save();
 
-        // Order note recording tracking + remote shipment id.
-        $carrier_lc   = strtolower( (string) $carrier_id );
-        $carrier_name = $carrier_id ?: 'Carrier';
-        if ( strpos( $carrier_lc, 'usps' ) !== false )   $carrier_name = 'USPS';
-        elseif ( strpos( $carrier_lc, 'ups' ) !== false )  $carrier_name = 'UPS';
-        elseif ( strpos( $carrier_lc, 'fedex' ) !== false ) $carrier_name = 'FedEx';
+        // From here the label exists. Anything that runs on completion and fatals - a
+        // notification hook, a third-party email template - must not be reported as a
+        // failed purchase.
+        $this->committed_purchase = [
+            'label_id'      => $label_id,
+            'label_url'     => $label_url,
+            'tracking'      => $tracking,
+            'insurance'     => $insured,
+            'insurance_fee' => $insured_fee,
+        ];
 
-        $tracking_url = $tracking;
+        // Whether the order was already Completed *before* this purchase. The relay call
+        // below completes it when the setting allows, so asking afterwards would classify
+        // every normal purchase as a reship.
+        $was_completed = $order->has_status( 'completed' );
+
+        // Tracking goes to whichever plugin owns tracking on this site — AST first, then
+        // Shipment Tracking — or to the customer by note when neither is installed.
         if ( $tracking ) {
-            if ( strpos( $carrier_lc, 'usps' ) !== false ) {
-                $tracking_url = 'https://tools.usps.com/go/TrackConfirmAction?tLabels=' . urlencode( $tracking );
-            } elseif ( strpos( $carrier_lc, 'ups' ) !== false ) {
-                $tracking_url = 'https://www.ups.com/track?loc=en_US&tracknum=' . urlencode( $tracking );
-            } elseif ( strpos( $carrier_lc, 'fedex' ) !== false ) {
-                $tracking_url = 'https://www.fedex.com/fedextrack/?tracknumbers=' . urlencode( $tracking );
-            }
-        }
-
-        if ( $tracking ) {
-            // Name the provider that actually bought the label, and the id that
-            // provider uses, so the note stays useful after a switch.
-            if ( 'shippo' === $provider ) {
-                $reference_label = __( 'Shippo Transaction ID:', 'shipping-desk' );
-                $reference_value = $label_id;
-            } elseif ( 'easypost' === $provider ) {
-                // EasyPost addresses the label by the shipment it was bought on.
-                $reference_label = __( 'EasyPost Shipment ID:', 'shipping-desk' );
-                $reference_value = $label_id;
-            } else {
-                $reference_label = __( 'Veeqo Remote Shipment ID:', 'shipping-desk' );
-                $reference_value = $remote_id;
-            }
-
-            $note = sprintf(
-                __( 'Order shipped via %1$s with tracking number <a href="%2$s" target="_blank">%3$s</a><br><strong>%4$s</strong> %5$s', 'shipping-desk' ),
-                $carrier_name,
-                esc_url( $tracking_url ),
-                esc_html( $tracking ),
-                esc_html( $reference_label ),
-                esc_html( $reference_value )
+            $this->record_label_tracking(
+                $order,
+                $provider,
+                $tracking,
+                $carrier_id,
+                Shipping_Desk_Helpers::tracking_url( $carrier_id, $tracking ),
+                $label_id,
+                $remote_id,
+                $insured,
+                $insured_fee
             );
-
-            // Say the cover out loud. The quote cannot show it (the provider prices
-            // insurance at purchase), so without this line the only evidence that a
-            // shipment was insured is its cost being higher than the quote.
-            if ( '' !== $insured ) {
-                $cover = sprintf(
-                    /* translators: %s: insured value, formatted with currency. */
-                    __( 'Insured for %s', 'shipping-desk' ),
-                    wc_price( (float) $insured, [ 'currency' => $order->get_currency() ] )
-                );
-                if ( '' !== $insured_fee ) {
-                    $cover .= ' ' . sprintf(
-                        /* translators: %s: insurance premium, formatted with currency. */
-                        __( '(premium %s)', 'shipping-desk' ),
-                        wc_price( (float) $insured_fee, [ 'currency' => $order->get_currency() ] )
-                    );
-                }
-                $note .= '<br>' . $cover . '.';
-            }
-
-            $order->add_order_note( $note );
         }
 
         if ( '' !== $address_note ) {
@@ -3084,16 +3298,20 @@ class Shipping_Desk_Plugin {
         // "Completed order" email so the customer receives the new tracking
         // number.
         //
+        // The original tracking is deliberately kept: a reship means two parcels
+        // really went out and both belong on the order. If the first label was
+        // refunded first, its number has already been removed by then.
+        //
         // OFF by default: shipment tracking plugins such as Advanced Shipment
         // Tracking already send a customer email when they detect new tracking,
         // so enabling this alongside one of those sends the email twice. Turn it
         // on only if nothing else notifies the customer.
         $reship_notified = false;
-        if ( $order->has_status( 'completed' ) && get_option( 'shipping_desk_reship_send_completed_email', 0 ) ) {
+        if ( $was_completed && get_option( 'shipping_desk_reship_send_completed_email', 0 ) ) {
             do_action( 'woocommerce_order_status_completed_notification', $order_id, $order );
             $reship_notified = true;
             $order->add_order_note( __( 'Shipping Desk: reshipped completed order; customer "Completed order" email re-triggered.', 'shipping-desk' ) );
-        } elseif ( $order->has_status( 'completed' ) ) {
+        } elseif ( $was_completed ) {
             $order->add_order_note( __( 'Shipping Desk: reshipped completed order. No customer email sent (disabled in Settings).', 'shipping-desk' ) );
         }
 
@@ -3105,10 +3323,53 @@ class Shipping_Desk_Plugin {
             // to infer it from a total that is larger than the quote.
             'insurance'     => $insured,
             'insurance_fee' => $insured_fee,
+            // Set only when cover was asked for and the bought label does not carry it.
+            'insurance_warning' => $insurance_warning,
             'reship_notified' => $reship_notified,
         ] );
     }
 
+
+    /**
+     * The note written when a label's cover did not match what was asked for.
+     *
+     * Shared by single and bulk purchases so the wording cannot drift, and so both can
+     * be grepped for afterwards.
+     *
+     * @param WC_Order $order     Order.
+     * @param float    $requested Declared value sent with the buy call.
+     * @param string   $applied   Declared value reported on the bought shipment.
+     * @return string
+     */
+    protected function insurance_shortfall_note( WC_Order $order, $requested, $applied ) {
+        $symbol = function_exists( 'get_woocommerce_currency_symbol' ) ? get_woocommerce_currency_symbol( $order->get_currency() ) : '';
+
+        return sprintf(
+            /* translators: 1: amount requested, 2: amount the provider reports as insured */
+            __( 'Shipping Desk: insurance for %1$s was requested, but EasyPost reports this label insured for %2$s. It is not covered as ordered - check before shipping.', 'shipping-desk' ),
+            $symbol . number_format( (float) $requested, 2, '.', '' ),
+            '' !== (string) $applied
+                ? $symbol . number_format( (float) $applied, 2, '.', '' )
+                : __( 'nothing', 'shipping-desk' )
+        );
+    }
+
+    /**
+     * The note written when cover is recorded but no premium was reported.
+     *
+     * @param WC_Order $order   Order.
+     * @param string   $insured Declared value reported on the shipment.
+     * @return string
+     */
+    protected function insurance_unpriced_note( WC_Order $order, $insured ) {
+        $symbol = function_exists( 'get_woocommerce_currency_symbol' ) ? get_woocommerce_currency_symbol( $order->get_currency() ) : '';
+
+        return sprintf(
+            /* translators: %s: the declared value the label reports */
+            __( 'Shipping Desk: this label records insurance for %s, but EasyPost reported no premium for it. Confirm the cover in the EasyPost dashboard before shipping.', 'shipping-desk' ),
+            $symbol . number_format( (float) $insured, 2, '.', '' )
+        );
+    }
 
     protected function get_shipment_action_context() {
         // $_REQUEST, not $_POST: the browser print endpoint is opened as a URL in a new
@@ -3335,6 +3596,8 @@ class Shipping_Desk_Plugin {
         $purchased = 0;
         $failed    = 0;
         $errors    = [];
+        // One line per order whose label came back without the cover that was asked for.
+        $insurance_warnings = [];
 
         if ( ! empty( $shipments ) ) {
             // One request, one provider: stamp the same marker on every order it
@@ -3362,6 +3625,11 @@ class Shipping_Desk_Plugin {
                 $tracking   = $shipment['tracking_number'] ?? '';
                 $carrier_id = $shipment['carrier_id'] ?? '';
 
+                // Cover on a bulk-bought label, read exactly as a single purchase reads it:
+                // without this the order stays silent about whether it was insured.
+                $insured     = isset( $shipment['insurance'] ) ? trim( (string) $shipment['insurance'] ) : '';
+                $insured_fee = isset( $shipment['insurance_fee'] ) ? trim( (string) $shipment['insurance_fee'] ) : '';
+
                 $order->update_meta_data( $m['shipment_id'], $shipment['id'] ?? '' );
                 $order->update_meta_data( $m['remote_id'],   $shipments[ $order_id ]['remote_shipment_id'] );
                 $order->update_meta_data( $m['label_id'],    $label_id );
@@ -3377,36 +3645,47 @@ class Shipping_Desk_Plugin {
                 if ( ! empty( $carrier_id ) ) {
                     $order->update_meta_data( $m['carrier'], $carrier_id );
                 }
+
+                if ( '' !== $insured ) {
+                    $order->update_meta_data( $m['insurance'], $insured );
+                }
+                if ( '' !== $insured_fee ) {
+                    $order->update_meta_data( $m['insurance_fee'], $insured_fee );
+                }
+
+                // Same question as a single purchase: does the bought label carry the
+                // cover that was asked for? The requested value travels with the entry.
+                $requested_bulk = isset( $shipments[ $order_id ]['liability_amount'] ) ? (float) $shipments[ $order_id ]['liability_amount'] : 0.0;
+                if ( 'easypost' === $provider ) {
+                    if ( Shipping_Desk_Helpers::insurance_shortfall( $requested_bulk, $insured ) ) {
+                        $warning = $this->insurance_shortfall_note( $order, $requested_bulk, $insured );
+                    } elseif ( Shipping_Desk_Helpers::insurance_premium_missing( $insured, $insured_fee, ! empty( $shipment['label_url'] ) ) ) {
+                        $warning = $this->insurance_unpriced_note( $order, $insured );
+                    }
+
+                    if ( isset( $warning ) && '' !== $warning ) {
+                        $order->add_order_note( $warning );
+                        $insurance_warnings[] = 'Order #' . $order_id . ': ' . $warning;
+                    }
+                    unset( $warning );
+                }
+
                 // Same as a single purchase: an accepted correction is applied
                 // before the save so the address and the label meta land together.
                 $address_note = $this->apply_address_decision( $order );
                 $order->save();
 
-                $carrier_lc   = strtolower( (string) $carrier_id );
-                $carrier_name = $carrier_id ?: 'Carrier';
-                if ( strpos( $carrier_lc, 'usps' ) !== false )   $carrier_name = 'USPS';
-                elseif ( strpos( $carrier_lc, 'ups' )  !== false )  $carrier_name = 'UPS';
-                elseif ( strpos( $carrier_lc, 'fedex' ) !== false ) $carrier_name = 'FedEx';
-                $tracking_url = Shipping_Desk_Helpers::tracking_url( $carrier_id, $tracking );
-
-                $reference_label = 'shippo' === $provider
-                    ? __( 'Shippo Transaction ID:', 'shipping-desk' )
-                    : ( 'easypost' === $provider
-                        ? __( 'EasyPost Shipment ID:', 'shipping-desk' )
-                        : __( 'Veeqo Remote Shipment ID:', 'shipping-desk' ) );
-                $reference_value = in_array( $provider, [ 'shippo', 'easypost' ], true )
-                    ? $label_id
-                    : $shipments[ $order_id ]['remote_shipment_id'];
-
-                $notee = sprintf(
-                    __( 'Order shipped via %1$s with tracking number <a href="%2$s" target="_blank">%3$s</a><br><strong>%4$s</strong> %5$s', 'shipping-desk' ),
-                    $carrier_name,
-                    esc_url( $tracking_url ),
-                    esc_html( $tracking ),
-                    esc_html( $reference_label ),
-                    esc_html( $reference_value )
+                $this->record_label_tracking(
+                    $order,
+                    $provider,
+                    $tracking,
+                    $carrier_id,
+                    Shipping_Desk_Helpers::tracking_url( $carrier_id, $tracking ),
+                    $label_id,
+                    $shipments[ $order_id ]['remote_shipment_id'],
+                    $insured,
+                    $insured_fee
                 );
-                $order->add_order_note( $notee );
                 if ( '' !== $address_note ) {
                     $order->add_order_note( $address_note );
                 }
@@ -3435,6 +3714,7 @@ class Shipping_Desk_Plugin {
             'purchased'  => $purchased,
             'failed'     => $failed + count( $skipped ),
             'errors'     => array_merge( $errors, array_values( $skipped ) ),
+            'insurance_warnings' => $insurance_warnings,
             'order_ids'   => array_merge(
                 array_keys( $shipments ),
                 array_keys( $skipped )
@@ -3623,6 +3903,9 @@ class Shipping_Desk_Plugin {
                 if ( in_array( $result->get_error_code(), $codes, true ) ) {
                     $order->update_meta_data( $m['refunded'], 1 );
                     $order->save();
+                    // The provider says the label is already void, so the number is dead
+                    // here too — otherwise it would sit beside the replacement's.
+                    $this->remove_dead_tracking( $order, (string) $order->get_meta( $m['tracking'] ) );
                 }
             }
             wp_send_json_error( [ 'message' => $result->get_error_message() ], 500 );
@@ -3642,6 +3925,10 @@ class Shipping_Desk_Plugin {
                         ? __( 'EasyPost label refund requested.', 'shipping-desk' )
                         : __( 'Veeqo shipping label refunded/cancelled.', 'shipping-desk' ) )
             );
+            // The label is void, so its number comes off the order as well: left there it
+            // would sit beside the replacement's number in the next shipment email. After
+            // the refund note, so the timeline reads refund, then removal.
+            $this->remove_dead_tracking( $order, (string) $order->get_meta( $m['tracking'] ) );
         }
 
         wp_send_json_success( [ 'refunded' => true ] );
@@ -3658,6 +3945,11 @@ class Shipping_Desk_Plugin {
         if ( ! $order ) {
             wp_send_json_error( [ 'message' => __( 'Order not found.', 'shipping-desk' ) ], 404 );
         }
+        // Read the dead label's number before the meta goes: after the reset there is
+        // nothing left to match a tracking item against.
+        $m        = Shipping_Desk_Helpers::meta_keys();
+        $tracking = (string) $order->get_meta( $m['tracking'] );
+        $refunded = (bool) $order->get_meta( $m['refunded'] );
         Shipping_Desk_Helpers::clear_shipping_meta( $order );
         // Reset means start over, so the cached address check goes too. Without
         // this a re-test of the same address is answered from a twelve-hour-old
@@ -3665,7 +3957,41 @@ class Shipping_Desk_Plugin {
         $this->clear_address_validation_cache( $order_id );
         $this->delete_quote_record( $order_id );
         $order->add_order_note( __( 'Shipping Desk: shipping state reset  -  a new label can now be purchased.', 'shipping-desk' ) );
+        // A reset on a live label leaves its tracking alone: that parcel may still be
+        // moving. Only a refunded label's number is dead enough to remove, and by then
+        // the refund has normally taken it already — forget() then finds nothing.
+        if ( $refunded && '' !== $tracking ) {
+            $this->remove_dead_tracking( $order, $tracking );
+        }
         wp_send_json_success( [ 'reset' => true ] );
+    }
+
+    /**
+     * Drop every stored quote, and the address verdicts behind them.
+     *
+     * Called when the provider or its label mode changes. Rates are quoted by one
+     * account and carry that account's shipment id, so none of them can be bought by
+     * the provider just selected — and a row that still shows them looks current.
+     * Deleting a cache is cheap; a stale rate that looks buyable is not.
+     *
+     * Direct SQL by prefix, as for the address cache: there is no core API for wildcard
+     * transient deletion, and the names are this plugin's own.
+     *
+     * @return void
+     */
+    protected function clear_cached_quotes() {
+        global $wpdb;
+
+        foreach ( [ '_transient_', '_transient_timeout_' ] as $prefix ) {
+            foreach ( [ 'shipping_desk_quotes_', 'shipping_desk_addr_' ] as $name ) {
+                $wpdb->query(
+                    $wpdb->prepare(
+                        "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+                        $wpdb->esc_like( $prefix . $name ) . '%'
+                    )
+                );
+            }
+        }
     }
 
     /**

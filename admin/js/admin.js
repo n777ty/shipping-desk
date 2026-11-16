@@ -2,17 +2,6 @@
 (function ($) {
     'use strict';
 
-    /**
-     * Pull a single attribute value out of a raw attribute string.
-     * Returns null when the attribute is absent.
-     */
-    function attrValue(attrString, name) {
-        if (!attrString) return null;
-        var re = new RegExp(name.replace(/[-]/g, '\\-') + '="([^"]*)"');
-        var m = String(attrString).match(re);
-        return m ? m[1] : null;
-    }
-
     function getBoxData($row) {
         var $sel = $row.find('.shipping-desk-box-select');
         if (!$sel.val()) return null;
@@ -220,6 +209,31 @@
     }
 
     /**
+     * Say what the Insurance value costs, next to the field itself.
+     *
+     * The rate column only shows a premium once rates exist, and a blank field means no
+     * cover - which looks identical to the feature being broken. This is the line that
+     * distinguishes the two, before any quote is fetched.
+     */
+    function refreshLiabilityEstimate($row) {
+        var $out = $row.find('.shipping-desk-liability-estimate');
+        if (!$out.length) return;
+
+        var provider = ($row.attr('data-provider') || '').toLowerCase();
+        var premium = insurancePremium($row);
+
+        if (premium > 0) {
+            $out.text('~$' + premium.toFixed(2) + ' premium');
+        } else if (provider === 'easypost') {
+            $out.text('No insurance');
+        } else if (provider === 'shippo') {
+            $out.text('Cover is priced into the rate');
+        } else {
+            $out.text('');
+        }
+    }
+
+    /**
      * Rate price, plus anything priced outside the quote.
      *
      * Veeqo prices services after the quotes; EasyPost prices insurance at purchase, so
@@ -236,6 +250,12 @@
         // The premium is the same whichever carrier is chosen - it depends only on the
         // declared value - so every rate row shows it and the rows stay comparable.
         var premium = insurancePremium($row);
+
+        // Recorded on the row so the decision can be inspected rather than guessed at:
+        // "no estimate" looks identical whether the provider prices cover into the rate
+        // or the Insurance field was empty. Read with
+        // jQuery('tr[data-order-id=N]').attr('data-insurance-premium').
+        $row.attr('data-insurance-premium', premium.toFixed(2));
         var selected = computedRateTotal($row);
 
         $rates.each(function () {
@@ -382,6 +402,16 @@
 
         $row.find('.shipping-desk-buy-label').prop('disabled', false);
         syncServices($row);
+
+        /*
+         * Rates arrive priced by the carrier alone. EasyPost charges cover at purchase,
+         * so its premium exists only in this column — and the Insurance field cannot
+         * supply it: the value is normally typed *before* Get Rates, so no change event
+         * follows the quote (and the handler ignores a value equal to the one used for
+         * the rate run). Restate every row here, premium included, or the operator sees
+         * a total that the label will exceed.
+         */
+        refreshRateTotals($row);
     }
 
     $(document).on('change', '.shipping-desk-service-select', function () {
@@ -407,6 +437,21 @@
         resetRates($(this).closest('tr'), 'Weight changed. Get rates to refresh quotes.');
     });
 
+    /*
+     * EasyPost's premium is displayed, not quoted, so it can follow the typing instead of
+     * waiting for the field to lose focus. The change handler below stays authoritative:
+     * it is the one that decides whether quotes survive. For Shippo and Veeqo nothing
+     * happens here - their quotes depend on the value, so resetting them mid-keystroke
+     * would clear rates on every digit.
+     */
+    $(document).on('input', '.shipping-desk-liability-amount', function () {
+        var $row = $(this).closest('tr');
+        refreshLiabilityEstimate($row);
+        if (($row.attr('data-provider') || '').toLowerCase() !== 'easypost') return;
+        if (!$row.data('rates')) return;
+        refreshRateTotals($row);
+    });
+
     /**
      * Insurance pricing differs by provider, so the reaction to a change differs too.
      *
@@ -418,6 +463,7 @@
      */
     $(document).on('change', '.shipping-desk-liability-amount', function () {
         var $row = $(this).closest('tr');
+        refreshLiabilityEstimate($row);
         if (!$row.data('rates')) return;
 
         var current = parseFloat($(this).val());
@@ -826,6 +872,11 @@
         $('.shipping-desk-table tbody tr[data-quotes]').each(function () {
             hydrateRow($(this));
         });
+
+        // Every row can say what its Insurance value costs, whether or not it has quotes.
+        $('.shipping-desk-table tbody tr').each(function () {
+            refreshLiabilityEstimate($(this));
+        });
     });
 
     function fetchRatesForRow($row) {
@@ -1008,6 +1059,16 @@
                     if (data.insurance_fee) {
                         msg += ' (premium $' + data.insurance_fee + ')';
                     }
+                }
+                // Cover was asked for and the label came back without it: this is the one
+                // moment it can be fixed cheaply, before the parcel moves.
+                if (data.insurance_warning) {
+                    msg += '\n\n' + data.insurance_warning;
+                }
+                // A fatal after the label was saved: the purchase stands, something after
+                // it broke. Say so rather than letting the label look unbought.
+                if (data.warning) {
+                    msg += '\n\n' + data.warning;
                 }
                 alert(msg);
             })
@@ -1290,7 +1351,7 @@
         // execution window and gives the operator progress instead of one long
         // spinner. Per-order results accumulate across chunks.
         var chunkSize = (ShippingDesk && ShippingDesk.bulkChunkSize) ? ShippingDesk.bulkChunkSize : 10;
-        var totals = { purchased: 0, failed: 0, errors: [], order_ids: [] };
+        var totals = { purchased: 0, failed: 0, errors: [], order_ids: [], insurance_warnings: [] };
 
         function markPurchased() {
             var $bought = $();
@@ -1320,6 +1381,9 @@
                 message += ' ' + addressSkipped
                     + (addressSkipped === 1 ? ' order skipped' : ' orders skipped')
                     + ' (address decision needed).';
+            }
+            if (totals.insurance_warnings.length) {
+                message += ' INSURANCE: ' + totals.insurance_warnings.join(' ');
             }
             $status.text(message);
 
@@ -1383,6 +1447,11 @@
                 if (data.order_ids && data.order_ids.length) {
                     totals.order_ids = totals.order_ids.concat(data.order_ids);
                 }
+                // A label that came back without the cover it was bought with is a purchase
+                // that "succeeded" and still needs the operator's eyes.
+                if (data.insurance_warnings && data.insurance_warnings.length) {
+                    totals.insurance_warnings = totals.insurance_warnings.concat(data.insurance_warnings);
+                }
 
                 buyChunk(offset + chunk.length);
             }).fail(function (xhr) {
@@ -1430,13 +1499,14 @@
 
             var $innerRow = $('<tr>');
             if (resp.data.attrs) {
-                // attrs is a raw attribute string such as
-                //   data-order-id="12" data-nonce="abc" data-items-weight="48.00"
-                $innerRow.attr('data-order-id', attrValue(resp.data.attrs, 'data-order-id'));
-                $innerRow.attr('data-nonce', attrValue(resp.data.attrs, 'data-nonce'));
-                var iw = attrValue(resp.data.attrs, 'data-items-weight');
-                if (iw !== null) {
-                    $innerRow.attr('data-items-weight', iw);
+                // Every data-* attribute, not a hand-picked few. The server renders the row
+                // exactly as the shipping tab does, and data-provider is what tells the rate
+                // column and the Insurance field who is pricing cover — a whitelist of three
+                // names dropped it, so a reship could never show an insurance premium.
+                var attrPattern = /(data-[a-z0-9-]+)="([^"]*)"/g;
+                var attrMatch;
+                while ((attrMatch = attrPattern.exec(resp.data.attrs)) !== null) {
+                    $innerRow.attr(attrMatch[1], attrMatch[2]);
                 }
             }
             // Fallbacks in case attrs is unavailable.
