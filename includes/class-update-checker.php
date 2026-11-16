@@ -327,7 +327,9 @@ class Shipping_Desk_Update_Checker {
 			'name'          => 'Shipping Desk',
 			'slug'          => self::SLUG,
 			'version'       => $release['version'],
-			'author'        => '<a href="' . esc_url( 'https://github.com/' . self::REPO ) . '">Shipping Desk</a>',
+			// Plain author name: the header's Author URI is the source of truth for where
+			// that goes, and duplicating the URL here would be one more place to forget.
+			'author'        => 'Jailbreak777',
 			'homepage'      => $release['url'],
 			'requires'      => self::REQUIRES_WP,
 			'requires_php'  => self::REQUIRES_PHP,
