@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.1.3
+Stable tag: 1.2.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,11 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.2.0 =
+* New: a "Today" badge in the header showing what has been spent on postage since midnight, with a label count. It resets by itself at midnight and costs one option read per page; nothing is queried and nothing is shown on a day with no purchases.
+* Note: the total is what was charged (postage plus insurance where the provider reports it). A refund later in the day does not reduce it.
+
 
 = 1.1.3 =
 * Changed: "Visit plugin site" now goes to the GitHub repository instead of the author's Telegram. The "By Jailbreak777" link is unchanged.

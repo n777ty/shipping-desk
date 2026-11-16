@@ -1346,3 +1346,19 @@ msgstr ""
 #: includes/class-update-checker.php
 msgid "The update package did not match the checksum published with the release, so it was not installed. Try again later, or install the zip from the release page."
 msgstr ""
+
+#: includes/class-plugin.php
+msgid "Today"
+msgstr ""
+
+#: includes/class-plugin.php
+msgid "Postage bought since midnight, site time. Refunds are not deducted."
+msgstr ""
+
+#: includes/class-plugin.php
+#. translators: %s: number of labels bought today.
+#, php-format
+msgid "%s label"
+msgid_plural "%s labels"
+msgstr[0] ""
+msgstr[1] ""

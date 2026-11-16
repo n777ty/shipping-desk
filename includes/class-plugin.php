@@ -98,6 +98,43 @@ class Shipping_Desk_Plugin {
     }
 
     /**
+     * "Today $42.10 · 7 labels": what was bought since midnight, in the header.
+     *
+     * Display only, and deliberately cheap — a single option read, no queries, no
+     * transient. Nothing renders on a day with no purchases, so the header stays quiet.
+     * The figure is the charged total (postage plus insurance where the provider reports
+     * it); refunds made later in the day are not deducted.
+     *
+     * @return void
+     */
+    public function render_daily_spend() {
+        $spend = Shipping_Desk_Helpers::daily_spend();
+        if ( empty( $spend ) ) {
+            return;
+        }
+
+        $labels = (int) $spend['labels'];
+        $money  = function_exists( 'wc_price' )
+            ? wp_kses_post( wc_price( $spend['amount'], [ 'currency' => $spend['currency'] ] ) )
+            : esc_html( number_format_i18n( $spend['amount'], 2 ) );
+        ?>
+        <div class="shipping-desk-spend" title="<?php esc_attr_e( 'Postage bought since midnight, site time. Refunds are not deducted.', 'shipping-desk' ); ?>">
+            <span class="shipping-desk-spend-label"><?php esc_html_e( 'Today', 'shipping-desk' ); ?></span>
+            <strong><?php echo $money; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wc_price output, escaped above. ?></strong>
+            <span class="shipping-desk-spend-count">
+                <?php
+                printf(
+                    /* translators: %s: number of labels bought today. */
+                    esc_html( _n( '%s label', '%s labels', $labels, 'shipping-desk' ) ),
+                    esc_html( number_format_i18n( $labels ) )
+                );
+                ?>
+            </span>
+        </div>
+        <?php
+    }
+
+    /**
      * One-time "what's new" popup after an update, on this plugin's screens only.
      *
      * Rendered in the footer so it sits above whatever the page already drew, and only
@@ -982,8 +1019,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.1.3' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.1.3', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.2.0' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.2.0', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -1391,6 +1428,7 @@ class Shipping_Desk_Plugin {
             <div class="shipping-desk-header">
                 <h1><?php esc_html_e( 'Shipping Desk', 'shipping-desk' ); ?></h1>
                 <?php $this->render_provider_switch(); ?>
+                <?php $this->render_daily_spend(); ?>
             </div>
             <?php if ( in_array( $this->provider(), [ 'shippo', 'easypost' ], true ) && 'test' === $this->provider_mode( $this->provider() ) ) : ?>
                 <div class="notice notice-warning inline">
@@ -3037,6 +3075,10 @@ class Shipping_Desk_Plugin {
         // when BrikPanel is absent or the label came from the test account.
         $this->record_shipping_cost( $order, $provider, $mode, $shipment );
 
+        // The day's running total behind the header badge. Deliberately separate from
+        // record_shipping_cost(), which is a no-op without BrikPanel.
+        Shipping_Desk_Helpers::record_daily_spend( $provider, $shipment, $mode );
+
         // Reshipping a completed order does not change its status, so the normal
         // status-change notification never fires. Re-trigger the WooCommerce
         // "Completed order" email so the customer receives the new tracking
@@ -3370,6 +3412,7 @@ class Shipping_Desk_Plugin {
                 }
                 $this->delete_quote_record( $order_id );
                 $this->record_shipping_cost( $order, $provider, $mode, $shipment );
+                Shipping_Desk_Helpers::record_daily_spend( $provider, $shipment, $mode );
                 $purchased++;
                 unset( $skipped[ $order_id ] );
             }

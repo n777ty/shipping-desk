@@ -692,3 +692,28 @@
     text-align: right;
 }
 
+/* Today's spend badge: right-aligned in the plugin header, quiet by default. */
+.shipping-desk-spend {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-left: auto;
+    padding: 4px 12px;
+    border: 1px solid #dcdcde;
+    border-radius: 999px;
+    background: #f6f7f7;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #50575e;
+    white-space: nowrap;
+}
+
+.shipping-desk-spend strong {
+    font-size: 14px;
+    color: #1d2327;
+}
+
+.shipping-desk-spend-count {
+    color: #787c82;
+}
+

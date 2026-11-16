@@ -253,5 +253,39 @@ helper_same( [], Shipping_Desk_Helpers::label_cost( 'shippo', [ 'total_charge' =
 helper_same( [], Shipping_Desk_Helpers::label_cost( 'shippo', [ 'total_charge' => 'abc' ] ), 'an unparseable charge records nothing' );
 helper_same( [], Shipping_Desk_Helpers::label_cost( 'veeqo', [ 'total_charge' => [ 'value' => -3 ] ] ), 'a negative charge records nothing' );
 
+helper_section( 'daily spend' );
+
+$spend_one = Shipping_Desk_Helpers::accumulate_daily( [], '2026-11-16', 'USD', 8.20 );
+helper_same( 8.20, $spend_one['totals']['USD']['amount'], 'a first purchase starts the day' );
+helper_same( 1, $spend_one['totals']['USD']['labels'], 'and counts one label' );
+
+$spend_two = Shipping_Desk_Helpers::accumulate_daily( $spend_one, '2026-11-16', 'USD', 2.50 );
+helper_same( 10.70, $spend_two['totals']['USD']['amount'], 'a second purchase adds to it' );
+helper_same( 2, $spend_two['totals']['USD']['labels'], 'and counts a second label' );
+
+$spend_cents = Shipping_Desk_Helpers::accumulate_daily(
+    Shipping_Desk_Helpers::accumulate_daily( [], '2026-11-16', 'USD', 0.10 ),
+    '2026-11-16',
+    'USD',
+    0.20
+);
+helper_same( 0.3, $spend_cents['totals']['USD']['amount'], 'cents are rounded, so 0.10 + 0.20 is 0.30' );
+
+$spend_next_day = Shipping_Desk_Helpers::accumulate_daily( $spend_two, '2026-11-17', 'USD', 5.00 );
+helper_same( '2026-11-17', $spend_next_day['date'], 'a purchase on a new day replaces the date' );
+helper_same( 5.00, $spend_next_day['totals']['USD']['amount'], 'and the total starts again: that is the midnight reset' );
+helper_same( 1, $spend_next_day['totals']['USD']['labels'], 'with a fresh label count' );
+
+$spend_mixed = Shipping_Desk_Helpers::accumulate_daily( $spend_two, '2026-11-16', 'EUR', 4.00 );
+helper_same( 10.70, $spend_mixed['totals']['USD']['amount'], 'another currency leaves the first total alone' );
+helper_same( 4.00, $spend_mixed['totals']['EUR']['amount'], 'and keeps its own' );
+
+helper_same( null, Shipping_Desk_Helpers::daily_total( $spend_two, '2026-11-18', 'USD' ), 'a stale date reads as nothing' );
+helper_same( null, Shipping_Desk_Helpers::daily_total( $spend_two, '2026-11-16', 'EUR' ), 'a currency with no total reads as nothing' );
+
+$spend_read = Shipping_Desk_Helpers::daily_total( $spend_two, '2026-11-16', 'usd' );
+helper_same( 10.70, $spend_read['amount'], 'the currency is case-insensitive' );
+helper_same( 2, $spend_read['labels'], 'and the label count comes back with the total' );
+
 echo PHP_EOL . 'Checks: ' . $GLOBALS['helper_checks'] . ', failures: ' . $GLOBALS['helper_failures'] . PHP_EOL;
 exit( 0 === $GLOBALS['helper_failures'] ? 0 : 1 );

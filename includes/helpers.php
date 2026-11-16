@@ -586,6 +586,167 @@ class Shipping_Desk_Helpers {
         }
         return $fallback ?: (string) $number;
     }
+
+    /** Where the running daily total lives. One option, rewritten per purchase. */
+    const OPTION_DAILY_SPEND = 'shipping_desk_daily_spend';
+
+    /**
+     * Today's date in the site's timezone, which is what "calendar day" means here.
+     *
+     * @return string Y-m-d.
+     */
+    protected static function site_date() {
+        return function_exists( 'wp_date' ) ? wp_date( 'Y-m-d' ) : date_i18n( 'Y-m-d' );
+    }
+
+    /**
+     * Add one purchase to a daily total. Pure: state in, state out.
+     *
+     * A different date starts again from zero, so the counter resets at midnight without a
+     * cron job or a scheduled cleanup - the first purchase of the new day overwrites the
+     * previous one. Currencies are kept apart rather than summed, because adding dollars to
+     * euros would be worse than showing nothing.
+     *
+     * @param array  $state    Current state: date + totals per currency.
+     * @param string $date     Y-m-d of the purchase.
+     * @param string $currency Currency code.
+     * @param float  $amount   Amount charged.
+     * @return array
+     */
+    public static function accumulate_daily( array $state, $date, $currency, $amount ) {
+        $date = (string) $date;
+
+        if ( ! isset( $state['date'] ) || (string) $state['date'] !== $date ) {
+            $state = [ 'date' => $date, 'totals' => [] ];
+        }
+        if ( ! isset( $state['totals'] ) || ! is_array( $state['totals'] ) ) {
+            $state['totals'] = [];
+        }
+
+        $currency = strtoupper( (string) $currency );
+        $current  = isset( $state['totals'][ $currency ] ) && is_array( $state['totals'][ $currency ] )
+            ? $state['totals'][ $currency ]
+            : [ 'amount' => 0.0, 'labels' => 0 ];
+
+        $state['totals'][ $currency ] = [
+            'amount' => round( (float) $current['amount'] + (float) $amount, 2 ),
+            'labels' => (int) $current['labels'] + 1,
+        ];
+
+        return $state;
+    }
+
+    /**
+     * One currency's total for a date, or null when there is nothing from that day.
+     *
+     * @param array  $state    State from accumulate_daily().
+     * @param string $date     Y-m-d to read.
+     * @param string $currency Currency code.
+     * @return array{amount:float,labels:int}|null
+     */
+    public static function daily_total( array $state, $date, $currency ) {
+        if ( ! isset( $state['date'] ) || (string) $state['date'] !== (string) $date ) {
+            return null;
+        }
+
+        $currency = strtoupper( (string) $currency );
+        $totals   = isset( $state['totals'] ) && is_array( $state['totals'] ) ? $state['totals'] : [];
+
+        if ( ! isset( $totals[ $currency ] ) || ! is_array( $totals[ $currency ] ) ) {
+            return null;
+        }
+
+        $amount = isset( $totals[ $currency ]['amount'] ) ? (float) $totals[ $currency ]['amount'] : 0.0;
+        $labels = isset( $totals[ $currency ]['labels'] ) ? (int) $totals[ $currency ]['labels'] : 0;
+
+        return ( $amount > 0 || $labels > 0 ) ? [ 'amount' => $amount, 'labels' => $labels ] : null;
+    }
+
+    /**
+     * Record what a purchase actually charged against today's total.
+     *
+     * Test-mode labels are skipped: they cost nothing, so a counter that moved for them
+     * would be lying. Runs on every purchase, whether or not BrikPanel is installed.
+     *
+     * @param string $provider Provider slug.
+     * @param array  $shipment Bought shipment.
+     * @param string $mode     test|live.
+     * @param string $date     Y-m-d override, for tests.
+     * @return void
+     */
+    public static function record_daily_spend( $provider, array $shipment, $mode, $date = '' ) {
+        if ( 'test' === $mode ) {
+            return;
+        }
+
+        $cost = self::label_cost( $provider, $shipment );
+        if ( empty( $cost ) || empty( $cost['amount'] ) || ! is_numeric( $cost['amount'] ) || (float) $cost['amount'] <= 0 ) {
+            return;
+        }
+
+        $currency = ! empty( $cost['currency'] ) ? strtoupper( (string) $cost['currency'] ) : 'USD';
+        $state    = get_option( self::OPTION_DAILY_SPEND, [] );
+        $state    = self::accumulate_daily(
+            is_array( $state ) ? $state : [],
+            '' !== $date ? $date : self::site_date(),
+            $currency,
+            (float) $cost['amount']
+        );
+
+        // Not autoloaded: only the plugin's own screens read it.
+        update_option( self::OPTION_DAILY_SPEND, $state, false );
+    }
+
+    /**
+     * Today's spend, for the badge. Null when nothing was bought today.
+     *
+     * A stale state (yesterday's totals) is treated as empty rather than deleted: the next
+     * purchase overwrites it, so a quiet day never needs a write of its own.
+     *
+     * @param string $preferred Preferred currency; falls back to the store currency.
+     * @param string $date      Y-m-d override, for tests.
+     * @return array{amount:float,labels:int,currency:string}|null
+     */
+    public static function daily_spend( $preferred = '', $date = '' ) {
+        $state = get_option( self::OPTION_DAILY_SPEND, [] );
+        if ( ! is_array( $state ) || empty( $state['totals'] ) || ! is_array( $state['totals'] ) ) {
+            return null;
+        }
+
+        $date   = '' !== $date ? $date : self::site_date();
+        $store  = function_exists( 'get_woocommerce_currency' ) ? (string) get_woocommerce_currency() : '';
+        $wanted = [];
+
+        foreach ( [ $preferred, $store ] as $candidate ) {
+            $candidate = strtoupper( trim( (string) $candidate ) );
+            if ( '' !== $candidate && ! in_array( $candidate, $wanted, true ) ) {
+                $wanted[] = $candidate;
+            }
+        }
+
+        // Then whatever else has a total, so the badge is not blank when the provider
+        // charged in a currency the store setting does not mention.
+        foreach ( array_keys( $state['totals'] ) as $code ) {
+            $code = strtoupper( (string) $code );
+            if ( ! in_array( $code, $wanted, true ) ) {
+                $wanted[] = $code;
+            }
+        }
+
+        foreach ( $wanted as $code ) {
+            $total = self::daily_total( $state, $date, $code );
+            if ( null !== $total ) {
+                return [
+                    'amount'   => $total['amount'],
+                    'labels'   => $total['labels'],
+                    'currency' => $code,
+                ];
+            }
+        }
+
+        return null;
+    }
+
     public static function absolute_url( $url ) {
         $url = trim( (string) $url );
         if ( $url === '' ) {
