@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.0.5
+Stable tag: 1.1.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,12 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.1.0 =
+* New: updates are offered in Plugins, taken from the published GitHub releases, with one-click updating. The release's published checksum is verified before anything is installed.
+* New: "View version details" shows the changelog, and a one-time "What's new" popup appears after an update - once per version, per person.
+* Changed: only releases are used, never a branch or a tag archive, so the plugin always stays in its own folder.
+
 
 = 1.0.5 =
 * Removed: the confirmation prompt on Buy Label. Buying is one click again. The insurance premium is already shown in the rate column, so the dialog only restated it.

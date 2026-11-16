@@ -54,6 +54,7 @@ class Shipping_Desk_Plugin {
         add_action( 'admin_menu', [ $this, 'register_admin_pages' ] );
         add_action( 'admin_init', [ $this, 'register_settings' ] );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+        add_action( 'admin_footer', [ $this, 'render_whats_new_modal' ] );
         // Runs before settings are used so legacy options are carried over.
         add_action( 'admin_init', [ $this, 'maybe_migrate_legacy_settings' ], 1 );
         add_action( 'admin_init', [ $this, 'maybe_migrate_easypost_key' ], 2 );
@@ -62,13 +63,70 @@ class Shipping_Desk_Plugin {
         add_action( 'admin_post_shipping_desk_import_settings', [ $this, 'handle_import_settings' ] );
 
         // AJAX
-        foreach ( [ 'shipping_desk_get_rates', 'shipping_desk_buy_label', 'shipping_desk_print_label', 'shipping_desk_print_pdf', 'shipping_desk_refund_label', 'shipping_desk_reset_shipping', 'shipping_desk_render_purchase_row', 'shipping_desk_printnode_refresh_printers', 'shipping_desk_printnode_print_label', 'shipping_desk_printnode_status', 'shipping_desk_bulk_buy', 'shipping_desk_switch_provider' ] as $action ) {
+        foreach ( [ 'shipping_desk_get_rates', 'shipping_desk_buy_label', 'shipping_desk_print_label', 'shipping_desk_print_pdf', 'shipping_desk_refund_label', 'shipping_desk_reset_shipping', 'shipping_desk_render_purchase_row', 'shipping_desk_printnode_refresh_printers', 'shipping_desk_printnode_print_label', 'shipping_desk_printnode_status', 'shipping_desk_bulk_buy', 'shipping_desk_switch_provider', 'shipping_desk_dismiss_whats_new' ] as $action ) {
             add_action( 'wp_ajax_' . $action, [ $this, $action ] );
         }
     }
 
     public function load_textdomain() {
         load_plugin_textdomain( 'shipping-desk', false, dirname( plugin_basename( $this->file ) ) . '/languages' );
+    }
+
+    /**
+     * One-time "what's new" popup after an update, on this plugin's screens only.
+     *
+     * Rendered in the footer so it sits above whatever the page already drew, and only
+     * for the version that is actually running — an update that failed halfway must not
+     * announce a release the site does not have. Dismissal is per user, per version.
+     */
+    public function render_whats_new_modal() {
+        $page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+        if ( 0 !== strpos( $page, 'shipping-desk' ) || ! current_user_can( 'manage_woocommerce' ) ) {
+            return;
+        }
+
+        $pending = Shipping_Desk_Update_Checker::pending_whats_new();
+        if ( empty( $pending ) ) {
+            return;
+        }
+        ?>
+        <div class="shipping-desk-modal" id="shipping-desk-whats-new" role="dialog" aria-modal="true" aria-labelledby="shipping-desk-whats-new-title" data-version="<?php echo esc_attr( $pending['version'] ); ?>" data-nonce="<?php echo esc_attr( wp_create_nonce( 'shipping_desk_whats_new' ) ); ?>">
+            <div class="shipping-desk-modal-panel">
+                <h2 id="shipping-desk-whats-new-title">
+                    <?php
+                    /* translators: %s: plugin version, e.g. 1.1.0 */
+                    echo esc_html( sprintf( __( "What's new in Shipping Desk %s", 'shipping-desk' ), $pending['version'] ) );
+                    ?>
+                </h2>
+                <ul class="shipping-desk-whats-new-list">
+                    <?php foreach ( $pending['items'] as $item ) : ?>
+                        <li><?php echo esc_html( $item ); ?></li>
+                    <?php endforeach; ?>
+                </ul>
+                <p class="shipping-desk-modal-actions">
+                    <button type="button" class="button button-primary shipping-desk-whats-new-close"><?php esc_html_e( 'Got it', 'shipping-desk' ); ?></button>
+                </p>
+            </div>
+        </div>
+        <?php
+    }
+
+    /**
+     * AJAX: remember that this user has read the changelog.
+     *
+     * @return void
+     */
+    public function shipping_desk_dismiss_whats_new() {
+        check_ajax_referer( 'shipping_desk_whats_new', '_wpnonce' );
+
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'message' => __( 'You do not have permission to do that.', 'shipping-desk' ) ], 403 );
+        }
+
+        $version = isset( $_POST['version'] ) ? sanitize_text_field( wp_unslash( $_POST['version'] ) ) : '';
+        Shipping_Desk_Update_Checker::dismiss_whats_new( $version );
+
+        wp_send_json_success();
     }
 
     public function register_admin_pages() {
@@ -899,8 +957,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.0.5' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.0.5', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.1.0' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.1.0', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),

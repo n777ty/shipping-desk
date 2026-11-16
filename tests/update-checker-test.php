@@ -1,0 +1,337 @@
+<?php
+/**
+ * Gate for Shipping_Desk_Update_Checker.
+ *
+ * Standalone: no Composer, no PHPUnit, no WordPress. WordPress functions are stubbed and
+ * the network call is replaced by a subclass, so the checks cover what actually decides an
+ * update:
+ *
+ *   - only `vX.Y.Z`-style tags count as versions
+ *   - the package is the release asset named `shipping-desk-<version>.zip`, never a zipball
+ *   - a release that is not newer is not offered, and leaves no stale offer behind
+ *   - the answer is cached, a failed check keeps the last good answer
+ *   - the changelog parser reads `== Changelog ==` and the popup data is per version,
+ *     per user, and only for the version that is actually running
+ *
+ * Run:  php tests/update-checker-test.php
+ * Exit: 0 when every check passes, 1 otherwise.
+ */
+
+error_reporting( E_ALL );
+
+define( 'ABSPATH', __DIR__ . '/' );
+define( 'HOUR_IN_SECONDS', 3600 );
+define( 'SHIPPING_DESK_VERSION', '1.1.0' );
+
+$GLOBALS['upd_checks']    = 0;
+$GLOBALS['upd_failures']  = 0;
+$GLOBALS['upd_transients'] = [];
+$GLOBALS['upd_options']    = [];
+$GLOBALS['upd_user_meta']  = [];
+
+/**
+ * Record one expectation.
+ *
+ * @param bool   $condition Result.
+ * @param string $label     What was being checked.
+ * @return void
+ */
+function upd_check( $condition, $label ) {
+	$GLOBALS['upd_checks']++;
+	if ( $condition ) {
+		echo "  ok    {$label}\n";
+		return;
+	}
+	$GLOBALS['upd_failures']++;
+	echo "  FAIL  {$label}\n";
+}
+
+/**
+ * Record an equality expectation, showing both sides when they differ.
+ *
+ * @param mixed  $want  Expected.
+ * @param mixed  $got   Actual.
+ * @param string $label What was being checked.
+ * @return void
+ */
+function upd_same( $want, $got, $label ) {
+	$ok = ( $want === $got );
+	if ( ! $ok ) {
+		$label .= " (expected " . var_export( $want, true ) . ', got ' . var_export( $got, true ) . ')';
+	}
+	upd_check( $ok, $label );
+}
+
+/**
+ * Clear cached state between cases.
+ *
+ * @return void
+ */
+function upd_reset() {
+	$GLOBALS['upd_transients'] = [];
+	$GLOBALS['upd_options']    = [];
+	$GLOBALS['upd_user_meta']  = [];
+}
+
+/* -- WordPress stand-ins ---------------------------------------------------- */
+
+if ( ! class_exists( 'WP_Error' ) ) {
+	class WP_Error {
+		protected $code;
+		protected $message;
+
+		public function __construct( $code = '', $message = '' ) {
+			$this->code    = $code;
+			$this->message = $message;
+		}
+
+		public function get_error_message() {
+			return $this->message;
+		}
+	}
+}
+
+function is_wp_error( $thing ) {
+	return $thing instanceof WP_Error;
+}
+
+function add_filter() {}
+function add_action() {}
+
+function apply_filters( $tag, $value ) {
+	return $value;
+}
+
+function plugin_basename( $file ) {
+	return 'shipping-desk/' . basename( $file );
+}
+
+function get_transient( $key ) {
+	return isset( $GLOBALS['upd_transients'][ $key ] ) ? $GLOBALS['upd_transients'][ $key ] : false;
+}
+
+function set_transient( $key, $value, $ttl = 0 ) {
+	$GLOBALS['upd_transients'][ $key ] = $value;
+	return true;
+}
+
+function __( $text, $domain = null ) {
+	return $text;
+}
+
+function esc_html( $text ) {
+	return htmlspecialchars( (string) $text, ENT_QUOTES );
+}
+
+function esc_url( $url ) {
+	return (string) $url;
+}
+
+function esc_html__( $text, $domain = null ) {
+	return esc_html( $text );
+}
+
+function get_option( $key, $default = false ) {
+	return array_key_exists( $key, $GLOBALS['upd_options'] ) ? $GLOBALS['upd_options'][ $key ] : $default;
+}
+
+function update_option( $key, $value, $autoload = null ) {
+	$GLOBALS['upd_options'][ $key ] = $value;
+	return true;
+}
+
+function get_user_meta( $user_id, $key, $single = false ) {
+	return isset( $GLOBALS['upd_user_meta'][ $user_id ][ $key ] ) ? $GLOBALS['upd_user_meta'][ $user_id ][ $key ] : '';
+}
+
+function update_user_meta( $user_id, $key, $value ) {
+	$GLOBALS['upd_user_meta'][ $user_id ][ $key ] = $value;
+	return true;
+}
+
+function get_current_user_id() {
+	return 1;
+}
+
+function wp_remote_get() {
+	return new WP_Error( 'no_network', 'Not reachable in this test.' );
+}
+
+require dirname( __DIR__ ) . '/includes/class-update-checker.php';
+
+/**
+ * Checker whose network call returns whatever the case needs.
+ */
+class Upd_Test_Checker extends Shipping_Desk_Update_Checker {
+
+	/** @var int */
+	public $calls = 0;
+
+	/** @var array|null */
+	public $release = null;
+
+	protected function fetch_release() {
+		$this->calls++;
+		return $this->release;
+	}
+}
+
+/**
+ * A release payload shaped like GitHub's.
+ *
+ * @param string $version Tag version.
+ * @param array  $assets  Assets; defaults to the expected zip.
+ * @return array
+ */
+function upd_release( $version, array $assets = null ) {
+	if ( null === $assets ) {
+		$assets = [
+			[
+				'name'                 => 'shipping-desk-' . $version . '.zip',
+				'browser_download_url' => 'https://github.com/n777ty/shipping-desk/releases/download/v' . $version . '/shipping-desk-' . $version . '.zip',
+				'digest'               => 'sha256:' . str_repeat( 'a', 64 ),
+			],
+		];
+	}
+
+	return [
+		'tag_name' => 'v' . $version,
+		'html_url' => 'https://github.com/n777ty/shipping-desk/releases/tag/v' . $version,
+		'body'     => "Release notes for {$version}",
+		'assets'   => $assets,
+	];
+}
+
+/* -- Versions -------------------------------------------------------------- */
+
+echo "\n[versions]\n";
+
+upd_same( '1.0.6', Shipping_Desk_Update_Checker::parse_tag( 'v1.0.6' ), 'a v-prefixed tag parses' );
+upd_same( '1.0.6', Shipping_Desk_Update_Checker::parse_tag( '1.0.6' ), 'a bare tag parses' );
+upd_same( '1.1.0', Shipping_Desk_Update_Checker::parse_tag( 'V1.1.0' ), 'the prefix is case-insensitive' );
+upd_same( '', Shipping_Desk_Update_Checker::parse_tag( 'v1.0.6-beta' ), 'a pre-release tag is not a version' );
+upd_same( '', Shipping_Desk_Update_Checker::parse_tag( 'latest' ), 'a non-version tag is rejected' );
+
+upd_check( Shipping_Desk_Update_Checker::is_newer( '1.0.6', '1.0.5' ), 'a higher version is newer' );
+upd_check( ! Shipping_Desk_Update_Checker::is_newer( '1.0.5', '1.0.5' ), 'the same version is not newer' );
+upd_check( ! Shipping_Desk_Update_Checker::is_newer( '1.0.4', '1.0.5' ), 'an older version is not newer' );
+upd_check( ! Shipping_Desk_Update_Checker::is_newer( '', '1.0.5' ), 'an empty version is never newer' );
+
+/* -- Asset selection -------------------------------------------------------- */
+
+echo "\n[asset selection]\n";
+
+$picked = Shipping_Desk_Update_Checker::pick_asset( upd_release( '1.2.0' ) );
+upd_same( '1.2.0', $picked['version'], 'the version comes from the tag' );
+upd_same(
+	'https://github.com/n777ty/shipping-desk/releases/download/v1.2.0/shipping-desk-1.2.0.zip',
+	$picked['package'],
+	'the package is the release asset'
+);
+upd_same( 'sha256:' . str_repeat( 'a', 64 ), $picked['digest'], 'the digest is carried through' );
+
+$wrong_name = Shipping_Desk_Update_Checker::pick_asset( upd_release( '1.2.0', [
+	[ 'name' => 'shipping-desk.zip', 'browser_download_url' => 'https://example.test/x.zip', 'digest' => '' ],
+] ) );
+upd_check( null === $wrong_name, 'an asset not named after the version is refused' );
+
+$no_assets = Shipping_Desk_Update_Checker::pick_asset( upd_release( '1.2.0', [] ) );
+upd_check( null === $no_assets, 'a release without assets offers no update (never a zipball)' );
+
+$bad_tag = Shipping_Desk_Update_Checker::pick_asset( [ 'tag_name' => 'nightly', 'assets' => [] ] );
+upd_check( null === $bad_tag, 'a release whose tag is not a version is ignored' );
+
+/* -- Caching ---------------------------------------------------------------- */
+
+echo "\n[caching]\n";
+
+upd_reset();
+$checker          = new Upd_Test_Checker();
+$checker->release = upd_release( '1.2.0' );
+$checker->latest_release();
+$checker->latest_release();
+upd_same( 1, $checker->calls, 'the release is fetched once, then served from cache' );
+
+$checker->latest_release( true );
+upd_same( 2, $checker->calls, 'a forced check asks GitHub again' );
+
+upd_reset();
+$checker          = new Upd_Test_Checker();
+$checker->release = upd_release( '1.9.9' );
+$checker->latest_release();
+$checker->release = null;
+$kept             = $checker->latest_release( true );
+upd_same( '1.9.9', $kept['release']['version'], 'a failed check keeps the last good answer' );
+
+/* -- The update offer ------------------------------------------------------- */
+
+echo "\n[update offer]\n";
+
+upd_reset();
+$checker          = new Upd_Test_Checker();
+$checker->release = upd_release( '1.2.0' );
+$transient        = $checker->filter_update_plugins( (object) [ 'response' => [] ] );
+$entry            = $transient->response['shipping-desk/shipping-desk.php'];
+
+upd_same( '1.2.0', $entry->new_version, 'a newer release is offered' );
+upd_same( 'shipping-desk', $entry->slug, 'the slug matches the plugin folder' );
+upd_same( '7.4', $entry->requires_php, 'requires_php travels with the offer' );
+upd_same( '6.0', $entry->requires, 'requires travels with the offer' );
+
+upd_reset();
+$checker          = new Upd_Test_Checker();
+$checker->release = upd_release( '1.1.0' );
+$same             = $checker->filter_update_plugins( (object) [
+	'response' => [ 'shipping-desk/shipping-desk.php' => (object) [ 'new_version' => '1.1.0' ] ],
+] );
+upd_check( empty( $same->response ), 'the running version is not offered and leaves no stale entry' );
+
+upd_reset();
+$checker          = new Upd_Test_Checker();
+$checker->release = null;
+$offline          = $checker->filter_update_plugins( (object) [ 'response' => [] ] );
+upd_check( empty( $offline->response ), 'an unreachable GitHub adds no update' );
+
+/* -- Changelog -------------------------------------------------------------- */
+
+echo "\n[changelog]\n";
+
+$readme = "== Changelog ==\n\n= 1.2.0 =\n* New: something.\n* Fixed: another.\n\n= 1.1.0 =\n* First.\n\n== Upgrade Notice ==\n= 1.2.0 =\nDo not treat this as a change.\n";
+$parsed = Shipping_Desk_Update_Checker::parse_changelog( $readme );
+
+upd_same( [ '1.2.0', '1.1.0' ], array_keys( $parsed ), 'versions are read in order' );
+upd_same( 2, count( $parsed['1.2.0'] ), 'bullets are read per version' );
+upd_check( ! isset( $parsed['Do not treat this as a change.'] ), 'the Upgrade Notice section is not changelog' );
+
+$html = Shipping_Desk_Update_Checker::changelog_html( [ '1.2.0' => [ 'A <b>bold</b> claim' ] ] );
+upd_check( false !== strpos( $html, '&lt;b&gt;' ), 'changelog html is escaped' );
+upd_check( false !== strpos( $html, '<h4>1.2.0</h4>' ), 'changelog html names the version' );
+
+/* -- What's new ------------------------------------------------------------- */
+
+echo "\n[what's new]\n";
+
+upd_reset();
+update_option( Shipping_Desk_Update_Checker::WHATS_NEW_OPTION, [ 'version' => '1.1.0', 'at' => time() ] );
+
+$pending = Shipping_Desk_Update_Checker::pending_whats_new( 5 );
+upd_check( is_array( $pending ), 'a freshly updated version has something to show' );
+upd_same( '1.1.0', $pending['version'], 'the popup names the version' );
+
+$shipped   = Shipping_Desk_Update_Checker::readme_changelog();
+$first_bullet = isset( $shipped['1.1.0'][0] ) ? $shipped['1.1.0'][0] : '';
+upd_check( '' !== $first_bullet, 'the installed readme has a 1.1.0 section to show' );
+upd_same( $first_bullet, $pending['items'][0], 'the popup lists the installed readme items' );
+
+Shipping_Desk_Update_Checker::dismiss_whats_new( '1.1.0', 5 );
+upd_check( null === Shipping_Desk_Update_Checker::pending_whats_new( 5 ), 'a dismissed version is not shown again' );
+upd_check( is_array( Shipping_Desk_Update_Checker::pending_whats_new( 6 ) ), 'dismissal is per user' );
+
+update_option( Shipping_Desk_Update_Checker::WHATS_NEW_OPTION, [ 'version' => '9.9.9', 'at' => time() ] );
+upd_check( null === Shipping_Desk_Update_Checker::pending_whats_new( 7 ), 'a version that is not running is never announced' );
+
+/* -- Summary ---------------------------------------------------------------- */
+
+echo "\n";
+printf( "Checks: %d, failures: %d\n", $GLOBALS['upd_checks'], $GLOBALS['upd_failures'] );
+exit( $GLOBALS['upd_failures'] > 0 ? 1 : 0 );

@@ -648,3 +648,47 @@
 	margin-left: 6px;
 }
 
+
+/* What's new popup, shown once after an update. Above the admin menu, page dimmed, one
+   decision on screen: read the list, close it. */
+.shipping-desk-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.shipping-desk-modal-panel {
+    width: 100%;
+    max-width: 560px;
+    max-height: 80vh;
+    padding: 20px 24px;
+    overflow: auto;
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.shipping-desk-modal-panel h2 {
+    margin-top: 0;
+    font-size: 18px;
+}
+
+.shipping-desk-whats-new-list {
+    margin: 0 0 16px 18px;
+    list-style: disc;
+}
+
+.shipping-desk-whats-new-list li {
+    margin-bottom: 6px;
+}
+
+.shipping-desk-modal-actions {
+    margin: 0;
+    text-align: right;
+}
+

@@ -1553,4 +1553,36 @@
             alert(ajaxErrorMessage(xhr, 'Error resetting.'));
         });
     });
+    /*
+     * "What's new" popup: once per version, per user, after an update. Closing it records
+     * the dismissal, but the popup goes away regardless - if the request fails, showing it
+     * again next time is better than trapping someone behind a changelog.
+     */
+    function closeWhatsNew() {
+        var $modal = $('#shipping-desk-whats-new');
+        if (!$modal.length) return;
+
+        var version = $modal.data('version');
+        var nonce = $modal.data('nonce');
+        $modal.remove();
+
+        $.post(ShippingDesk.ajaxurl, {
+            action: 'shipping_desk_dismiss_whats_new',
+            _wpnonce: nonce,
+            version: version
+        });
+    }
+
+    $(document).on('click', '.shipping-desk-whats-new-close', closeWhatsNew);
+
+    // Clicking the dimmed area closes it too, but clicking the panel must not.
+    $(document).on('click', '#shipping-desk-whats-new', function (e) {
+        if (e.target === this) closeWhatsNew();
+    });
+
+    $(document).on('keydown', function (e) {
+        if (e.key === 'Escape' || e.keyCode === 27) {
+            closeWhatsNew();
+        }
+    });
 })(jQuery);
