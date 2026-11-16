@@ -119,6 +119,57 @@ form_check(
 	'the legacy key is still read by the upgrade migration'
 );
 
+/* -- The origin address saves on its own ------------------------------------ */
+
+echo "\n[the address has its own group]\n";
+
+form_check(
+	isset( $registered['shipping_desk_from_address'] ) && 'shipping_desk_from_settings' === $registered['shipping_desk_from_address'],
+	'the origin address is registered to its own settings group',
+	'shared with the API keys, so saving an address would re-post every key'
+);
+
+/* -- Every registered option has a field ----------------------------------- */
+
+echo "\n[registered options have fields]\n";
+
+// Field names as they appear in markup, including array-style names such as
+// shipping_desk_from_address[city]. Dynamic rows (the box table) are built in JS, so
+// admin.js is scanned too.
+$markup = $source . (string) file_get_contents( dirname( __DIR__ ) . '/admin/js/admin.js' );
+preg_match_all( '/name="([a-z0-9_]+)(?:\[[^"]*)?"/i', $markup, $field_names );
+$field_names = array_flip( $field_names[1] );
+
+foreach ( $registered as $option => $group ) {
+	form_check(
+		isset( $field_names[ $option ] ),
+		sprintf( '%s has a field in the page', $option ),
+		'registered without a matching field name, so any save of its group stores null'
+	);
+}
+
+/* -- Password managers stay out of the keys --------------------------------- */
+
+echo "\n[password managers cannot quietly replace a key]\n";
+
+form_check(
+	false !== strpos( $source, 'autocomplete="new-password"' ) && false !== strpos( $source, 'data-1p-ignore' ),
+	'the key fields ask password managers to stay out',
+	'autocomplete="off" alone is ignored on password inputs'
+);
+
+form_check(
+	substr_count( $source, '$this->api_key_attributes()' ) >= 5,
+	'every key field uses those attributes',
+	'a field without them is the one a manager fills'
+);
+
+$admin_js = (string) file_get_contents( dirname( __DIR__ ) . '/admin/js/admin.js' );
+form_check(
+	false !== strpos( $admin_js, '.shipping-desk-api-key' ) && false !== strpos( $admin_js, 'password manager' ),
+	'a submit that would overwrite an untouched key asks first'
+);
+
 /* -- Checkboxes post a value even when unticked ----------------------------- */
 
 echo "\n[checkboxes post zero]\n";

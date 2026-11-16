@@ -362,6 +362,59 @@ $no_key = ep_client( '' )->validate_address( ep_address() );
 ep_same( 0, count( $GLOBALS['ep_requests'] ), 'does not call EasyPost without a key' );
 ep_same( 'unavailable', $no_key['status'], 'reports the missing key' );
 
+/* -- Print immediately after buying ----------------------------------------- */
+
+ep_section( 'label available shortly after the buy' );
+
+/**
+ * Client whose shipment read is canned, so the retry can be observed without HTTP.
+ */
+class EasyPost_Label_Race_Stub extends Shipping_Desk_EasyPost_Client {
+
+	public $queue = [];
+	public $reads = 0;
+
+	public function __construct( array $queue ) {
+		parent::__construct( 'EZTK_test_key' );
+		$this->queue = $queue;
+	}
+
+	public function get_shipment( $id ) {
+		$this->reads++;
+		return empty( $this->queue ) ? [] : array_shift( $this->queue );
+	}
+}
+
+$ep_labelled = [ 'postage_label' => [ 'label_url' => 'https://example.test/label.pdf' ] ];
+
+// EasyPost assembles the PDF just after the buy: one empty read, then the label.
+$ep_race  = new EasyPost_Label_Race_Stub( [ [], $ep_labelled ] );
+$ep_start = microtime( true );
+$ep_url   = $ep_race->get_label_url( 'shp_test' );
+$ep_wait  = microtime( true ) - $ep_start;
+
+ep_same( 'https://example.test/label.pdf', $ep_url, 'a label that appears on the second read is returned' );
+ep_same( 2, $ep_race->reads, 'the shipment was read twice rather than once' );
+ep_check( $ep_wait >= 0.7, 'and the retry waited before asking again' );
+
+$ep_ready = new EasyPost_Label_Race_Stub( [ $ep_labelled ] );
+ep_same( 'https://example.test/label.pdf', $ep_ready->get_label_url( 'shp_test' ), 'a label already present is returned first time' );
+ep_same( 1, $ep_ready->reads, 'with no retry' );
+
+$ep_absent = new EasyPost_Label_Race_Stub( [ [], [], [] ] );
+$ep_error  = $ep_absent->get_label_url( 'shp_test' );
+
+ep_check( $ep_error instanceof WP_Error, 'no label after three reads is an error' );
+ep_same( 3, $ep_absent->reads, 'after three reads' );
+ep_check(
+	false === strpos( $ep_error->get_error_message(), 'Buy the label again' ),
+	'the message never tells the operator to buy again - the label exists and a second buy is charged'
+);
+ep_check(
+	false !== strpos( $ep_error->get_error_message(), 'do not buy another' ),
+	'and says so plainly'
+);
+
 /* -- Result --------------------------------------------------------------- */
 
 echo PHP_EOL . 'Checks: ' . $GLOBALS['ep_checks'] . ', failures: ' . $GLOBALS['ep_failures'] . PHP_EOL;

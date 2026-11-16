@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,12 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.3.1 =
+* Changed: the origin address has its own Save button, separate from the API keys. Correcting an address no longer re-posts every credential, and a stray edit in a key field cannot be committed by a save that was about the address. Each form saves its own settings group, which is what WordPress actually saves.
+* New: API key fields ask password managers to stay out, using the signals they actually honour (`autocomplete="new-password"` plus the LastPass, 1Password, Bitwarden and Dashlane opt-outs). If a key still changes without a keystroke behind it, the save asks for confirmation first. This was found the honest way: a manager filled a key while the origin address was being edited.
+* Fixed: the Veeqo API key could not be saved, and any save of the API keys form cleared it. The field posted a different option name than the one registered, so the typed value was ignored and the stored key was set to null - the same failure as the legacy EasyPost key. The settings gate now asserts that every registered option has a field on the page.
+* Fixed: clicking Print straight after buying an EasyPost label could report that the shipment has no label, even though the purchase had succeeded - EasyPost finishes building the PDF a moment later. The print request now reads the shipment up to three times, 0.8s apart, before concluding anything. The message no longer says to buy the label again: it exists, a second buy would be charged, and a retry is normally enough.
 
 = 1.3.0 =
 

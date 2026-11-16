@@ -580,21 +580,39 @@ class Shipping_Desk_EasyPost_Client implements Shipping_Desk_Provider_Interface,
      * @return string|WP_Error
      */
     public function get_label_url( $id ) {
-        $shipment = $this->get_shipment( $id );
-        if ( is_wp_error( $shipment ) ) {
-            return $shipment;
+        /*
+         * EasyPost finishes assembling the label just after the buy response, so a shipment
+         * fetched in the following second or two can still report no `postage_label`. Print
+         * is precisely what an operator clicks next, which is why this failed
+         * intermittently right after a purchase and worked on the second try.
+         *
+         * Ask again before concluding anything: three reads, 0.8s apart. Only a label that
+         * is still absent after that is reported missing - and the message never suggests
+         * buying again, because the label exists and a second buy would be charged.
+         */
+        $attempts = 3;
+
+        for ( $attempt = 1; $attempt <= $attempts; $attempt++ ) {
+            $shipment = $this->get_shipment( $id );
+            if ( is_wp_error( $shipment ) ) {
+                return $shipment;
+            }
+
+            $url = $this->postage_label_field( $shipment, 'label_url' );
+            if ( '' !== $url ) {
+                return $url;
+            }
+
+            if ( $attempt < $attempts ) {
+                usleep( 800000 );
+            }
         }
 
-        $url = $this->postage_label_field( $shipment, 'label_url' );
-        if ( '' === $url ) {
-            return new WP_Error(
-                'easypost_label_missing',
-                __( 'EasyPost has no label for this shipment. Buy the label again.', 'shipping-desk' ),
-                [ 'shipment_id' => (string) $id ]
-            );
-        }
-
-        return $url;
+        return new WP_Error(
+            'easypost_label_missing',
+            __( 'EasyPost has not returned a label for this shipment yet. Wait a few seconds and click Print again - the label was bought, so do not buy another. If Print keeps failing, open the shipment in the EasyPost dashboard.', 'shipping-desk' ),
+            [ 'shipment_id' => (string) $id ]
+        );
     }
 
     /**

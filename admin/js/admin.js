@@ -1628,6 +1628,51 @@
      * the dismissal, but the popup goes away regardless - if the request fails, showing it
      * again next time is better than trapping someone behind a changelog.
      */
+    /*
+     * A key field that changed without a keystroke was filled by a password manager.
+     *
+     * This happened for real: an address edit once committed a replaced API key, because a
+     * single save covered both the address and the keys. The forms are separate now, but a
+     * manager can still land on the keys form, so a submit that would overwrite a key
+     * nobody typed into asks first.
+     */
+    (function () {
+        var initial = {};
+        var $keys = $('.shipping-desk-api-key');
+
+        $keys.each(function () {
+            initial[this.name] = this.value;
+        });
+
+        // A real edit starts with a keystroke; autofill does not produce one.
+        $(document).on('keydown', '.shipping-desk-api-key', function () {
+            $(this).data('typed', true);
+        });
+
+        $keys.closest('form').on('submit', function (event) {
+            var replaced = [];
+
+            $(this).find('.shipping-desk-api-key').each(function () {
+                if (undefined === initial[this.name]) return;
+                if (this.value === initial[this.name]) return;
+                if ($(this).data('typed')) return;
+                replaced.push(this.name.replace(/^shipping_desk_/, '').replace(/_/g, ' '));
+            });
+
+            if (!replaced.length) return;
+
+            var ok = window.confirm(
+                'These API keys changed without being typed:\n\n  ' + replaced.join('\n  ') +
+                '\n\nA password manager may have filled them. Save anyway?'
+            );
+
+            if (!ok) {
+                event.preventDefault();
+                $(this).find('.shipping-desk-api-key').first().trigger('focus');
+            }
+        });
+    })();
+
     function closeWhatsNew() {
         var $modal = $('#shipping-desk-whats-new');
         if (!$modal.length) return;

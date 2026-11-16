@@ -281,7 +281,10 @@ class Shipping_Desk_Plugin {
         // form in that group is saved without it - which would erase the key before
         // maybe_migrate_easypost_key() could copy it into its slot. Unregistered, nothing
         // here can touch it.
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_from_address', [ 'sanitize_callback' => [ $this, 'sanitize_from_address' ] ] );
+        // Its own group, not the keys' group: WordPress saves a group, so sharing one would
+        // mean saving an address re-posts every key - and any field absent from that POST
+        // is nulled. The gate in tests/settings-forms-test.php enforces the split.
+        register_setting( 'shipping_desk_from_settings', 'shipping_desk_from_address', [ 'sanitize_callback' => [ $this, 'sanitize_from_address' ] ] );
 
         add_settings_section( 'shipping_desk_provider_section', __( 'Label Provider', 'shipping-desk' ), '__return_false', 'shipping_desk_api_settings' );
         add_settings_field( 'shipping_desk_provider_field', __( 'Active provider', 'shipping-desk' ), [ $this, 'render_provider_field' ], 'shipping_desk_api_settings', 'shipping_desk_provider_section' );
@@ -293,8 +296,8 @@ class Shipping_Desk_Plugin {
         add_settings_section( 'shipping_desk_api_section', __( 'Veeqo API Settings', 'shipping-desk' ), '__return_false', 'shipping_desk_api_settings' );
         add_settings_field( 'shipping_desk_veeqo_api_key_field', __( 'Veeqo API Key', 'shipping-desk' ), [ $this, 'render_api_key_field' ], 'shipping_desk_api_settings', 'shipping_desk_api_section' );
 
-        add_settings_section( 'shipping_desk_from_address_section', __( 'From Address (Optional)', 'shipping-desk' ), '__return_false', 'shipping_desk_api_settings' );
-        add_settings_field( 'shipping_desk_from_address_field', __( 'Shipment Origin', 'shipping-desk' ), [ $this, 'render_from_address_field' ], 'shipping_desk_api_settings', 'shipping_desk_from_address_section' );
+        add_settings_section( 'shipping_desk_from_address_section', __( 'From Address (Optional)', 'shipping-desk' ), '__return_false', 'shipping_desk_from_settings' );
+        add_settings_field( 'shipping_desk_from_address_field', __( 'Shipment Origin', 'shipping-desk' ), [ $this, 'render_from_address_field' ], 'shipping_desk_from_settings', 'shipping_desk_from_address_section' );
 
         register_setting( 'shipping_desk_printnode_settings', 'shipping_desk_printnode_api_key' );
         register_setting( 'shipping_desk_printnode_settings', 'shipping_desk_printnode_printer_id', [ 'sanitize_callback' => 'absint' ] );
@@ -650,12 +653,12 @@ class Shipping_Desk_Plugin {
         <p>
             <label for="shipping_desk_easypost_test_api_key"><strong><?php esc_html_e( 'Test API key', 'shipping-desk' ); ?></strong></label><br />
             <input type="password" id="shipping_desk_easypost_test_api_key" name="shipping_desk_easypost_test_api_key"
-                   value="<?php echo esc_attr( $test_key ); ?>" class="regular-text" autocomplete="off" />
+                   value="<?php echo esc_attr( $test_key ); ?>" <?php echo $this->api_key_attributes(); // phpcs:ignore WordPress.Security.EscapeOutput -- static attribute string ?> />
         </p>
         <p>
             <label for="shipping_desk_easypost_live_api_key"><strong><?php esc_html_e( 'Production API key', 'shipping-desk' ); ?></strong></label><br />
             <input type="password" id="shipping_desk_easypost_live_api_key" name="shipping_desk_easypost_live_api_key"
-                   value="<?php echo esc_attr( $live_key ); ?>" class="regular-text" autocomplete="off" />
+                   value="<?php echo esc_attr( $live_key ); ?>" <?php echo $this->api_key_attributes(); // phpcs:ignore WordPress.Security.EscapeOutput -- static attribute string ?> />
         </p>
         <p class="description">
             <?php esc_html_e( 'Used for both EasyPost labels and address validation. Insurance is EasyPost\'s own and is priced at purchase, not in the quote.', 'shipping-desk' ); ?>
@@ -810,11 +813,28 @@ class Shipping_Desk_Plugin {
         <?php
     }
 
+    /**
+     * Attributes that keep password managers out of an API key field.
+     *
+     * `autocomplete="off"` is the one they ignore, which is how a manager filled a key
+     * while the operator was editing the origin address. `new-password` is the signal
+     * browsers honour, and the data-* attributes are the vendor equivalents - LastPass,
+     * 1Password, Bitwarden, Dashlane.
+     *
+     * Static string, no user input: echo it directly, or `esc_attr()` would mangle the
+     * quotes into one useless attribute.
+     *
+     * @return string
+     */
+    protected function api_key_attributes() {
+        return 'class="regular-text shipping-desk-api-key" autocomplete="new-password" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other"';
+    }
+
     public function render_api_key_field() {
         $api_key = get_option( 'shipping_desk_veeqo_api_key', '' );
         printf(
-            '<input type="password" name="shipping_desk_api_key" value="%s" class="regular-text" /><p class="description">%s</p>',
-            esc_attr( $api_key ),
+            '<input type="password" name="shipping_desk_veeqo_api_key" value="%s" %s /><p class="description">%s</p>',
+            esc_attr( $api_key ), $this->api_key_attributes(),
             esc_html__( 'Stored in wp_options; used for all Veeqo API calls.', 'shipping-desk' )
         );
     }
@@ -868,12 +888,12 @@ class Shipping_Desk_Plugin {
         <p>
             <label for="shipping_desk_shippo_test_api_key"><strong><?php esc_html_e( 'Test API key', 'shipping-desk' ); ?></strong></label><br />
             <input type="password" id="shipping_desk_shippo_test_api_key" name="shipping_desk_shippo_test_api_key"
-                   value="<?php echo esc_attr( $test_key ); ?>" class="regular-text" autocomplete="off" />
+                   value="<?php echo esc_attr( $test_key ); ?>" <?php echo $this->api_key_attributes(); // phpcs:ignore WordPress.Security.EscapeOutput -- static attribute string ?> />
         </p>
         <p>
             <label for="shipping_desk_shippo_live_api_key"><strong><?php esc_html_e( 'Production API key', 'shipping-desk' ); ?></strong></label><br />
             <input type="password" id="shipping_desk_shippo_live_api_key" name="shipping_desk_shippo_live_api_key"
-                   value="<?php echo esc_attr( $live_key ); ?>" class="regular-text" autocomplete="off" />
+                   value="<?php echo esc_attr( $live_key ); ?>" <?php echo $this->api_key_attributes(); // phpcs:ignore WordPress.Security.EscapeOutput -- static attribute string ?> />
         </p>
         <?php
         $warning = $this->shippo_key_warning( $test_key, $live_key );
@@ -1040,8 +1060,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.0' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.0', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.1' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.1', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -2079,7 +2099,25 @@ class Shipping_Desk_Plugin {
                 <?php
                 settings_fields( 'shipping_desk_api_settings' );
                 do_settings_sections( 'shipping_desk_api_settings' );
-                submit_button();
+                submit_button( __( 'Save API settings', 'shipping-desk' ) );
+                ?>
+            </form>
+
+            <hr />
+
+            <?php
+            /*
+             * A second form, not a second section in the first one. Changing the origin
+             * address is routine; re-posting every credential to do it is not, and a
+             * password field is exactly where a stray edit or an autofill goes unnoticed.
+             * Separate groups keep the save scoped to the address.
+             */
+            ?>
+            <form method="post" action="options.php">
+                <?php
+                settings_fields( 'shipping_desk_from_settings' );
+                do_settings_sections( 'shipping_desk_from_settings' );
+                submit_button( __( 'Save origin address', 'shipping-desk' ) );
                 ?>
             </form>
 
