@@ -260,12 +260,14 @@
                 parts.push('$' + extra.toFixed(2));
             }
             if (premium > 0) {
-                parts.push('$' + premium.toFixed(2) + ' est. insurance');
+                // "~$2.50 ins." keeps the column narrow: the tilde is the whole
+                // "estimate" caveat, and every operator reads ins. as insurance.
+                parts.push('~$' + premium.toFixed(2) + ' ins.');
             }
 
             var text = '$' + (base + extra + premium).toFixed(2);
             if (parts.length) {
-                text += ' (base $' + base.toFixed(2) + ' + ' + parts.join(' + ') + ')';
+                text += ' ($' + base.toFixed(2) + ' + ' + parts.join(' + ') + ')';
             }
             $price.text(text);
         });
