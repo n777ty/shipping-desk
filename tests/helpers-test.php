@@ -310,5 +310,11 @@ helper_same( false, Shipping_Desk_Helpers::quote_record_matches_provider( $quote
 helper_same( false, Shipping_Desk_Helpers::quote_record_matches_provider( $quote_easypost, 'easypost', 'live' ), 'nor does the other label mode' );
 helper_same( false, Shipping_Desk_Helpers::quote_record_matches_provider( [ 'rates' => [ [ 'rate_id' => 'rate_1' ] ] ], 'easypost', 'test' ), 'a record with no stamp cannot be trusted' );
 
+helper_same( null, Shipping_Desk_Helpers::daily_average( [ 'amount' => 0.0, 'labels' => 0 ] ), 'no labels means no average' );
+helper_same( 42.1, Shipping_Desk_Helpers::daily_average( [ 'amount' => 42.10, 'labels' => 1 ] ), 'one label averages the total' );
+helper_same( 6.01, Shipping_Desk_Helpers::daily_average( [ 'amount' => 42.10, 'labels' => 7 ] ), 'the average divides the day by its labels' );
+helper_same( 6.67, Shipping_Desk_Helpers::daily_average( [ 'amount' => 20.0, 'labels' => 3 ] ), 'and rounds to cents' );
+helper_same( null, Shipping_Desk_Helpers::daily_average( [] ), 'a missing record has no average' );
+
 echo PHP_EOL . 'Checks: ' . $GLOBALS['helper_checks'] . ', failures: ' . $GLOBALS['helper_failures'] . PHP_EOL;
 exit( 0 === $GLOBALS['helper_failures'] ? 0 : 1 );

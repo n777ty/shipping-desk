@@ -742,6 +742,26 @@ class Shipping_Desk_Helpers {
     }
 
     /**
+     * Average postage per label for one day's total.
+     *
+     * The badge shows a total and a count; the average is the number an operator actually
+     * compares between days, because it is not skewed by how busy the day was.
+     *
+     * @param array $total amount and labels, as daily_total() returns.
+     * @return float|null Null when there is nothing to divide by.
+     */
+    public static function daily_average( array $total ) {
+        $labels = isset( $total['labels'] ) ? (int) $total['labels'] : 0;
+        if ( $labels < 1 ) {
+            return null;
+        }
+
+        $amount = isset( $total['amount'] ) ? (float) $total['amount'] : 0.0;
+
+        return round( $amount / $labels, 2 );
+    }
+
+    /**
      * Record what a purchase actually charged against today's total.
      *
      * Test-mode labels are skipped: they cost nothing, so a counter that moved for them

@@ -128,8 +128,32 @@ class Shipping_Desk_Plugin {
         $money  = function_exists( 'wc_price' )
             ? wp_kses_post( wc_price( $spend['amount'], [ 'currency' => $spend['currency'] ] ) )
             : esc_html( number_format_i18n( $spend['amount'], 2 ) );
+
+        // One label makes the average identical to the total, which is noise. From two
+        // labels on it is the figure worth comparing between days.
+        $average = Shipping_Desk_Helpers::daily_average( $spend );
+        $average = ( null !== $average && $labels > 1 )
+            ? ( function_exists( 'wc_price' )
+                ? wp_kses_post( wc_price( $average, [ 'currency' => $spend['currency'] ] ) )
+                : esc_html( number_format_i18n( $average, 2 ) ) )
+            : '';
+
+        // Two layouts, one markup: the class decides whether the supporting figures sit
+        // beside the amount or stack against it. Filterable so they can be compared on a
+        // live site with one line rather than by reinstalling.
+        $layout = (string) apply_filters( 'shipping_desk_spend_layout', 'stacked' );
+        $class  = 'inline' === $layout ? 'shipping-desk-spend' : 'shipping-desk-spend shipping-desk-spend--stacked';
+
+        // Which of the two small figures sits on top. Only added when both exist: a lone
+        // figure would otherwise carry a rule with nothing beneath it.
+        if ( 'inline' !== $layout && '' !== $average
+            && 'count-first' === (string) apply_filters( 'shipping_desk_spend_order', 'average-first' ) ) {
+            $class .= ' shipping-desk-spend--count-first';
+        }
+
+        $title = __( 'Postage bought since midnight, site time. Refunds are not deducted.', 'shipping-desk' );
         ?>
-        <div class="shipping-desk-spend" title="<?php esc_attr_e( 'Postage bought since midnight, site time. Refunds are not deducted.', 'shipping-desk' ); ?>">
+        <div class="<?php echo esc_attr( $class ); ?>" title="<?php echo esc_attr( $title ); ?>">
             <span class="shipping-desk-spend-label"><?php esc_html_e( 'Today', 'shipping-desk' ); ?></span>
             <strong><?php echo $money; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wc_price output, escaped above. ?></strong>
             <span class="shipping-desk-spend-count">
@@ -141,6 +165,15 @@ class Shipping_Desk_Plugin {
                 );
                 ?>
             </span>
+            <?php if ( '' !== $average ) : ?>
+                <span
+                    class="shipping-desk-spend-average"
+                    title="<?php esc_attr_e( 'Average postage per label today.', 'shipping-desk' ); ?>"
+                >
+                    <?php echo $average; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wc_price output, escaped above. ?>
+                    <span class="shipping-desk-spend-average-label"><?php esc_html_e( 'avg', 'shipping-desk' ); ?></span>
+                </span>
+            <?php endif; ?>
         </div>
         <?php
     }
@@ -1060,8 +1093,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.2' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.2', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.3' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.3', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),

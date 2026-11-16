@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.3.2
+Stable tag: 1.3.3
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,11 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.3.3 =
+* New: the Today badge also shows the average postage per label, once the day has more than one label. It sits after the count, quieter, separated by the pill's own hairline - the total and the count keep the emphasis. A day with a single label does not show it, because there the average is the total.
+* New: two layouts for that badge, chosen with the shipping_desk_spend_layout filter. "stacked" (default) makes the total the dominant figure with the label count and average in a column beside it; "inline" keeps everything on one baseline. Both share one markup, so the choice costs nothing.
+* Changed: in the stacked layout the two small figures are separated by a hairline, and the average now sits above the label count - the two money figures together, the count last. Flip it with the shipping_desk_spend_order filter.
 
 = 1.3.2 =
 * Changed: Print waits longer when the provider has not finished building the file yet - four reads, backing off 0.5s, 1s then 1.5s. EasyPost has been seen taking more than two seconds after a successful purchase.

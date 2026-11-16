@@ -727,3 +727,91 @@
     color: #787c82;
 }
 
+/*
+ * Average per label: a quieter third figure, separated by the pill's own hairline rather
+ * than by punctuation, so the total and the count keep the emphasis.
+ */
+.shipping-desk-spend-average {
+    padding-left: 9px;
+    border-left: 1px solid #dcdcde;
+    color: #787c82;
+}
+
+.shipping-desk-spend-average-label {
+    margin-left: 3px;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    color: #a7aaad;
+}
+
+/*
+ * Stacked layout: the amount carries the pill, with the two supporting figures in a column
+ * beside it. Same markup as the inline layout - only the grid differs - so the two can be
+ * compared by adding or removing one class.
+ *
+ * Default order is average above count: the two money figures then sit together, and the
+ * count - a different unit - reads last.
+ */
+.shipping-desk-spend--stacked {
+    display: inline-grid;
+    grid-template-columns: auto auto auto;
+    grid-template-areas:
+        "label total avg"
+        "label total count";
+    align-items: center;
+    column-gap: 10px;
+    padding: 6px 14px;
+    line-height: 1.2;
+}
+
+.shipping-desk-spend--stacked .shipping-desk-spend-label {
+    grid-area: label;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.shipping-desk-spend--stacked strong {
+    grid-area: total;
+    font-size: 22px;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+
+.shipping-desk-spend--stacked .shipping-desk-spend-count,
+.shipping-desk-spend--stacked .shipping-desk-spend-average {
+    justify-self: stretch;
+    border-left: 0;
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.shipping-desk-spend--stacked .shipping-desk-spend-average {
+    grid-area: avg;
+    padding: 0;
+}
+
+/* The lower of the two figures carries the rule, so the pair reads as two rows of one
+   table rather than two lines of text. */
+.shipping-desk-spend--stacked .shipping-desk-spend-count {
+    grid-area: count;
+    padding: 3px 0 0;
+    border-top: 1px solid #dcdcde;
+}
+
+.shipping-desk-spend--stacked.shipping-desk-spend--count-first {
+    grid-template-areas:
+        "label total count"
+        "label total avg";
+}
+
+.shipping-desk-spend--stacked.shipping-desk-spend--count-first .shipping-desk-spend-count {
+    padding-top: 0;
+    border-top: 0;
+}
+
+.shipping-desk-spend--stacked.shipping-desk-spend--count-first .shipping-desk-spend-average {
+    padding-top: 3px;
+    border-top: 1px solid #dcdcde;
+}
+

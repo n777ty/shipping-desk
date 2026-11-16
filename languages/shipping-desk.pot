@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-16T19:06:01+00:00\n"
+"POT-Creation-Date: 2026-11-16T20:59:08+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: shipping-desk\n"
@@ -103,6 +103,14 @@ msgstr ""
 #: includes/class-easypost-client.php:563
 #: includes/class-shippo-client.php:429
 msgid "A refund for this label is already pending with the carrier."
+msgstr ""
+
+#: includes/class-plugin.php:156
+msgid "Average postage per label today."
+msgstr ""
+
+#: includes/class-plugin.php:159
+msgid "avg"
 msgstr ""
 
 #: includes/class-plugin.php:1942
