@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.3.1
+Stable tag: 1.3.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,12 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.3.2 =
+* Changed: Print waits longer when the provider has not finished building the file yet - four reads, backing off 0.5s, 1s then 1.5s. EasyPost has been seen taking more than two seconds after a successful purchase.
+* New: the label URL returned by the purchase is now stored on the order, and Print falls back to it when the provider reports no label yet. A bought label can be printed without waiting at all, even when EasyPost is slow.
+* Fixed: a print could report "Not Found" - EasyPost's 404, which carries no detail - for a shipment bought seconds earlier that the API had not caught up with. A 404 now retries inside the same short window, and the URL recorded at purchase is used when the provider cannot be read.
+* Changed: when a label is not ready yet, the browser now waits and retries by itself - two more attempts, 2.5s apart, with the button reading "Waiting for label...". EasyPost has been measured taking longer than the server is willing to block, so the second click was doing work the plugin should do.
 
 = 1.3.1 =
 * Changed: the origin address has its own Save button, separate from the API keys. Correcting an address no longer re-posts every credential, and a stray edit in a key field cannot be committed by a save that was about the address. Each form saves its own settings group, which is what WordPress actually saves.

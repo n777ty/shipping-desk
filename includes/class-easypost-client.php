@@ -586,15 +586,24 @@ class Shipping_Desk_EasyPost_Client implements Shipping_Desk_Provider_Interface,
          * is precisely what an operator clicks next, which is why this failed
          * intermittently right after a purchase and worked on the second try.
          *
-         * Ask again before concluding anything: three reads, 0.8s apart. Only a label that
-         * is still absent after that is reported missing - and the message never suggests
-         * buying again, because the label exists and a second buy would be charged.
+         * Ask again before concluding anything: four reads, backing off 0.5s/1s/1.5s. Only a
+         * label that is still absent after that is reported missing - and the message never
+         * suggests buying again, because the label exists and a second buy would be charged.
          */
-        $attempts = 3;
+        $attempts = 4;
 
         for ( $attempt = 1; $attempt <= $attempts; $attempt++ ) {
             $shipment = $this->get_shipment( $id );
+
             if ( is_wp_error( $shipment ) ) {
+                // A shipment bought a moment ago can answer 404 while EasyPost catches up,
+                // and "Not Found" is an unhelpful thing to show an operator holding a
+                // parcel. Retry it like a missing label; every other error is returned.
+                if ( 'easypost_not_found' === $shipment->get_error_code() && $attempt < $attempts ) {
+                    usleep( 500000 * $attempt );
+                    continue;
+                }
+
                 return $shipment;
             }
 
@@ -604,7 +613,10 @@ class Shipping_Desk_EasyPost_Client implements Shipping_Desk_Provider_Interface,
             }
 
             if ( $attempt < $attempts ) {
-                usleep( 800000 );
+                // 0.5s, 1s, 1.5s: three seconds of patience in total. EasyPost has been
+                // seen taking more than two, and a printing operator will wait three
+                // seconds without noticing.
+                usleep( 500000 * $attempt );
             }
         }
 

@@ -1060,8 +1060,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.1' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.1', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.2' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.2', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -3229,6 +3229,12 @@ class Shipping_Desk_Plugin {
         $order->update_meta_data( $m['shipment_id'], $shipment['id'] ?? '' );
         $order->update_meta_data( $m['remote_id'], $remote_id );
         $order->update_meta_data( $m['label_id'], $label_id );
+        // The URL the buy response carried. Print asks the provider for a fresh one first -
+        // Veeqo and Shippo sign theirs with an expiry - but this is what saves a print when
+        // EasyPost has not finished building the file yet.
+        if ( '' !== $label_url ) {
+            $order->update_meta_data( $m['label_url'], $label_url );
+        }
         $order->update_meta_data( $m['tracking'], $tracking );
         $order->update_meta_data( $m['provider'], $provider );
         $order->update_meta_data( $m['provider_mode'], $mode );
@@ -3407,6 +3413,43 @@ class Shipping_Desk_Plugin {
             __( 'Shipping Desk: this label records insurance for %s, but EasyPost reported no premium for it. Confirm the cover in the EasyPost dashboard before shipping.', 'shipping-desk' ),
             $symbol . number_format( (float) $insured, 2, '.', '' )
         );
+    }
+
+    /**
+     * The printable URL for an order's label.
+     *
+     * A fresh URL is asked for first: it is authoritative, and Veeqo and Shippo sign theirs
+     * with an expiry, so a stored one can go stale. EasyPost is the exception in the wrong
+     * direction - it can take a few seconds to finish building the PDF after a successful
+     * buy - so when the provider says it has no label, the URL recorded at purchase is used
+     * instead. A label that was bought can be printed without waiting for the second try.
+     *
+     * Any other error (auth, network) is passed through untouched: falling back would hide
+     * a broken key behind a label that only looks fine.
+     *
+     * @param array $target Client, reference and order from get_shipment_action_context().
+     * @return string|WP_Error
+     */
+    protected function printable_label_url( array $target ) {
+        $url = $target['client']->get_label_url( $target['reference'] );
+
+        if ( ! is_wp_error( $url ) && '' !== trim( (string) $url ) ) {
+            return $url;
+        }
+
+        if ( is_wp_error( $url ) && ! in_array( $url->get_error_code(), [ 'easypost_label_missing', 'easypost_not_found', 'shippo_no_label' ], true ) ) {
+            return $url;
+        }
+
+        if ( ! empty( $target['order'] ) ) {
+            $m     = Shipping_Desk_Helpers::meta_keys();
+            $saved = trim( (string) $target['order']->get_meta( $m['label_url'] ) );
+            if ( '' !== $saved ) {
+                return $saved;
+            }
+        }
+
+        return $url;
     }
 
     protected function get_shipment_action_context() {
@@ -3770,9 +3813,17 @@ class Shipping_Desk_Plugin {
 
         // Always request a fresh URL: Veeqo label URLs carry expiring tokens and
         // Shippo label URLs are signed with their own expiry.
-        $label_url = $target['client']->get_label_url( $target['reference'] );
+        $label_url = $this->printable_label_url( $target );
         if ( is_wp_error( $label_url ) ) {
-            wp_send_json_error( [ 'message' => $label_url->get_error_message() ], 500 );
+            // Say when waiting is the right answer, so the browser can retry itself rather
+            // than asking the operator to click Print again.
+            wp_send_json_error(
+                [
+                    'message'   => $label_url->get_error_message(),
+                    'retryable' => in_array( $label_url->get_error_code(), [ 'easypost_label_missing', 'easypost_not_found', 'shippo_no_label' ], true ),
+                ],
+                500
+            );
         }
         $label_url = Shipping_Desk_Helpers::absolute_url( $label_url );
         if ( empty( $label_url ) ) {
@@ -3897,7 +3948,7 @@ class Shipping_Desk_Plugin {
             // No bytes: either the provider's file is already the right size, or the
             // download failed. Either way, hand the browser the carrier's own URL
             // instead of showing an error where a label was expected.
-            $label_url = $target['client']->get_label_url( $target['reference'] );
+            $label_url = $this->printable_label_url( $target );
             if ( is_wp_error( $label_url ) || '' === trim( (string) $label_url ) ) {
                 wp_die(
                     esc_html__( 'The shipping provider did not return a label.', 'shipping-desk' ),
@@ -4184,9 +4235,17 @@ class Shipping_Desk_Plugin {
             wp_send_json_error( [ 'message' => $target->get_error_message() ], 400 );
         }
 
-        $label_url = $target['client']->get_label_url( $target['reference'] );
+        $label_url = $this->printable_label_url( $target );
         if ( is_wp_error( $label_url ) ) {
-            wp_send_json_error( [ 'message' => $label_url->get_error_message() ], 500 );
+            // Say when waiting is the right answer, so the browser can retry itself rather
+            // than asking the operator to click Print again.
+            wp_send_json_error(
+                [
+                    'message'   => $label_url->get_error_message(),
+                    'retryable' => in_array( $label_url->get_error_code(), [ 'easypost_label_missing', 'easypost_not_found', 'shippo_no_label' ], true ),
+                ],
+                500
+            );
         }
         $label_url = Shipping_Desk_Helpers::absolute_url( $label_url );
         if ( empty( $label_url ) ) {

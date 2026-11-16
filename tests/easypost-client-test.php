@@ -36,6 +36,11 @@ if ( ! class_exists( 'WP_Error' ) ) {
             return empty( $messages ) ? '' : $messages[0];
         }
 
+        public function get_error_code() {
+            $codes = array_keys( $this->errors );
+            return empty( $codes ) ? '' : $codes[0];
+        }
+
         public function get_error_messages() {
             $messages = [];
             foreach ( $this->errors as $list ) {
@@ -395,17 +400,17 @@ $ep_wait  = microtime( true ) - $ep_start;
 
 ep_same( 'https://example.test/label.pdf', $ep_url, 'a label that appears on the second read is returned' );
 ep_same( 2, $ep_race->reads, 'the shipment was read twice rather than once' );
-ep_check( $ep_wait >= 0.7, 'and the retry waited before asking again' );
+ep_check( $ep_wait >= 0.4, 'and the retry waited before asking again' );
 
 $ep_ready = new EasyPost_Label_Race_Stub( [ $ep_labelled ] );
 ep_same( 'https://example.test/label.pdf', $ep_ready->get_label_url( 'shp_test' ), 'a label already present is returned first time' );
 ep_same( 1, $ep_ready->reads, 'with no retry' );
 
-$ep_absent = new EasyPost_Label_Race_Stub( [ [], [], [] ] );
+$ep_absent = new EasyPost_Label_Race_Stub( [ [], [], [], [] ] );
 $ep_error  = $ep_absent->get_label_url( 'shp_test' );
 
-ep_check( $ep_error instanceof WP_Error, 'no label after three reads is an error' );
-ep_same( 3, $ep_absent->reads, 'after three reads' );
+ep_check( $ep_error instanceof WP_Error, 'no label after four reads is an error' );
+ep_same( 4, $ep_absent->reads, 'after four reads' );
 ep_check(
 	false === strpos( $ep_error->get_error_message(), 'Buy the label again' ),
 	'the message never tells the operator to buy again - the label exists and a second buy is charged'
@@ -414,6 +419,29 @@ ep_check(
 	false !== strpos( $ep_error->get_error_message(), 'do not buy another' ),
 	'and says so plainly'
 );
+
+// A shipment that answers 404 for a moment after buying: retried, not reported.
+$ep_404 = new EasyPost_Label_Race_Stub( [ new WP_Error( 'easypost_not_found', 'Not Found' ), $ep_labelled ] );
+ep_same( 'https://example.test/label.pdf', $ep_404->get_label_url( 'shp_test' ), 'a 404 that clears on the retry still yields the label' );
+ep_same( 2, $ep_404->reads, 'after two reads' );
+
+$ep_gone = new EasyPost_Label_Race_Stub(
+	[
+		new WP_Error( 'easypost_not_found', 'Not Found' ),
+		new WP_Error( 'easypost_not_found', 'Not Found' ),
+		new WP_Error( 'easypost_not_found', 'Not Found' ),
+		new WP_Error( 'easypost_not_found', 'Not Found' ),
+	]
+);
+$ep_gone_error = $ep_gone->get_label_url( 'shp_test' );
+ep_check( $ep_gone_error instanceof WP_Error, 'a 404 that never clears is still an error' );
+ep_same( 4, $ep_gone->reads, 'after four reads' );
+
+// Any other error is returned at once: an auth failure must not be softened into a wait.
+$ep_auth = new EasyPost_Label_Race_Stub( [ new WP_Error( 'easypost_auth_error', 'Unauthorized' ) ] );
+$ep_auth_error = $ep_auth->get_label_url( 'shp_test' );
+ep_same( 'Unauthorized', $ep_auth_error->get_error_message(), 'an auth error is returned untouched' );
+ep_same( 1, $ep_auth->reads, 'without retrying' );
 
 /* -- Result --------------------------------------------------------------- */
 

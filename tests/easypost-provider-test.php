@@ -817,9 +817,10 @@ gate_reset();
 $GLOBALS['gate_responses'][] = gate_canned( 200, gate_bought( [ 'postage_label' => null ] ) );
 $GLOBALS['gate_responses'][] = gate_canned( 200, gate_bought( [ 'postage_label' => null ] ) );
 $GLOBALS['gate_responses'][] = gate_canned( 200, gate_bought( [ 'postage_label' => null ] ) );
+$GLOBALS['gate_responses'][] = gate_canned( 200, gate_bought( [ 'postage_label' => null ] ) );
 $result = gate_client()->get_label_url( 'shp_123' );
 gate_same( 'easypost_label_missing', $result->get_error_code(), 'a shipment with no label is not a URL' );
-gate_same( 3, count( $GLOBALS['gate_requests'] ), 'the shipment is read three times before the label is called missing' );
+gate_same( 4, count( $GLOBALS['gate_requests'] ), 'the shipment is read four times before the label is called missing' );
 
 gate_reset();
 $GLOBALS['gate_responses'][] = gate_canned( 200, gate_bought( [ 'postage_label' => [ 'label_url' => 'https://files/label.png', 'label_pdf_url' => 'https://files/label.pdf' ] ] ) );

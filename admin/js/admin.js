@@ -1535,39 +1535,62 @@
         var orderId = $row.data('order-id');
         var nonce = $row.data('nonce');
         var remoteId = $row.data('remote-id') || '';
-
         var originalText = $btn.text();
-        $btn.prop('disabled', true).text('Printing...');
 
-        $.post(ShippingDesk.ajaxurl, {
-            action: 'shipping_desk_print_label',
-            order_id: orderId,
-            remote_id: remoteId,
-            _wpnonce: nonce
-        }, function (resp) {
-            $btn.prop('disabled', false).text(originalText);
-            // print_url is the 4x6 file (same bytes PrintNode gets); label_url is the
-            // carrier's own, which is 4x7 for UPS and a letter page for FedEx.
-            var url = (resp && resp.success && resp.data)
-                ? (resp.data.print_url || resp.data.label_url || '')
-                : '';
-            if (url) {
-                var w = window.open(url, '_blank');
-                if (!w) {
-                    // Popup blocked - navigate current tab instead.
-                    window.location.href = url;
+        /*
+         * EasyPost can take longer to produce a label than one request is willing to wait
+         * for, so a retryable failure is retried here instead of being handed to the
+         * operator: two more attempts, 2.5s apart, with the button saying what it is doing.
+         * Only when those are exhausted does the message appear.
+         */
+        function attempt(triesLeft) {
+            $btn.prop('disabled', true).text(triesLeft < 3 ? 'Waiting for label...' : 'Printing...');
+
+            $.post(ShippingDesk.ajaxurl, {
+                action: 'shipping_desk_print_label',
+                order_id: orderId,
+                remote_id: remoteId,
+                _wpnonce: nonce
+            }, function (resp) {
+                // print_url is the 4x6 file (same bytes PrintNode gets); label_url is the
+                // carrier's own, which is 4x7 for UPS and a letter page for FedEx.
+                var data = (resp && resp.success && resp.data) ? resp.data : {};
+                var url = data.print_url || data.label_url || '';
+
+                $btn.prop('disabled', false).text(originalText);
+
+                if (url) {
+                    var w = window.open(url, '_blank');
+                    if (!w) {
+                        // Popup blocked - navigate current tab instead.
+                        window.location.href = url;
+                    }
+                    return;
                 }
-            } else if (resp && resp.success) {
-                // PrintNode (server print) succeeded - no popup needed; the
-                // disabled "Printing..." button already confirmed the click.
-                return;
-            } else {
+
+                if (resp && resp.success) {
+                    // PrintNode (server print) succeeded - no popup needed; the disabled
+                    // "Printing..." button already confirmed the click.
+                    return;
+                }
+
                 alert((resp && resp.data && resp.data.message) ? resp.data.message : 'Error printing label.');
-            }
-        }).fail(function (xhr) {
-            $btn.prop('disabled', false).text(originalText);
-            alert(ajaxErrorMessage(xhr, 'Error printing the label.'));
-        });
+            }).fail(function (xhr) {
+                var data = (xhr && xhr.responseJSON && xhr.responseJSON.data) ? xhr.responseJSON.data : {};
+
+                if (data.retryable && triesLeft > 1) {
+                    window.setTimeout(function () {
+                        attempt(triesLeft - 1);
+                    }, 2500);
+                    return;
+                }
+
+                $btn.prop('disabled', false).text(originalText);
+                alert(data.message || ajaxErrorMessage(xhr, 'Error printing the label.'));
+            });
+        }
+
+        attempt(3);
     });
 
     $(document).on('click', '.shipping-desk-refund-label', function () {
