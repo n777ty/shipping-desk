@@ -23,6 +23,10 @@ define( 'ABSPATH', __DIR__ . '/' );
 define( 'HOUR_IN_SECONDS', 3600 );
 define( 'SHIPPING_DESK_VERSION', '1.1.0' );
 
+// A plugin directory of our own, so installed_version() can be tested: the disk copy says
+// 1.1.0 at first, matching the constant, and tests change it to model an update landing.
+define( 'WP_PLUGIN_DIR', sys_get_temp_dir() . '/shipping-desk-upd-' . getmypid() );
+
 $GLOBALS['upd_checks']    = 0;
 $GLOBALS['upd_failures']  = 0;
 $GLOBALS['upd_transients'] = [];
@@ -71,7 +75,36 @@ function upd_reset() {
 	$GLOBALS['upd_transients'] = [];
 	$GLOBALS['upd_options']    = [];
 	$GLOBALS['upd_user_meta']  = [];
+	$GLOBALS['upd_deleted']    = [];
 }
+
+/**
+ * Write a plugin header with the given version, as an update would leave it on disk.
+ *
+ * @param string $version Version to claim.
+ * @return void
+ */
+function upd_set_disk_version( $version ) {
+	$dir = WP_PLUGIN_DIR . '/shipping-desk';
+	if ( ! is_dir( $dir ) ) {
+		mkdir( $dir, 0777, true );
+	}
+	file_put_contents( $dir . '/shipping-desk.php', "<?php\n/**\n * Plugin Name: Shipping Desk\n * Version: {$version}\n */\n" );
+}
+
+/**
+ * Remove the fake plugin file, so the constant has to be used as the fallback.
+ *
+ * @return void
+ */
+function upd_remove_disk() {
+	$file = WP_PLUGIN_DIR . '/shipping-desk/shipping-desk.php';
+	if ( is_file( $file ) ) {
+		unlink( $file );
+	}
+}
+
+upd_set_disk_version( '1.1.0' );
 
 /* -- WordPress stand-ins ---------------------------------------------------- */
 
@@ -112,6 +145,12 @@ function get_transient( $key ) {
 
 function set_transient( $key, $value, $ttl = 0 ) {
 	$GLOBALS['upd_transients'][ $key ] = $value;
+	return true;
+}
+
+function delete_site_transient( $key ) {
+	$GLOBALS['upd_deleted'][] = $key;
+	unset( $GLOBALS['upd_transients'][ $key ] );
 	return true;
 }
 
@@ -330,7 +369,68 @@ upd_check( is_array( Shipping_Desk_Update_Checker::pending_whats_new( 6 ) ), 'di
 update_option( Shipping_Desk_Update_Checker::WHATS_NEW_OPTION, [ 'version' => '9.9.9', 'at' => time() ] );
 upd_check( null === Shipping_Desk_Update_Checker::pending_whats_new( 7 ), 'a version that is not running is never announced' );
 
+/* -- After an update -------------------------------------------------------- */
+
+echo "\n[after an update]\n";
+
+// The bug this section exists for: WordPress clears the update transient when a plugin is
+// upgraded, then re-checks in the same request - where the loaded code is still the old
+// one. Reading the version from the constant re-offered the version just installed. The
+// header on disk is what got installed, so it decides.
+upd_set_disk_version( '1.1.1' );
+upd_reset();
+$checker          = new Upd_Test_Checker();
+$checker->release = upd_release( '1.1.1' );
+
+upd_same( '1.1.1', $checker->installed_version(), 'the installed version comes from the header on disk' );
+
+$just_installed = $checker->filter_update_plugins( (object) [
+	'response' => [ 'shipping-desk/shipping-desk.php' => (object) [ 'new_version' => '1.1.1' ] ],
+] );
+upd_check( empty( $just_installed->response ), 'the version just installed is not offered again' );
+
+upd_reset();
+$checker->release = upd_release( '1.1.2' );
+$genuinely_newer  = $checker->filter_update_plugins( (object) [ 'response' => [] ] );
+upd_same(
+	'1.1.2',
+	$genuinely_newer->response['shipping-desk/shipping-desk.php']->new_version,
+	'a genuinely newer release is still offered after an update'
+);
+
+// Fallback: no readable file, so the loaded constant is the best available answer.
+upd_remove_disk();
+$fallback = new Upd_Test_Checker();
+upd_same( '1.1.0', $fallback->installed_version(), 'the constant is the fallback when the file cannot be read' );
+upd_set_disk_version( '1.1.1' );
+
+// The upgrade hook records the new version and drops the stale update transient.
+upd_reset();
+$checker->record_upgrade( null, [ 'type' => 'plugin', 'plugin' => 'shipping-desk/shipping-desk.php' ] );
+upd_same(
+	'1.1.1',
+	isset( $GLOBALS['upd_options'][ Shipping_Desk_Update_Checker::WHATS_NEW_OPTION ]['version'] )
+		? $GLOBALS['upd_options'][ Shipping_Desk_Update_Checker::WHATS_NEW_OPTION ]['version']
+		: '',
+	'the upgrade is recorded for the "what\'s new" popup'
+);
+upd_check( in_array( 'update_plugins', $GLOBALS['upd_deleted'], true ), 'the stale update transient is dropped' );
+
+upd_reset();
+$checker->record_upgrade( null, [ 'type' => 'plugin', 'plugin' => 'other-plugin/other-plugin.php' ] );
+upd_check( empty( $GLOBALS['upd_options'] ), 'another plugin being updated records nothing here' );
+
 /* -- Summary ---------------------------------------------------------------- */
+
+// Leave nothing behind: the fake plugin directory exists only for these checks.
+$upd_dir = WP_PLUGIN_DIR . '/shipping-desk';
+if ( is_dir( $upd_dir ) ) {
+	foreach ( glob( $upd_dir . '/*' ) as $upd_file ) {
+		@unlink( $upd_file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+	}
+	@rmdir( $upd_dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+}
+@rmdir( WP_PLUGIN_DIR ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 
 echo "\n";
 printf( "Checks: %d, failures: %d\n", $GLOBALS['upd_checks'], $GLOBALS['upd_failures'] );

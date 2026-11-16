@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.1.1
+Stable tag: 1.1.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,10 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.1.2 =
+* Fixed: after an update, the Plugins screen could keep offering the version that had just been installed. The check compared the release against the code loaded in that request, which during an update's own re-check is still the previous version; it now compares against the plugin header on disk.
+
 
 = 1.1.1 =
 * New: a Settings link under the plugin name on the Plugins screen, going straight to the plugin's Settings page.

@@ -95,6 +95,32 @@ class Shipping_Desk_Update_Checker {
 		return plugin_basename( dirname( __DIR__ ) . '/shipping-desk.php' );
 	}
 
+	/**
+	 * The installed version, read from the plugin header on disk.
+	 *
+	 * Deliberately not SHIPPING_DESK_VERSION. WordPress clears the update transient when a
+	 * plugin is upgraded and then immediately re-runs the update check *in the same
+	 * request* - where PHP is still executing the old plugin file, so the constant still
+	 * says the old version. Comparing against it re-offers the update that was just
+	 * installed, and stores that offer for twelve hours. The header on disk is the
+	 * version that actually got installed.
+	 *
+	 * @return string Empty when nothing can be read.
+	 */
+	public function installed_version() {
+		$file = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR . '/' . $this->plugin_basename() : '';
+
+		if ( '' !== $file && is_readable( $file ) ) {
+			// The header sits in the first kilobytes; no need to read a 100 KB file.
+			$head = (string) file_get_contents( $file, false, null, 0, 8192 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+			if ( preg_match( '/^[\s\/*]*Version:\s*(\S+)/mi', $head, $match ) ) {
+				return trim( $match[1] );
+			}
+		}
+
+		return defined( 'SHIPPING_DESK_VERSION' ) ? SHIPPING_DESK_VERSION : '';
+	}
+
 	/* -- Pure helpers ---------------------------------------------------------- */
 
 	/**
@@ -247,7 +273,7 @@ class Shipping_Desk_Update_Checker {
 		}
 
 		$basename = $this->plugin_basename();
-		$current  = defined( 'SHIPPING_DESK_VERSION' ) ? SHIPPING_DESK_VERSION : '';
+		$current  = $this->installed_version();
 
 		if ( ! self::is_newer( $release['version'], $current ) ) {
 			// Installed is current: leave nothing behind that would keep WordPress asking.
@@ -385,18 +411,19 @@ class Shipping_Desk_Update_Checker {
 			return;
 		}
 
-		if ( ! function_exists( 'get_plugin_data' ) ) {
-			require_once ABSPATH . 'wp-admin/includes/plugin.php';
-		}
-
-		$data    = get_plugin_data( WP_PLUGIN_DIR . '/' . $basename, false, false );
-		$version = ! empty( $data['Version'] ) ? (string) $data['Version'] : '';
+		$version = $this->installed_version();
 
 		if ( '' === $version ) {
 			return;
 		}
 
 		update_option( self::WHATS_NEW_OPTION, [ 'version' => $version, 'at' => time() ], false );
+
+		// WordPress re-checks for updates at the end of the same request that installed
+		// this one, while the old plugin code is still loaded. Dropping the transient here
+		// means that check rebuilds it from the version on disk, so the update just
+		// installed is not offered again.
+		delete_site_transient( 'update_plugins' );
 	}
 
 	/* -- Changelog ------------------------------------------------------------- */
