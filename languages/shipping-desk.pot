@@ -1325,3 +1325,24 @@ msgstr ""
 #: includes/helpers.php:214
 msgid "email formatted"
 msgstr ""
+
+#: includes/class-plugin.php
+#. translators: %s: plugin version, e.g. 1.1.0
+msgid "What's new in Shipping Desk %s"
+msgstr ""
+
+#: includes/class-plugin.php
+msgid "Got it"
+msgstr ""
+
+#: includes/class-plugin.php
+msgid "You do not have permission to do that."
+msgstr ""
+
+#: includes/class-update-checker.php
+msgid "Buy, print and refund shipping labels from WooCommerce orders."
+msgstr ""
+
+#: includes/class-update-checker.php
+msgid "The update package did not match the checksum published with the release, so it was not installed. Try again later, or install the zip from the release page."
+msgstr ""

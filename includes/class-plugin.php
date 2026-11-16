@@ -61,6 +61,7 @@ class Shipping_Desk_Plugin {
         add_action( 'admin_init', [ $this, 'maybe_default_legacy_provider' ], 3 );
         add_action( 'admin_post_shipping_desk_export_settings', [ $this, 'handle_export_settings' ] );
         add_action( 'admin_post_shipping_desk_import_settings', [ $this, 'handle_import_settings' ] );
+        add_filter( 'plugin_action_links_' . plugin_basename( $this->file ), [ $this, 'filter_action_links' ] );
 
         // AJAX
         foreach ( [ 'shipping_desk_get_rates', 'shipping_desk_buy_label', 'shipping_desk_print_label', 'shipping_desk_print_pdf', 'shipping_desk_refund_label', 'shipping_desk_reset_shipping', 'shipping_desk_render_purchase_row', 'shipping_desk_printnode_refresh_printers', 'shipping_desk_printnode_print_label', 'shipping_desk_printnode_status', 'shipping_desk_bulk_buy', 'shipping_desk_switch_provider', 'shipping_desk_dismiss_whats_new' ] as $action ) {
@@ -70,6 +71,30 @@ class Shipping_Desk_Plugin {
 
     public function load_textdomain() {
         load_plugin_textdomain( 'shipping-desk', false, dirname( plugin_basename( $this->file ) ) . '/languages' );
+    }
+
+    /**
+     * "Settings" beside Deactivate on the Plugins screen, going straight to our page.
+     *
+     * WordPress adds that link by itself only for plugins that register a page through
+     * the Settings API; this plugin lives under its own menu, so the link is added here.
+     * First in the list, where WordPress puts it for everyone else.
+     *
+     * @param string[] $links Action links, as HTML.
+     * @return string[]
+     */
+    public function filter_action_links( $links ) {
+        if ( ! is_array( $links ) || ! current_user_can( 'manage_woocommerce' ) ) {
+            return $links;
+        }
+
+        array_unshift(
+            $links,
+            '<a href="' . esc_url( admin_url( 'admin.php?page=shipping-desk-settings' ) ) . '">'
+                . esc_html__( 'Settings', 'shipping-desk' ) . '</a>'
+        );
+
+        return $links;
     }
 
     /**
@@ -957,8 +982,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.1.0' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.1.0', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.1.1' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.1.1', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
