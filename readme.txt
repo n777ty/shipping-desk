@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.3.6
+Stable tag: 1.3.7
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,10 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.3.7 =
+* Fixed: the Signature dropdown sat 9px above the Box dropdown beside it. The two share a row, the row's cells are vertically centred, and the Signature column is the taller of the two once its group replaces the placeholder and the insurance estimate appears - so centring pushed its content up. Both columns are top-aligned now, which fixes their heights out of the question.
+* Fixed: the Signature select is 28px high with an 8px radius and 12px type, matching the Box select. It was 26px/6px/11px, so even with the labels level the two controls did not share a baseline.
 
 = 1.3.6 =
 * Changed: the orders screen header is two rows. The title gets the whole first line and the provider control and today's spend share the second, one at each end. In one row the 22px/700 total was the strongest thing on the page and the title - inherited from WordPress core at 23px/400 - was the weakest, so the number outranked the page it belonged to.

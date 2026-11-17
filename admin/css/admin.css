@@ -357,6 +357,18 @@
     margin-bottom: 8px;
 }
 .shipping-desk-service-group:last-child { margin-bottom: 0; }
+/*
+ * Box and Signature are two columns of one row, and the cells are vertically centred
+ * (see the table rule above), so unequal content moves one control above the other: the
+ * signature group replaces the "Get rates first" placeholder when the provider prices
+ * confirmation, and the insurance estimate appears once rates are quoted. Top-aligning
+ * these two columns gives both labels and both selects the same starting edge, whatever
+ * sits underneath them.
+ */
+.shipping-desk-table .shipping-desk-box-column,
+.shipping-desk-table .shipping-desk-services-column {
+    vertical-align: top;
+}
 .shipping-desk-service-group .shipping-desk-service-name,
 .shipping-desk-box-column .shipping-desk-service-name {
     display: block;
@@ -384,6 +396,17 @@
     border-color: #2563eb;
     box-shadow: 0 0 0 2px rgba(37,99,235,.15);
     outline: none;
+}
+/*
+ * The signature select sits beside the Box select in the same row, so it matches it:
+ * 28px high, 8px radius, 12px type. At 26px/6px/11px the two controls did not share a
+ * baseline even when their labels did, which read as a misalignment of its own.
+ */
+.shipping-desk-table .shipping-desk-signature-confirmation {
+    height: 28px;
+    padding: 0 6px;
+    border-radius: 8px;
+    font-size: 12px;
 }
 /* Insurance row in the Services column: label left, 90px input right. */
 .shipping-desk-service-amount-row {
