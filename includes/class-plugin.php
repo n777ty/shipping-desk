@@ -1093,8 +1093,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.5' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.5', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.6' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.6', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -1433,7 +1433,6 @@ class Shipping_Desk_Plugin {
                         );
                         ?>"><?php echo esc_html( $is_live ? __( 'live', 'shipping-desk' ) : __( 'test', 'shipping-desk' ) ); ?></button>
             <?php endif; ?>
-            <span class="shipping-desk-provider-msg" role="status" aria-live="polite"></span>
         </div>
         <?php
     }
@@ -1503,8 +1502,19 @@ class Shipping_Desk_Plugin {
         <div class="wrap shipping-desk-wrap">
             <div class="shipping-desk-header">
                 <h1><?php esc_html_e( 'Shipping Desk', 'shipping-desk' ); ?></h1>
-                <?php $this->render_provider_switch(); ?>
-                <?php $this->render_daily_spend(); ?>
+                <?php
+                /*
+                 * Two rows on purpose: the title gets the width of the page to itself, and
+                 * the two working things sit under it - where labels come from on the left,
+                 * what they have cost on the right. In one row the 22px total competed with
+                 * the title and won, because the title inherited core's 23px/400.
+                 */
+                ?>
+                <div class="shipping-desk-controls">
+                    <?php $this->render_provider_switch(); ?>
+                    <span class="shipping-desk-provider-msg" role="status" aria-live="polite"></span>
+                    <?php $this->render_daily_spend(); ?>
+                </div>
             </div>
             <?php if ( in_array( $this->provider(), [ 'shippo', 'easypost' ], true ) && 'test' === $this->provider_mode( $this->provider() ) ) : ?>
                 <div class="notice notice-warning inline">

@@ -521,6 +521,21 @@
     }
 
     /**
+     * The status line beside the provider control.
+     *
+     * It sits in the header's controls row, not inside the switch: the switch is now a
+     * pill-shaped track, and a message inside it would stretch the pill. The switch itself
+     * is still the fallback, so markup from before that move keeps working.
+     *
+     * @param {jQuery} $el Any element inside the switch.
+     * @return {jQuery}
+     */
+    function providerMessage($el) {
+        var $row = $el.closest('.shipping-desk-controls').find('.shipping-desk-provider-msg');
+        return $row.length ? $row : $el.closest('.shipping-desk-provider-switch').find('.shipping-desk-provider-msg');
+    }
+
+    /**
      * Provider switch in the page header.
      *
      * The switch changes where the next rate request and the next purchase go, so
@@ -537,7 +552,7 @@
             return;
         }
 
-        var $msg = $wrap.find('.shipping-desk-provider-msg');
+        var $msg = providerMessage($btn);
         $wrap.addClass('is-busy').find('.shipping-desk-provider-btn').prop('disabled', true);
         $msg.removeClass('is-error').text('Switching...');
 
@@ -586,7 +601,7 @@
             return;
         }
 
-        var $msg = $wrap.find('.shipping-desk-provider-msg');
+        var $msg = providerMessage($chip);
         $wrap.addClass('is-busy').find('.shipping-desk-provider-btn, .shipping-desk-mode-chip').prop('disabled', true);
         $msg.removeClass('is-error').text(toLive ? 'Switching to production...' : 'Switching to test...');
 

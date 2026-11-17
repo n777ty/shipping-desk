@@ -1,50 +1,83 @@
-/* Provider indicator in the page header: small, always visible, click to switch. */
+/*
+ * Header: the title on its own line, then one row holding the provider control and today's
+ * spend. The title is set here rather than left to core, because core's 23px/400 title lost
+ * to the badge's 22px/700 total - the number read as the most important thing on the page.
+ */
 .shipping-desk-wrap .shipping-desk-header {
 	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: 14px;
+	flex-direction: column;
+	gap: 12px;
 }
 
+.shipping-desk-wrap .shipping-desk-header h1 {
+	font-size: 24px;
+	font-weight: 600;
+	line-height: 1.2;
+	margin: 0;
+	letter-spacing: -0.01em;
+}
+
+.shipping-desk-wrap .shipping-desk-controls {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 18px;
+}
+
+/*
+ * The provider control is one track with segments, not three loose buttons: the same
+ * surface, border and radius as the spend badge, so the row has one shape language. The
+ * spend badge keeps its own pill (see the end of this file) and is the only other pill.
+ */
 .shipping-desk-wrap .shipping-desk-provider-switch {
 	display: inline-flex;
 	align-items: center;
-	gap: 5px;
+	gap: 2px;
+	padding: 3px;
 	font-size: 12px;
 	line-height: 1;
 	color: #646970;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 999px;
 }
 
 .shipping-desk-wrap .shipping-desk-provider-btn {
 	height: auto;
 	min-height: 0;
-	padding: 3px 9px;
+	padding: 4px 13px;
 	font-size: 12px;
 	line-height: 1.7;
-	border: 1px solid #c3c4c7;
-	border-radius: 3px;
-	background: #f6f7f7;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
 	color: #50575e;
 	cursor: pointer;
 	box-shadow: none;
 }
 
 .shipping-desk-wrap .shipping-desk-provider-btn:hover {
-	border-color: #2271b1;
+	background: #fff;
 	color: #2271b1;
+}
+
+.shipping-desk-wrap .shipping-desk-provider-btn:focus-visible {
+	outline: 2px solid #2271b1;
+	outline-offset: 1px;
 }
 
 .shipping-desk-wrap .shipping-desk-provider-btn.is-active {
 	background: #2271b1;
-	border-color: #2271b1;
 	color: #fff;
 	cursor: default;
 }
 
 .shipping-desk-wrap .shipping-desk-mode-chip {
+	margin-left: 3px;
 	padding: 3px 7px;
 	border: 0;
-	border-radius: 9px;
+	border-radius: 999px;
 	font-size: 10px;
 	font-weight: 600;
 	letter-spacing: 0.05em;

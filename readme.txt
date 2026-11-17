@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.3.5
+Stable tag: 1.3.6
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,12 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.3.6 =
+* Changed: the orders screen header is two rows. The title gets the whole first line and the provider control and today's spend share the second, one at each end. In one row the 22px/700 total was the strongest thing on the page and the title - inherited from WordPress core at 23px/400 - was the weakest, so the number outranked the page it belonged to.
+* Changed: the provider buttons are one segmented pill instead of three rectangles. Same surface, border and radius as the spend badge, active option filled, so the row has one shape language rather than three corner radii. The test/live chip is a pill at the right end of the same track.
+* Fixed: the switch's status message no longer lengthens that pill when a switch is in progress or fails; it sits beside the control in the header row.
+* Unchanged on purpose: the plugin still sets no font-family, so the header uses the WordPress admin font rather than the theme's. A theme font would have to be loaded into wp-admin as well, and beside WordPress's own controls it reads as a different product.
 
 = 1.3.5 =
 * Fixed: a suite or apartment the verifier folded into line 1 is no longer written twice. Accepting a correction that turns "123 Main St" + "Apt 5" into "123 Main St APT 5" wrote the new line 1 and kept the old line 2, so the order read "123 Main St APT 5, Apt 5" and the label would have printed it that way. A second line the new first line already contains is dropped, and the note says the suite moved into line 1. A second line the verifier simply does not mention is still kept - matching is on the words, so "Suite 5" is never treated as contained in "Suite 500".
