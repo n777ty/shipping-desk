@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.3.3
+Stable tag: 1.3.4
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,11 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.3.4 =
+* Fixed: ticking "also save this as the order's shipping address" now writes the verified address onto the order when the suggestion is accepted, not when a label is eventually bought. The old arrangement stored the choice and acted on it at purchase; in practice the order kept its old address while the quotes were priced from the corrected one, with no note and no change to explain it.
+* Fixed: a correction no longer blanks address line 2 when the verifier returns the rest of the address without it, and a corrected country is now written as well.
+* Changed: the address line above the quotes says whether the order itself was updated, so a quote priced from a corrected address is not mistaken for an order that was corrected with it.
 
 = 1.3.3 =
 * New: the Today badge also shows the average postage per label, once the day has more than one label. It sits after the count, quieter, separated by the pill's own hairline - the total and the count keep the emphasis. A day with a single label does not show it, because there the average is the total.

@@ -1093,8 +1093,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.3' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.3', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.4' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.4', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -2383,7 +2383,20 @@ class Shipping_Desk_Plugin {
 
                 if ( $needs_choice && in_array( $choice, [ 'suggested', 'original' ], true ) ) {
                     $this->apply_address_choice( $payload, $address_validation, $choice );
-                    $this->store_address_decision( $order, $address_validation, $address_validation['applied'], $wants_order_update );
+
+                    // The order is corrected here, not at purchase: the operator has
+                    // just decided where this parcel goes, and an intent stored for a
+                    // later request stays invisible until that request acts on it -
+                    // exactly the gap that left the order address untouched with no
+                    // note. Only when the box was ticked; the label alone may be all
+                    // that was asked for.
+                    if ( 'suggested' === $address_validation['applied'] && $wants_order_update ) {
+                        $address_note = $this->apply_verified_address( $order, $address_validation );
+                        if ( '' !== $address_note ) {
+                            $address_validation['order_updated'] = true;
+                            $order->add_order_note( $address_note );
+                        }
+                    }
                 } elseif ( $needs_choice ) {
                     // Persist the pending decision too, so a reload or another browser
                     // still shows the panel (and the row keeps its flag in a bulk run).
@@ -2977,108 +2990,89 @@ class Shipping_Desk_Plugin {
     }
 
     /**
-     * Remember the decision so the purchase can act on it.
+     * Write a verified address onto the order's shipping address, now.
      *
-     * Quoting is not buying: nothing is written to the order's address here, only
-     * the intent, so an abandoned quote leaves no trace. Choosing the original
-     * address clears any earlier decision.
+     * Called the moment the operator accepts the suggestion with the box ticked -
+     * not stored for the purchase to act on later. A deferred intent is invisible
+     * until something acts on it, which is how "ticked the box, address never
+     * changed, no note appeared" happened: the quote was priced from the corrected
+     * address while the order kept the old one. Writing it here means the order,
+     * the quotes and the label all describe one address from the same moment.
      *
-     * @param WC_Order $order         Order being quoted.
-     * @param array    $validation    Normalised validation result.
-     * @param string   $applied       'suggested' or 'original'.
-     * @param bool     $update_order  Whether the operator asked to correct the order.
-     * @return void
+     * Only the *shipping* address is ever touched: the billing address is the one the
+     * customer entered and the one the payment gateway checked, so rewriting it would
+     * break the AVS trail for no benefit. A field the verifier did not return is left
+     * alone - blanking line 2 because the verifier omitted it would delete a real
+     * suite number.
+     *
+     * @param WC_Order $order      Order being quoted.
+     * @param array    $validation Normalised validation result.
+     * @return string Note text, or '' when the order already read that way.
      */
-    protected function store_address_decision( WC_Order $order, array $validation, $applied, $update_order ) {
-        $m = Shipping_Desk_Helpers::meta_keys();
+    protected function apply_verified_address( WC_Order $order, array $validation ) {
+        $recommended = isset( $validation['recommended'] ) && is_array( $validation['recommended'] )
+            ? $validation['recommended']
+            : [];
 
-        if ( 'suggested' !== $applied ) {
-            if ( '' !== (string) $order->get_meta( $m['address_decision'] ) ) {
-                $order->delete_meta_data( $m['address_decision'] );
-                $order->save();
-            }
-            return;
-        }
-
-        $order->update_meta_data( $m['address_decision'], [
-            'original'     => isset( $validation['original'] ) && is_array( $validation['original'] ) ? $validation['original'] : [],
-            'recommended'  => isset( $validation['recommended'] ) && is_array( $validation['recommended'] ) ? $validation['recommended'] : [],
-            'changed'      => isset( $validation['changed'] ) && is_array( $validation['changed'] ) ? $validation['changed'] : [],
-            'update_order' => (bool) $update_order,
-        ] );
-        $order->save();
-    }
-
-    /**
-     * Act on the address decision at purchase time.
-     *
-     * Must be called before the order is saved, so a requested correction lands in
-     * the same write as the label meta. Returns the order note to add afterwards,
-     * or '' when the label was bought with the address as entered.
-     *
-     * Only the *shipping* address is ever touched: the billing address is the one
-     * the customer entered and the one the payment gateway checked, so rewriting it
-     * would break the AVS trail for no benefit.
-     *
-     * @param WC_Order $order Order being shipped.
-     * @return string Note text, or ''.
-     */
-    protected function apply_address_decision( WC_Order $order ) {
-        $m        = Shipping_Desk_Helpers::meta_keys();
-        $decision = $order->get_meta( $m['address_decision'] );
-
-        if ( ! is_array( $decision ) || empty( $decision['recommended'] ) ) {
+        if ( empty( $recommended ) ) {
             return '';
         }
 
-        $recommended = $decision['recommended'];
-        $original    = isset( $decision['original'] ) && is_array( $decision['original'] ) ? $decision['original'] : [];
-        $changed     = isset( $decision['changed'] ) && is_array( $decision['changed'] ) ? $decision['changed'] : [];
+        $before = [
+            'line1'        => (string) $order->get_shipping_address_1(),
+            'line2'        => (string) $order->get_shipping_address_2(),
+            'town'         => (string) $order->get_shipping_city(),
+            'county'       => (string) $order->get_shipping_state(),
+            'postcode'     => (string) $order->get_shipping_postcode(),
+            'country_code' => (string) $order->get_shipping_country(),
+        ];
 
-        $summary = implode( ', ', Shipping_Desk_Helpers::describe_address_changes( $changed ) );
+        $properties = [
+            'line1'        => 'shipping_address_1',
+            'line2'        => 'shipping_address_2',
+            'town'         => 'shipping_city',
+            'county'       => 'shipping_state',
+            'postcode'     => 'shipping_postcode',
+            'country_code' => 'shipping_country',
+        ];
+
+        $changed = 0;
+        foreach ( $properties as $key => $property ) {
+            $value = isset( $recommended[ $key ] ) ? trim( (string) $recommended[ $key ] ) : '';
+            if ( '' === $value || $before[ $key ] === $value ) {
+                continue;
+            }
+            $order->{ 'set_' . $property }( $value );
+            $changed++;
+        }
+
+        if ( 0 === $changed ) {
+            // The order already reads that way: no note, nothing to report.
+            return '';
+        }
+
+        $order->save();
+
+        $summary = isset( $validation['changed'] ) && is_array( $validation['changed'] )
+            ? implode( ', ', Shipping_Desk_Helpers::describe_address_changes( $validation['changed'] ) )
+            : '';
         if ( '' === $summary ) {
             $summary = __( 'standardised', 'shipping-desk' );
         }
 
-        $updated = false;
-        if ( ! empty( $decision['update_order'] ) ) {
-            if ( ! empty( $recommended['line1'] ) ) {
-                $order->set_shipping_address_1( $recommended['line1'] );
-            }
-            $order->set_shipping_address_2( isset( $recommended['line2'] ) ? $recommended['line2'] : '' );
-            if ( ! empty( $recommended['town'] ) ) {
-                $order->set_shipping_city( $recommended['town'] );
-            }
-            if ( ! empty( $recommended['county'] ) ) {
-                $order->set_shipping_state( $recommended['county'] );
-            }
-            if ( ! empty( $recommended['postcode'] ) ) {
-                $order->set_shipping_postcode( $recommended['postcode'] );
-            }
-            $updated = true;
-        }
-
-        $before = Shipping_Desk_Helpers::format_address( $original );
-        $after  = Shipping_Desk_Helpers::format_address( $recommended );
-
-        if ( $updated ) {
-            return sprintf(
-                /* translators: 1: previous address, 2: verified address, 3: what changed */
-                __( 'Shipping address updated from Shippo verification: %1$s → %2$s (%3$s). The label uses the verified address.', 'shipping-desk' ),
-                $before,
-                $after,
-                $summary
-            );
-        }
+        $source = ( isset( $validation['validator'] ) && 'easypost' === $validation['validator'] )
+            ? 'EasyPost'
+            : 'Shippo';
 
         return sprintf(
-            /* translators: 1: verified address, 2: what changed */
-            __( 'Address verified with Shippo: %1$s (%2$s). The label uses the verified address; the saved order address was left as entered.', 'shipping-desk' ),
-            $after,
+            /* translators: 1: validator name, 2: previous address, 3: verified address, 4: what changed */
+            __( 'Shipping address updated from %1$s verification: %2$s → %3$s (%4$s). The label uses the verified address.', 'shipping-desk' ),
+            $source,
+            Shipping_Desk_Helpers::format_address( $before ),
+            Shipping_Desk_Helpers::format_address( $recommended ),
             $summary
         );
     }
-
 
     /**
      * Rate object supplied by the client: either an array or a JSON string.
@@ -3317,9 +3311,9 @@ class Shipping_Desk_Plugin {
             }
         }
 
-        // Applies an accepted address correction (and the optional order update)
-        // before this save, so the label meta and the address land together.
-        $address_note = $this->apply_address_decision( $order );
+        // No address correction is applied here: an accepted suggestion was written
+        // onto the order when it was accepted, so the label was quoted and bought
+        // from the same address the order now carries.
         $order->save();
 
         // From here the label exists. Anything that runs on completion and fatals - a
@@ -3352,10 +3346,6 @@ class Shipping_Desk_Plugin {
                 $insured,
                 $insured_fee
             );
-        }
-
-        if ( '' !== $address_note ) {
-            $order->add_order_note( $address_note );
         }
 
         // The quotes are now spent: they must not be reused for a reship or shown
@@ -3784,9 +3774,8 @@ class Shipping_Desk_Plugin {
                     unset( $warning );
                 }
 
-                // Same as a single purchase: an accepted correction is applied
-                // before the save so the address and the label meta land together.
-                $address_note = $this->apply_address_decision( $order );
+                // As in a single purchase: the address was corrected when the
+                // operator accepted it, so only the label meta is written here.
                 $order->save();
 
                 $this->record_label_tracking(
@@ -3800,9 +3789,6 @@ class Shipping_Desk_Plugin {
                     $insured,
                     $insured_fee
                 );
-                if ( '' !== $address_note ) {
-                    $order->add_order_note( $address_note );
-                }
                 $this->delete_quote_record( $order_id );
                 $this->record_shipping_cost( $order, $provider, $mode, $shipment );
                 Shipping_Desk_Helpers::record_daily_spend( $provider, $shipment, $mode );

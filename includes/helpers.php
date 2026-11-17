@@ -620,11 +620,6 @@ class Shipping_Desk_Helpers {
             'box_h'        => '_shipping_desk_box_height',
             'box_weight'   => '_shipping_desk_box_weight_oz',
             'refunded'     => '_shipping_desk_label_refunded',
-            // The address decision behind the current quotes: which address the
-            // operator accepted, and whether the order's own address should be
-            // updated when the label is bought. Written at quote time, acted on at
-            // purchase, so an abandoned quote changes nothing.
-            'address_decision' => '_shipping_desk_address_decision',
             // Verdict for a specific address, keyed by its hash. A clean address
             // never gains a ZIP+4, so without this the same order would be checked
             // again (and billed again) every day it stayed unshipped.

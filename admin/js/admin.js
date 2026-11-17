@@ -668,7 +668,7 @@
 
         var $updateLabel = $('<label>', { 'class': 'shipping-desk-address-update' });
         var $updateBox = $('<input>', { type: 'checkbox' });
-        $updateLabel.append($updateBox).append(document.createTextNode(" Also update this order's shipping address when the label is bought"));
+        $updateLabel.append($updateBox).append(document.createTextNode(" Also save this as the order's shipping address"));
         if (hasSuggestion) $panel.append($updateLabel);
 
         var $apply = $('<button>', {
@@ -720,6 +720,9 @@
         if (validation.applied === 'suggested') {
             corrected = true;
             text = 'Address: suggested' + (validation.summary ? ' (' + validation.summary + ')' : '');
+            // Applied the moment it was accepted, so say so: the operator needs to
+            // know the order itself changed, not just the quote.
+            text += validation.order_updated ? ' \u00b7 order address updated' : ' \u00b7 order address left as entered';
         } else if (validation.applied === 'original') {
             text = 'Address: as entered (a correction was offered)' + (validation.summary ? ' - ' + validation.summary : '');
         } else if (validation.status === 'valid') {
