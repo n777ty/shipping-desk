@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.3.4
+Stable tag: 1.3.5
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,9 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.3.5 =
+* Fixed: a suite or apartment the verifier folded into line 1 is no longer written twice. Accepting a correction that turns "123 Main St" + "Apt 5" into "123 Main St APT 5" wrote the new line 1 and kept the old line 2, so the order read "123 Main St APT 5, Apt 5" and the label would have printed it that way. A second line the new first line already contains is dropped, and the note says the suite moved into line 1. A second line the verifier simply does not mention is still kept - matching is on the words, so "Suite 5" is never treated as contained in "Suite 500".
 
 = 1.3.4 =
 * Fixed: ticking "also save this as the order's shipping address" now writes the verified address onto the order when the suggestion is accepted, not when a label is eventually bought. The old arrangement stored the choice and acted on it at purchase; in practice the order kept its old address while the quotes were priced from the corrected one, with no note and no change to explain it.

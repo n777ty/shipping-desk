@@ -240,6 +240,73 @@ $shippo = $apply->invoke( $plugin, new WC_Order( [ 'line1' => '1 A St' ] ), [
 ] );
 apply_check( false !== strpos( $shippo, 'Shippo' ), 'the note names Shippo when Shippo answered' );
 
+/* -- a suite carried into line 1 ------------------------------------------ */
+
+echo "\n[the suite moved into line 1]\n";
+
+// The common shape: the verifier folds line 2 into line 1 and returns no line 2 at
+// all. Keeping the old line 2 would print the apartment twice.
+$folded = new WC_Order( [
+	'line1'    => '123 Main St',
+	'line2'    => 'Apt 5',
+	'town'     => 'Springfield',
+	'county'   => 'IL',
+	'postcode' => '62704',
+] );
+$note = $apply->invoke( $plugin, $folded, [
+	'validator'   => 'easypost',
+	'changed'     => [ 'address_line_1' ],
+	'recommended' => [
+		'line1'    => '123 Main St APT 5',
+		'town'     => 'Springfield',
+		'county'   => 'IL',
+		'postcode' => '62704',
+	],
+] );
+apply_same( '123 Main St APT 5', $folded->address['line1'], 'line 1 carries the suite' );
+apply_same( '', $folded->address['line2'], 'and line 2 is dropped rather than duplicated' );
+apply_check( false !== strpos( $note, 'suite folded into line 1' ), 'the note says the suite moved into line 1' );
+
+// A verifier that returns the line both ways at once must not leave it twice either.
+$both = new WC_Order( [
+	'line1'    => '123 Main St',
+	'line2'    => 'Apt 5',
+	'postcode' => '62704',
+] );
+$apply->invoke( $plugin, $both, [
+	'validator'   => 'easypost',
+	'changed'     => [ 'address_line_1' ],
+	'recommended' => [
+		'line1'    => '123 Main St APT 5',
+		'line2'    => 'Apt 5',
+		'postcode' => '62704',
+	],
+] );
+apply_same( '', $both->address['line2'], 'a line 2 the new line 1 already contains is dropped too' );
+
+// And a different suite is not swallowed by a similar-looking street number.
+$distinct = new WC_Order( [
+	'line1'    => '123 Main St',
+	'line2'    => 'Suite 5',
+	'postcode' => '62704',
+] );
+$apply->invoke( $plugin, $distinct, [
+	'validator'   => 'easypost',
+	'changed'     => [ 'address_line_1' ],
+	'recommended' => [
+		'line1'    => '123 Suite 500',
+		'postcode' => '62704',
+	],
+] );
+apply_same( 'Suite 5', $distinct->address['line2'], '"Suite 5" is not swallowed by "Suite 500"' );
+
+echo "\n[the carried-line test itself]\n";
+apply_check( true === Shipping_Desk_Helpers::address_line_carried( '123 Main St APT 5', 'Apt 5' ), 'case and punctuation are ignored' );
+apply_check( true === Shipping_Desk_Helpers::address_line_carried( '123 Main St, Apt. 5', 'apt 5' ), 'a comma between them does not matter' );
+apply_check( false === Shipping_Desk_Helpers::address_line_carried( '123 Suite 500', 'Suite 5' ), 'a longer number is a different line' );
+apply_check( false === Shipping_Desk_Helpers::address_line_carried( '123 Main St', '' ), 'an empty line 2 is never carried' );
+apply_check( false === Shipping_Desk_Helpers::address_line_carried( '', 'Apt 5' ), 'nor is one carried into an empty line 1' );
+
 echo "\n[the wiring]\n";
 
 // Normalised: the files are checked out with CRLF on Windows.

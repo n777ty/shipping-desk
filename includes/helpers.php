@@ -205,6 +205,7 @@ class Shipping_Desk_Helpers {
             'postal_code'    => __( 'ZIP+4 added', 'shipping-desk' ),
             'address_line_1' => __( 'street standardised', 'shipping-desk' ),
             'address_line_2' => __( 'suite moved to line 2', 'shipping-desk' ),
+            'address_line_2_folded' => __( 'suite folded into line 1', 'shipping-desk' ),
             'city_locality'  => __( 'city corrected', 'shipping-desk' ),
             'state_province' => __( 'state corrected', 'shipping-desk' ),
             'country_code'   => __( 'country corrected', 'shipping-desk' ),
@@ -224,6 +225,38 @@ class Shipping_Desk_Helpers {
         }
 
         return array_values( array_unique( $phrases ) );
+    }
+
+    /**
+     * Whether a second address line has been carried into the first.
+     *
+     * Verifiers move a suite or apartment into line 1 rather than keeping it separate:
+     * "123 Main St" plus "Apt 5" comes back as "123 Main St APT 5" with no second line
+     * at all. Writing that line 1 while keeping line 2 unchanged prints the apartment
+     * twice, which is worse than the drop it replaced.
+     *
+     * Matched token-wise rather than as a plain substring, so "Suite 5" is not treated
+     * as carried into "Suite 500". Case and punctuation are ignored, because both
+     * verifiers standardise them - the comparison is about the words, not the spelling.
+     *
+     * @param string $line1 First address line, as it will be written.
+     * @param string $line2 Second address line, as it stands.
+     * @return bool
+     */
+    public static function address_line_carried( $line1, $line2 ) {
+        $fold = function ( $text ) {
+            $text = strtolower( (string) $text );
+            return trim( preg_replace( '/[^a-z0-9]+/', ' ', $text ) );
+        };
+
+        $first  = $fold( $line1 );
+        $second = $fold( $line2 );
+
+        if ( '' === $first || '' === $second ) {
+            return false;
+        }
+
+        return 1 === preg_match( '/(^|[^a-z0-9])' . preg_quote( $second, '/' ) . '($|[^a-z0-9])/', $first );
     }
 
     /**

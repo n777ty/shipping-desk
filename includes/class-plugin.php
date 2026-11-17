@@ -1093,8 +1093,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.4' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.4', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.5' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.5', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -3036,13 +3036,32 @@ class Shipping_Desk_Plugin {
             'country_code' => 'shipping_country',
         ];
 
-        $changed = 0;
+        // The address as it will be written: a field the verifier did not return keeps
+        // the value the order already has, rather than being blanked.
+        $after = $before;
         foreach ( $properties as $key => $property ) {
             $value = isset( $recommended[ $key ] ) ? trim( (string) $recommended[ $key ] ) : '';
-            if ( '' === $value || $before[ $key ] === $value ) {
+            if ( '' !== $value ) {
+                $after[ $key ] = $value;
+            }
+        }
+
+        // A second line the new first line already contains has been carried into it:
+        // "123 Main St" + "Apt 5" comes back as "123 Main St APT 5". Keeping the old
+        // line 2 then prints the apartment twice, so it is dropped. This also covers a
+        // verifier that returns the line both ways at once, which EasyPost does.
+        $folded = '' !== $after['line2']
+            && Shipping_Desk_Helpers::address_line_carried( $after['line1'], $after['line2'] );
+        if ( $folded ) {
+            $after['line2'] = '';
+        }
+
+        $changed = 0;
+        foreach ( $properties as $key => $property ) {
+            if ( $before[ $key ] === $after[ $key ] ) {
                 continue;
             }
-            $order->{ 'set_' . $property }( $value );
+            $order->{ 'set_' . $property }( $after[ $key ] );
             $changed++;
         }
 
@@ -3053,9 +3072,16 @@ class Shipping_Desk_Plugin {
 
         $order->save();
 
-        $summary = isset( $validation['changed'] ) && is_array( $validation['changed'] )
-            ? implode( ', ', Shipping_Desk_Helpers::describe_address_changes( $validation['changed'] ) )
-            : '';
+        $fields = isset( $validation['changed'] ) && is_array( $validation['changed'] )
+            ? $validation['changed']
+            : [];
+        if ( $folded ) {
+            // The verifier reports a moved suite as a changed line 1; what the order
+            // needs to say is that line 2 went with it.
+            $fields[] = 'address_line_2_folded';
+        }
+
+        $summary = implode( ', ', Shipping_Desk_Helpers::describe_address_changes( $fields ) );
         if ( '' === $summary ) {
             $summary = __( 'standardised', 'shipping-desk' );
         }
@@ -3069,7 +3095,7 @@ class Shipping_Desk_Plugin {
             __( 'Shipping address updated from %1$s verification: %2$s → %3$s (%4$s). The label uses the verified address.', 'shipping-desk' ),
             $source,
             Shipping_Desk_Helpers::format_address( $before ),
-            Shipping_Desk_Helpers::format_address( $recommended ),
+            Shipping_Desk_Helpers::format_address( $after ),
             $summary
         );
     }
