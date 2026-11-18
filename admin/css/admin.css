@@ -697,6 +697,66 @@
     font-size: 12px;
 }
 
+/*
+ * The same idea for text fields: one geometry for every field the plugin renders, on every
+ * screen, so a settings input is not square beside a rounded button.
+ *
+ * Only text-entry types are named. Checkboxes, radios, hidden inputs and the file picker stay
+ * exactly as WordPress renders them - a fixed height and a border on a checkbox is a bug, and
+ * the file picker is drawn by the browser. `select` is not listed either: all three of the
+ * plugin's selects are in the shared in-table rule above, which also pins their width and
+ * leaves room for core's arrow; a new select should get a class and join that rule.
+ *
+ * Width is deliberately not set: .regular-text, .small-text and the table cells each decide
+ * their own, and overriding it would undo WordPress's own layout.
+ */
+.shipping-desk-screen input[type="text"],
+.shipping-desk-screen input[type="password"],
+.shipping-desk-screen input[type="number"],
+.shipping-desk-screen input[type="search"],
+.shipping-desk-screen input[type="email"],
+.shipping-desk-screen input[type="url"],
+.shipping-desk-screen input[type="tel"] {
+    box-sizing: border-box;
+    height: 30px;
+    min-height: 0;
+    padding: 0 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background-color: #fff;
+    color: #374151;
+    font-size: 12px;
+    line-height: 28px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05);
+    vertical-align: middle;
+}
+
+/* Multi-line fields carry no fixed height, or the first line would be the whole box. */
+.shipping-desk-screen textarea {
+    box-sizing: border-box;
+    padding: 6px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background-color: #fff;
+    color: #374151;
+    font-size: 12px;
+    line-height: 1.5;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+
+.shipping-desk-screen input[type="text"]:focus,
+.shipping-desk-screen input[type="password"]:focus,
+.shipping-desk-screen input[type="number"]:focus,
+.shipping-desk-screen input[type="search"]:focus,
+.shipping-desk-screen input[type="email"]:focus,
+.shipping-desk-screen input[type="url"]:focus,
+.shipping-desk-screen input[type="tel"]:focus,
+.shipping-desk-screen textarea:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37,99,235,.15);
+    outline: none;
+}
+
 .shipping-desk-wrap .shipping-desk-address-apply {
 	margin-top: 2px !important;
 }

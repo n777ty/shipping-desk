@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.3.13
+Stable tag: 1.3.14
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,9 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.3.14 =
+* Improved: text fields now match the buttons - 30px high with 6px corners, the same border colour and 12px type, on every screen of the plugin, including the settings pages whose fields had stayed square while the buttons beside them were rounded. Only text-entry fields are affected: checkboxes, radio buttons, hidden fields and the file picker stay exactly as WordPress renders them, and field widths are untouched, so .regular-text still sizes itself.
 
 = 1.3.13 =
 * Fixed: some buttons kept WordPress's square corners and their own height - "Save Boxes" beside a rounded "Add Box", "Got it" in the what's-new dialog, and every button on the PrintNode screen. The stylesheet styled `.button` by naming particular classes under a page wrapper, so the buttons WordPress renders for the plugin (`submit_button()`, which adds no class of ours) and the dialog printed outside any wrapper matched no rule at all. One screen-wide rule now covers every button on every screen, and a gate fails the build if a new button is covered by neither that rule nor one of its own.
