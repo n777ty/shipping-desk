@@ -208,19 +208,63 @@
     line-height: 1.5;
 }
 
-.shipping-desk-box-select,
-.shipping-desk-total-weight {
+/*
+ * One control style for every select and number input on the page: same height, radius,
+ * border and type, so the row's controls read as a set.
+ *
+ * Scoped to .shipping-desk-wrap on purpose. WordPress core styles these with
+ * `.wp-core-ui select` and `input[type="number"]` - one class plus an element - which
+ * outranks a single-class plugin rule. Every rule here used to be single-class, so it
+ * never applied: the Box select and the weight/insurance inputs were rendering with core's
+ * radius, height and type, while the Signature select (whose override happened to be two
+ * classes) took the plugin's. That is why one control looked square and the others round.
+ */
+.shipping-desk-wrap select.shipping-desk-box-select,
+.shipping-desk-wrap select.shipping-desk-service-select,
+.shipping-desk-wrap select.shipping-desk-signature-confirmation {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    height: 30px;              /* core's own control height */
+    min-height: 0;             /* core sets min-height, which would otherwise win */
+    padding: 0 24px 0 8px;     /* right side leaves room for core's select arrow */
     border: 1px solid #d1d5db;
-    border-radius: 8px;
-    height: 28px;
-    line-height: 28px;
-    font-size: 12px;
-    background: #fff;
+    border-radius: 6px;
+    background-color: #fff;    /* leaves core's arrow image in place */
     color: #374151;
+    font-size: 12px;
+    line-height: 28px;
     box-shadow: 0 1px 2px rgba(0,0,0,.05);
+    vertical-align: middle;
 }
-.shipping-desk-box-select:focus,
-.shipping-desk-total-weight:focus {
+
+.shipping-desk-wrap input[type="number"].shipping-desk-total-weight,
+.shipping-desk-wrap input[type="number"].shipping-desk-liability-amount {
+    box-sizing: border-box;
+    width: 90px;
+    height: 30px;
+    min-height: 0;
+    padding: 0 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background-color: #fff;
+    color: #374151;
+    font-size: 12px;
+    line-height: 28px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05);
+    vertical-align: middle;
+}
+
+.shipping-desk-wrap select.shipping-desk-box-select:focus,
+.shipping-desk-wrap select.shipping-desk-service-select:focus,
+.shipping-desk-wrap select.shipping-desk-signature-confirmation:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37,99,235,.15);
+    outline: none;
+}
+
+.shipping-desk-wrap input[type="number"].shipping-desk-total-weight:focus,
+.shipping-desk-wrap input[type="number"].shipping-desk-liability-amount:focus {
     border-color: #2563eb;
     box-shadow: 0 0 0 3px rgba(37,99,235,.15);
     outline: none;
@@ -288,8 +332,6 @@
     transform: none;
     box-shadow: none;
 }
-.shipping-desk-total-weight { width: 90px; }
-
 .shipping-desk-table td { padding: 10px 8px; }
 .shipping-desk-order-link { display: inline-block; line-height: 1.5; white-space: nowrap; }
 .shipping-desk-address {
@@ -337,17 +379,6 @@
     padding: 0 8px;
     text-align: left;
 }
-.shipping-desk-liability-amount {
-    box-sizing: border-box;
-    height: 28px;
-    line-height: 28px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    background: #fff;
-    color: #374151;
-    font-size: 12px;
-    box-shadow: 0 1px 2px rgba(0,0,0,.05);
-}
 .shipping-desk-services {
     font-size: 12px;
     line-height: 1.45;
@@ -378,36 +409,6 @@
     line-height: 1.45;
     margin-bottom: 2px;
 }
-/* Confirmation group dropdown. Insurance lives in the Box/Weight column. */
-.shipping-desk-service-select,
-.shipping-desk-signature-confirmation {
-    box-sizing: border-box;
-    width: 100%;
-    height: 26px;
-    padding: 0 4px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    background: #fff;
-    color: #374151;
-    font-size: 11px;
-}
-.shipping-desk-service-select:focus,
-.shipping-desk-signature-confirmation:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 2px rgba(37,99,235,.15);
-    outline: none;
-}
-/*
- * The signature select sits beside the Box select in the same row, so it matches it:
- * 28px high, 8px radius, 12px type. At 26px/6px/11px the two controls did not share a
- * baseline even when their labels did, which read as a misalignment of its own.
- */
-.shipping-desk-table .shipping-desk-signature-confirmation {
-    height: 28px;
-    padding: 0 6px;
-    border-radius: 8px;
-    font-size: 12px;
-}
 /* Insurance row in the Services column: label left, 90px input right. */
 .shipping-desk-service-amount-row {
     display: flex;
@@ -431,24 +432,7 @@
 .shipping-desk-service-amount-row .shipping-desk-liability-amount {
     flex: 0 0 90px;
     width: 90px;
-    padding: 0 8px;
     text-align: left;
-}
-.shipping-desk-liability-amount {
-    box-sizing: border-box;
-    height: 28px;
-    line-height: 28px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    background: #fff;
-    color: #374151;
-    font-size: 12px;
-    box-shadow: 0 1px 2px rgba(0,0,0,.05);
-}
-.shipping-desk-liability-amount:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 2px rgba(37,99,235,.15);
-    outline: none;
 }
 /* Reship detail row on the Completed tab: a nested table holding the same
    purchase UI as the Processing tab. */
@@ -474,11 +458,6 @@
 .shipping-desk-service-free {
     color: #16733a;
     font-weight: 600;
-}
-.shipping-desk-box-select {
-    box-sizing: border-box;
-    width: 100%;
-    max-width: 100%;
 }
 .shipping-desk-rates-container {
     max-height: 180px;

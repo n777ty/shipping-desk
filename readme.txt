@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.3.7
+Stable tag: 1.3.8
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,10 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.3.8 =
+* Fixed: the Box, Signature, Weight and Insurance controls now share one style - 30px high, 6px corners, 12px type, one border colour. They looked like they came from different plugins because they did: every plugin rule for these controls was a single CSS class, and WordPress core styles them with selectors that are one class plus an element (`.wp-core-ui select`, `input[type="number"]`), so core's 3px/4px corners, 30px height and 14px type won. Only the Signature select, whose rule happened to be two classes, took the plugin's styling - which is why it was the only rounded one.
+* Changed: those rules are now scoped to the page wrapper and qualified with the element, so they apply as intended and would keep applying if core's selectors tightened.
 
 = 1.3.7 =
 * Fixed: the Signature dropdown sat 9px above the Box dropdown beside it. The two share a row, the row's cells are vertically centred, and the Signature column is the taller of the two once its group replaces the placeholder and the insurance estimate appears - so centring pushed its content up. Both columns are top-aligned now, which fixes their heights out of the question.
