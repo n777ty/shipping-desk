@@ -169,20 +169,21 @@
     gap: 8px;
     margin: 12px 0;
 }
-.shipping-desk-bulk-action-select {
-    height: 28px;
-    padding: 0 6px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    background: #fff;
-    color: #374151;
-    font-size: 12px;
+/*
+ * The shared select rule sets width: 100% for the in-table selects, where the column
+ * provides the constraint. In the bulk toolbar there is no column, so the dropdown stretches
+ * the full row unless it is pinned back to its own width.
+ */
+.shipping-desk-wrap .shipping-desk-bulk-actions select.shipping-desk-bulk-action-select {
+    width: auto;
+    min-width: 160px;
+    max-width: 260px;
 }
 .shipping-desk-bulk-apply {
-    height: 28px;
-    padding: 0 10px;
+    height: 30px;
+    padding: 0 12px;
     border: 1px solid #d1d5db;
-    border-radius: 8px;
+    border-radius: 6px;
     background: #fff;
     color: #374151;
     font-size: 12px;
@@ -221,7 +222,8 @@
  */
 .shipping-desk-wrap select.shipping-desk-box-select,
 .shipping-desk-wrap select.shipping-desk-service-select,
-.shipping-desk-wrap select.shipping-desk-signature-confirmation {
+.shipping-desk-wrap select.shipping-desk-signature-confirmation,
+.shipping-desk-wrap select.shipping-desk-bulk-action-select {
     box-sizing: border-box;
     width: 100%;
     max-width: 100%;
@@ -257,7 +259,8 @@
 
 .shipping-desk-wrap select.shipping-desk-box-select:focus,
 .shipping-desk-wrap select.shipping-desk-service-select:focus,
-.shipping-desk-wrap select.shipping-desk-signature-confirmation:focus {
+.shipping-desk-wrap select.shipping-desk-signature-confirmation:focus,
+.shipping-desk-wrap select.shipping-desk-bulk-action-select:focus {
     border-color: #2563eb;
     box-shadow: 0 0 0 3px rgba(37,99,235,.15);
     outline: none;

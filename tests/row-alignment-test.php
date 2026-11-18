@@ -45,12 +45,15 @@ function row_same( $want, $got, $label ) {
 /**
  * The declarations of one CSS rule, found by its first selector line.
  *
+ * Deliberately tolerant of the selector group spanning several lines: it looks for the
+ * selector, then the next "{" after it.
+ *
  * @param string $css      Stylesheet.
- * @param string $selector Selector text, exactly as the file spells it.
+ * @param string $selector Selector text to locate.
  * @return string Body, or '' when the rule is missing.
  */
 function row_css_rule( $css, $selector ) {
-	$start = strpos( $css, $selector . ' {' );
+	$start = strpos( $css, $selector );
 	if ( false === $start ) {
 		return '';
 	}
@@ -83,6 +86,33 @@ row_check( false !== strpos( $input_rule, 'border-radius: 6px' ), 'the same 6px 
 row_check( false !== strpos( $input_rule, 'height: 30px' ), 'the same height' );
 row_check( false !== strpos( $input_rule, 'font-size: 12px' ), 'and the same type size' );
 row_check( false !== strpos( $input_rule, 'min-height: 0' ), 'with core\'s min-height neutralised here too' );
+
+echo "\n[every select is covered]\n";
+
+// Each <select> the plugin renders has a static class, so every one can be required to
+// appear in the shared rule by name. Tags are not parsed with a regex: every one of them
+// embeds PHP in an attribute, and the ">" of that closing tag ends a naive match early -
+// which is exactly how the bulk-actions select was missed. Instead each "<select" is
+// followed by a short window in which its class attribute must appear.
+$php = str_replace( "\r\n", "\n", (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-plugin.php' ) );
+
+$select_classes = array();
+$offset         = 0;
+while ( false !== ( $at = strpos( $php, '<select', $offset ) ) ) {
+	if ( preg_match( '/class="([^"]+)"/', substr( $php, $at, 320 ), $found ) ) {
+		$select_classes[] = $found[1];
+	}
+	$offset = $at + 7;
+}
+$select_classes = array_unique( $select_classes );
+
+row_check( count( $select_classes ) >= 3, 'the markup renders the selects to check (' . count( $select_classes ) . ' found: ' . implode( ', ', $select_classes ) . ')' );
+foreach ( $select_classes as $select_class ) {
+	row_check(
+		false !== strpos( $css, 'select.' . $select_class . ',' ) || false !== strpos( $css, 'select.' . $select_class . ' {' ),
+		"{$select_class} is in the shared select rule, so WordPress core cannot override it"
+	);
+}
 
 echo "\n[strong enough to beat WordPress core]\n";
 

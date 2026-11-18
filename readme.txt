@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.3.8
+Stable tag: 1.3.9
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,11 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.3.9 =
+* Fixed: the Bulk Actions dropdown now shares the same style as the other controls - 30px high, 6px corners, 12px type. It was the last one left on WordPress core's styling, for the same reason as the rest: a single-class rule loses to core's `.wp-core-ui select`.
+* Changed: the Apply button beside it is 30px high with 6px corners too, so the toolbar reads as one row rather than a taller dropdown next to a shorter button.
+* Fixed: the shared rule's full width would have stretched that dropdown across the toolbar; the bulk select keeps its own width (160-260px) with a more specific rule.
 
 = 1.3.8 =
 * Fixed: the Box, Signature, Weight and Insurance controls now share one style - 30px high, 6px corners, 12px type, one border colour. They looked like they came from different plugins because they did: every plugin rule for these controls was a single CSS class, and WordPress core styles them with selectors that are one class plus an element (`.wp-core-ui select`, `input[type="number"]`), so core's 3px/4px corners, 30px height and 14px type won. Only the Signature select, whose rule happened to be two classes, took the plugin's styling - which is why it was the only rounded one.
