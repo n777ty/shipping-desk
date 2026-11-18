@@ -307,6 +307,86 @@ apply_check( false === Shipping_Desk_Helpers::address_line_carried( '123 Suite 5
 apply_check( false === Shipping_Desk_Helpers::address_line_carried( '123 Main St', '' ), 'an empty line 2 is never carried' );
 apply_check( false === Shipping_Desk_Helpers::address_line_carried( '', 'Apt 5' ), 'nor is one carried into an empty line 1' );
 
+/* -- the payload the label is bought from -------------------------------- */
+
+echo "\n[the payload that prints]\n";
+
+// The bug this section exists for: a fold applied to the order but not to the rate
+// payload printed the apartment on both lines of a UPS label, while the order looked right.
+$payload = [
+	'to_address' => [
+		'name'         => 'Ada Lovelace',
+		'phone'        => '+13035550100',
+		'email'        => 'ada@example.com',
+		'line1'        => '123 Example St',
+		'line2'        => 'Apt 4B',
+		'town'         => 'Springfield',
+		'county'       => 'CO',
+		'postcode'     => '62701',
+		'country_code' => 'US',
+	],
+];
+
+$fold_validation = [
+	'status'      => 'corrected',
+	'validator'   => 'easypost',
+	'recommended' => [
+		'line1'    => '123 EXAMPLE ST APT 4B',
+		'town'     => 'SPRINGFIELD',
+		'county'   => 'CO',
+		'postcode' => '62701-1234',
+	],
+];
+
+$choose = $plugin_class->getMethod( 'apply_address_choice' );
+$choose->invokeArgs( $plugin, [ &$payload, &$fold_validation, 'suggested' ] );
+
+apply_same( '123 EXAMPLE ST APT 4B', $payload['to_address']['line1'], 'the payload carries the folded street line' );
+apply_same( '', $payload['to_address']['line2'], 'and its second line is empty, so the label prints the apartment once' );
+apply_same( '62701-1234', $payload['to_address']['postcode'], 'the corrected postcode reaches the payload' );
+apply_same( 'Ada Lovelace', $payload['to_address']['name'], 'the rest of the recipient is untouched' );
+apply_same( 'ada@example.com', $payload['to_address']['email'], 'including the email' );
+apply_same( 'suggested', $fold_validation['applied'], 'and the decision is recorded as applied' );
+
+// A verifier that echoes the line both ways must not leave it in the payload either.
+$echoed = [ 'to_address' => [ 'line1' => '123 Example St', 'line2' => 'Apt 4B' ] ];
+$echo_validation = [ 'status' => 'corrected', 'recommended' => [ 'line1' => '123 EXAMPLE ST APT 4B', 'line2' => 'APT 4B' ] ];
+$choose->invokeArgs( $plugin, [ &$echoed, &$echo_validation, 'suggested' ] );
+apply_same( '', $echoed['to_address']['line2'], 'a second line returned as well as folded is still dropped' );
+
+// Keeping the original address must leave the payload exactly as entered.
+$kept = [ 'to_address' => [ 'line1' => '123 Example St', 'line2' => 'Apt 4B', 'postcode' => '62701' ] ];
+$kept_validation = [ 'status' => 'corrected', 'recommended' => [ 'line1' => '123 EXAMPLE ST APT 4B' ] ];
+$choose->invokeArgs( $plugin, [ &$kept, &$kept_validation, 'original' ] );
+apply_same( 'Apt 4B', $kept['to_address']['line2'], 'choosing the original address leaves the payload alone' );
+apply_same( 'original', $kept_validation['applied'], 'and says so' );
+
+echo "\n[one rule, both places]\n";
+
+$correction = Shipping_Desk_Helpers::apply_address_correction(
+	[ 'line1' => '123 Example St', 'line2' => 'Apt 4B', 'postcode' => '62701' ],
+	[ 'line1' => '123 EXAMPLE ST APT 4B', 'postcode' => '62701-1234' ]
+);
+apply_same( '', $correction['line2'], 'the shared helper drops a folded line 2' );
+apply_same( '123 EXAMPLE ST APT 4B', $correction['line1'], 'and keeps the folded line 1' );
+
+$unrelated = Shipping_Desk_Helpers::apply_address_correction(
+	[ 'line1' => '123 Example St', 'line2' => 'Suite 500' ],
+	[ 'line1' => '123 EXAMPLE ST' ]
+);
+apply_same( 'Suite 500', $unrelated['line2'], 'a line 2 the new line 1 does not contain is kept' );
+
+$plugin_source = str_replace( "\r\n", "\n", (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-plugin.php' ) );
+
+apply_check(
+	false !== strpos( $plugin_source, '$payload[\'to_address\'] = Shipping_Desk_Helpers::apply_address_correction(' ),
+	'the rate payload uses the shared correction'
+);
+apply_check(
+	false !== strpos( $plugin_source, '$after  = Shipping_Desk_Helpers::apply_address_correction( $before, $recommended );' ),
+	'and so does the order, from the same function'
+);
+
 echo "\n[the wiring]\n";
 
 // Normalised: the files are checked out with CRLF on Windows.

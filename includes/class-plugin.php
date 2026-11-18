@@ -1093,8 +1093,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.11' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.11', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.12' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.12', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -2972,6 +2972,12 @@ class Shipping_Desk_Plugin {
     /**
      * Put the chosen address into the rate payload.
      *
+     * The payload is what the provider turns into a shipment, and the label is bought on
+     * that shipment - so this is the address that prints. It therefore goes through the
+     * same correction as the order (see Shipping_Desk_Helpers::apply_address_correction):
+     * a suite the verifier folded into line 1 has to leave line 2 empty here too, or the
+     * label carries the apartment twice.
+     *
      * @param array  $payload    Rate payload, by reference.
      * @param array  $validation Normalised validation result, by reference.
      * @param string $choice     'suggested' or 'original'.
@@ -2990,11 +2996,11 @@ class Shipping_Desk_Plugin {
             return;
         }
 
-        foreach ( [ 'line1', 'line2', 'town', 'county', 'postcode', 'country_code' ] as $field ) {
-            if ( ! empty( $recommended[ $field ] ) ) {
-                $payload['to_address'][ $field ] = $recommended[ $field ];
-            }
-        }
+        $current = isset( $payload['to_address'] ) && is_array( $payload['to_address'] )
+            ? $payload['to_address']
+            : [];
+
+        $payload['to_address'] = Shipping_Desk_Helpers::apply_address_correction( $current, $recommended );
 
         $validation['applied'] = 'suggested';
     }
@@ -3046,25 +3052,11 @@ class Shipping_Desk_Plugin {
             'country_code' => 'shipping_country',
         ];
 
-        // The address as it will be written: a field the verifier did not return keeps
-        // the value the order already has, rather than being blanked.
-        $after = $before;
-        foreach ( $properties as $key => $property ) {
-            $value = isset( $recommended[ $key ] ) ? trim( (string) $recommended[ $key ] ) : '';
-            if ( '' !== $value ) {
-                $after[ $key ] = $value;
-            }
-        }
-
-        // A second line the new first line already contains has been carried into it:
-        // "123 Main St" + "Apt 5" comes back as "123 Main St APT 5". Keeping the old
-        // line 2 then prints the apartment twice, so it is dropped. This also covers a
-        // verifier that returns the line both ways at once, which EasyPost does.
-        $folded = '' !== $after['line2']
-            && Shipping_Desk_Helpers::address_line_carried( $after['line1'], $after['line2'] );
-        if ( $folded ) {
-            $after['line2'] = '';
-        }
+        // One correction, shared with the rate payload: a field the verifier did not
+        // return keeps its value, and a second line the new first line already contains is
+        // dropped rather than printed twice.
+        $after  = Shipping_Desk_Helpers::apply_address_correction( $before, $recommended );
+        $folded = '' !== $before['line2'] && '' === $after['line2'];
 
         $changed = 0;
         foreach ( $properties as $key => $property ) {

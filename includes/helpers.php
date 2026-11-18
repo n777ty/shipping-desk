@@ -260,6 +260,48 @@ class Shipping_Desk_Helpers {
     }
 
     /**
+     * The address to use once a correction is accepted.
+     *
+     * A field the verifier did not return keeps its current value: blanking a line it said
+     * nothing about would delete a real suite number. Line 2 is the exception, because
+     * verifiers fold it into line 1 - "123 Example St" plus "Apt 4B" comes back as
+     * "123 EXAMPLE ST APT 4B" - and writing that line 1 while keeping the old line 2
+     * prints the apartment twice.
+     *
+     * Deliberately shared by the rate payload and the order itself. The label is bought on
+     * the shipment built from the payload, so applying the fold to only one of them printed
+     * the apartment on both lines of a UPS label while the order looked correct.
+     *
+     * @param array $current     Address as it stands: line1, line2, town, county, postcode, country_code.
+     * @param array $recommended Fields returned by the verifier, same keys.
+     * @return array The address to use.
+     */
+    public static function apply_address_correction( array $current, array $recommended ) {
+        $fields = [ 'line1', 'line2', 'town', 'county', 'postcode', 'country_code' ];
+
+        $target = $current;
+        foreach ( $fields as $field ) {
+            $value = isset( $recommended[ $field ] ) ? trim( (string) $recommended[ $field ] ) : '';
+            if ( '' !== $value ) {
+                $target[ $field ] = $value;
+            }
+        }
+
+        // The fold test needs strings, and callers pass arrays of unknown completeness.
+        foreach ( $fields as $field ) {
+            if ( ! isset( $target[ $field ] ) || ! is_scalar( $target[ $field ] ) ) {
+                $target[ $field ] = '';
+            }
+        }
+
+        if ( '' !== $target['line2'] && self::address_line_carried( $target['line1'], $target['line2'] ) ) {
+            $target['line2'] = '';
+        }
+
+        return $target;
+    }
+
+    /**
      * Single-line rendering of a plugin-shaped address, for the choice panel.
      *
      * @param array $address Address array (line1, line2, town, county, postcode).

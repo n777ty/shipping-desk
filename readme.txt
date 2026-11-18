@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.3.11
+Stable tag: 1.3.12
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,9 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.3.12 =
+* Fixed: a suite the verifier folded into line 1 was printed twice on the label. 1.3.5 taught the order to drop the now-redundant second line, but the rate payload - which is what the provider turns into a shipment, and what the label is bought from - kept it, so a UPS label read "123 EXAMPLE ST APT 4B / APT641 / SPRINGFIELD, CO 62701-1234" while the order looked correct. Both now take their address from one shared function, so a fold cannot be applied to one and missed by the other.
 
 = 1.3.11 =
 * Fixed: Get Rates and Buy Label sat a pixel or two out of line. Get Rates is the only one of those buttons with a border, and with the default content-box its 30px height plus 1px borders measured 32px against its neighbour's 30px - baseline alignment then turned the difference into a visible offset, and made the shorter button look a shade bigger. Both are border-box now and aligned by their middles, so they share a top and bottom edge exactly.
