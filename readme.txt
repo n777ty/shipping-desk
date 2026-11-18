@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.3.9
+Stable tag: 1.3.10
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,10 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.3.10 =
+* Changed: every button in the plugin is 30px high with 6px corners - Get Rates, Buy Label, Print, Refund, Reship, Reset Shipping, the bulk Apply, the pagination Go, the address panel's "Use selected address", the flagged-orders review button and the what's-new dismissal. They were 28px with 8px corners, and the ones built on WordPress's own .button class were carrying core's 3px corners, so a single row could show three different shapes.
+* Unchanged on purpose: the provider segments and the test/live chip stay pills, because they sit inside the segmented track from 1.3.6 and a pill there is the design. WordPress's own Save button on the settings screen is left to core - its class is shared with the rest of wp-admin.
 
 = 1.3.9 =
 * Fixed: the Bulk Actions dropdown now shares the same style as the other controls - 30px high, 6px corners, 12px type. It was the last one left on WordPress core's styling, for the same reason as the rest: a single-class rule loses to core's `.wp-core-ui select`.

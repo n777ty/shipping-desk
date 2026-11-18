@@ -136,6 +136,58 @@ $top = row_css_rule( $css, ".shipping-desk-table .shipping-desk-box-column,\n.sh
 row_check( '' !== $top, 'the two columns have a rule of their own' );
 row_check( false !== strpos( $top, 'vertical-align: top' ), 'and it top-aligns them, so content height cannot shift one above the other' );
 
+echo "\n[every button is the same shape]\n";
+
+/*
+ * A rule that sets both the 30px height and the 6px radius is the shape. Every plugin
+ * button has to appear in one of those: a button outside them is wearing WordPress core's
+ * geometry, which is how the controls drifted apart in the first place.
+ */
+$uniform = array();
+if ( preg_match_all( '/([^{}]+)\{([^}]*)\}/', $css, $rules, PREG_SET_ORDER ) ) {
+	foreach ( $rules as $rule ) {
+		if ( false !== strpos( $rule[2], 'height: 30px' ) && false !== strpos( $rule[2], 'border-radius: 6px' ) ) {
+			preg_match_all( '/\.(shipping-desk-[a-z0-9-]+)/', $rule[1], $names );
+			foreach ( $names[1] as $name ) {
+				$uniform[ $name ] = true;
+			}
+		}
+	}
+}
+row_check( ! empty( $uniform ), 'the 30px / 6px button rules are found (' . count( $uniform ) . ' classes)' );
+
+// Pills by design: the provider segments and the live/test chip sit inside a track.
+$pills = array( 'shipping-desk-provider-btn', 'shipping-desk-mode-chip' );
+
+$button_classes = array();
+$offset         = 0;
+while ( false !== ( $at = strpos( $php, '<button', $offset ) ) ) {
+	if ( preg_match( '/class="([^"]+)"/', substr( $php, $at, 320 ), $found ) ) {
+		foreach ( preg_split( '/\s+/', trim( $found[1] ) ) as $name ) {
+			// Some class attributes have PHP appended to them (the provider button adds
+			// its active state), so keep only the leading class token.
+			if ( preg_match( '/^(shipping-desk-[a-z0-9-]+)/', $name, $token ) ) {
+				$button_classes[ $token[1] ] = true;
+			}
+		}
+	}
+	$offset = $at + 7;
+}
+// Rendered by JavaScript rather than in the markup.
+foreach ( array( 'shipping-desk-address-apply', 'shipping-desk-review-flagged' ) as $js_button ) {
+	$button_classes[ $js_button ] = true;
+}
+
+$checked = 0;
+foreach ( array_keys( $button_classes ) as $button_class ) {
+	if ( in_array( $button_class, $pills, true ) ) {
+		continue;
+	}
+	$checked++;
+	row_check( isset( $uniform[ $button_class ] ), "{$button_class} is 30px high with 6px corners" );
+}
+row_check( $checked >= 6, 'at least six plugin buttons were checked (' . $checked . ')' );
+
 echo "\n";
 printf( "Checks: %d, failures: %d\n", $GLOBALS['row_checks'], $GLOBALS['row_failures'] );
 exit( $GLOBALS['row_failures'] > 0 ? 1 : 0 );
