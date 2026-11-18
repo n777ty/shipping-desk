@@ -671,21 +671,28 @@
 }
 
 /*
- * Buttons the plugin renders with WordPress's own .button class - the address panel's
- * "Use selected address", the flagged-orders notice, the what's-new dismissal. Core styles
- * those with .wp-core-ui .button, so they need one class more to be brought to the same
- * geometry as the plugin's own buttons: 30px high, 6px corners, 12px type.
+ * Every button on every screen of the plugin, in one rule.
+ *
+ * These carry WordPress's own .button class: submit_button() renders an <input
+ * type="submit">, the plugin's own markup renders a <button>, and core styles both with
+ * `.wp-core-ui .button` - two classes, so a single-class selector loses whatever the load
+ * order says. Naming the element gives this rule one class more and it wins outright.
+ *
+ * The scope is the body, not a page wrapper. The wrappers are not uniform (four screens
+ * use shipping-desk-wrap, PrintNode uses shipping-desk-settings) and the what's-new dialog
+ * is printed in admin_footer, outside any wrapper at all. An enumerated list of
+ * wrapper-scoped class names missed every one of those cases, which is why "Save Boxes" -
+ * submit_button() markup with no plugin class of its own - kept core's 3px corners and its
+ * own height while the button beside it was 30px with 6px corners.
  */
-.shipping-desk-wrap .button.shipping-desk-address-apply,
-.shipping-desk-wrap .button.shipping-desk-review-flagged,
-.shipping-desk-wrap .button.shipping-desk-whats-new-close,
-.shipping-desk-wrap .button.shipping-desk-remove-box,
-.shipping-desk-wrap #shipping-desk-add-box {
+.shipping-desk-screen input.button,
+.shipping-desk-screen button.button {
     box-sizing: border-box;
     vertical-align: middle;
     height: 30px;
     min-height: 0;
     line-height: 28px;
+    padding: 0 12px;
     border-radius: 6px;
     font-size: 12px;
 }

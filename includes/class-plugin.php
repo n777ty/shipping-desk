@@ -66,6 +66,9 @@ class Shipping_Desk_Plugin {
         add_action( 'admin_init', [ $this, 'register_settings' ] );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
         add_action( 'admin_footer', [ $this, 'render_whats_new_modal' ] );
+        // One body class for every screen of the plugin, so styling does not have to
+        // know which page wrapper a given page happens to use.
+        add_filter( 'admin_body_class', [ $this, 'add_screen_body_class' ] );
         // Runs before settings are used so legacy options are carried over.
         add_action( 'admin_init', [ $this, 'maybe_migrate_legacy_settings' ], 1 );
         add_action( 'admin_init', [ $this, 'maybe_migrate_easypost_key' ], 2 );
@@ -106,6 +109,31 @@ class Shipping_Desk_Plugin {
         );
 
         return $links;
+    }
+
+    /**
+     * Marks every screen of the plugin with a body class: `shipping-desk-screen`.
+     *
+     * The page wrappers are not uniform - four screens use `shipping-desk-wrap` and the
+     * PrintNode screen uses `shipping-desk-settings` - and the what's-new dialog is printed
+     * in admin_footer, outside every wrapper. Styling that keys off a wrapper therefore
+     * misses whichever surface it was not told about: that is how "Save Boxes", whose markup
+     * comes from submit_button() and carries no plugin class of its own, kept WordPress
+     * core's 3px corners while the buttons beside it were 6px.
+     *
+     * The body class is the one thing all of those surfaces share, and this is the same
+     * page test enqueue_assets() uses, so the stylesheet and the hook cannot disagree.
+     *
+     * @param string $classes Space-separated body classes.
+     * @return string
+     */
+    public function add_screen_body_class( $classes ) {
+        $page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+        if ( 0 !== strpos( $page, 'shipping-desk' ) ) {
+            return $classes;
+        }
+
+        return trim( $classes . ' shipping-desk-screen' );
     }
 
     /**
@@ -1093,8 +1121,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.12' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.12', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.13' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.13', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),

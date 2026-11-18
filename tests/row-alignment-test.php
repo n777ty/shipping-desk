@@ -160,14 +160,20 @@ row_check( ! empty( $uniform ), 'the 30px / 6px button rules are found (' . coun
 $pills = array( 'shipping-desk-provider-btn', 'shipping-desk-mode-chip' );
 
 $button_classes = array();
+$with_button    = array();
 $offset         = 0;
 while ( false !== ( $at = strpos( $php, '<button', $offset ) ) ) {
 	if ( preg_match( '/class="([^"]+)"/', substr( $php, $at, 320 ), $found ) ) {
-		foreach ( preg_split( '/\s+/', trim( $found[1] ) ) as $name ) {
+		$attribute = $found[1];
+		$is_core   = (bool) preg_match( '/(^|\s)button(\s|$)/', preg_replace( '/<\?php.*?\?>/s', ' ', $attribute ) );
+		foreach ( preg_split( '/\s+/', trim( $attribute ) ) as $name ) {
 			// Some class attributes have PHP appended to them (the provider button adds
 			// its active state), so keep only the leading class token.
 			if ( preg_match( '/^(shipping-desk-[a-z0-9-]+)/', $name, $token ) ) {
 				$button_classes[ $token[1] ] = true;
+				if ( $is_core ) {
+					$with_button[ $token[1] ] = true;
+				}
 			}
 		}
 	}
@@ -176,17 +182,39 @@ while ( false !== ( $at = strpos( $php, '<button', $offset ) ) ) {
 // Rendered by JavaScript rather than in the markup.
 foreach ( array( 'shipping-desk-address-apply', 'shipping-desk-review-flagged' ) as $js_button ) {
 	$button_classes[ $js_button ] = true;
+	$with_button[ $js_button ]    = true;
 }
 
+/*
+ * Two ways for a button to be the right shape, and 1.3.13 created the second one. Per-class
+ * rules could not cover submit_button() markup (no plugin class of ours) or the what's-new
+ * dialog (printed outside every page wrapper), so those buttons are covered by one rule
+ * scoped to the screen body class instead. A button is correct if its own class carries the
+ * rule, or if it carries .button and the screen-wide rule provides it.
+ */
+$shared_rule = row_css_rule( $css, ".shipping-desk-screen input.button,\n.shipping-desk-screen button.button" );
+$shared_ok   = false !== strpos( $shared_rule, 'height: 30px' ) && false !== strpos( $shared_rule, 'border-radius: 6px' );
+row_check( $shared_ok, 'the screen-wide .button rule provides the same 30px / 6px shape' );
+
 $checked = 0;
+$via_screen = 0;
 foreach ( array_keys( $button_classes ) as $button_class ) {
 	if ( in_array( $button_class, $pills, true ) ) {
 		continue;
 	}
 	$checked++;
-	row_check( isset( $uniform[ $button_class ] ), "{$button_class} is 30px high with 6px corners" );
+	$by_own_rule = isset( $uniform[ $button_class ] );
+	$by_screen   = isset( $with_button[ $button_class ] ) && $shared_ok;
+	if ( $by_screen && ! $by_own_rule ) {
+		$via_screen++;
+	}
+	row_check(
+		$by_own_rule || $by_screen,
+		"{$button_class} is 30px high with 6px corners" . ( ( $by_screen && ! $by_own_rule ) ? ' (via the screen-wide .button rule)' : '' )
+	);
 }
 row_check( $checked >= 6, 'at least six plugin buttons were checked (' . $checked . ')' );
+row_check( $via_screen > 0, "the screen-wide rule is what covers {$via_screen} of them, not a per-class rule" );
 
 /*
  * The bug behind "Buy Label sits two pixels lower than Get Rates": a 30px height with a
