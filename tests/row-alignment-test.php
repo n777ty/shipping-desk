@@ -188,6 +188,28 @@ foreach ( array_keys( $button_classes ) as $button_class ) {
 }
 row_check( $checked >= 6, 'at least six plugin buttons were checked (' . $checked . ')' );
 
+/*
+ * The bug behind "Buy Label sits two pixels lower than Get Rates": a 30px height with a
+ * 1px border and the default content-box measures 32px, so a bordered button beside a
+ * borderless one is 2px taller and baseline alignment turns that into an offset. Every
+ * rule that fixes a height and draws a border must therefore be border-box.
+ */
+$not_border_box = array();
+if ( preg_match_all( '/([^{}]+)\{([^}]*)\}/', $css, $border_rules, PREG_SET_ORDER ) ) {
+	foreach ( $border_rules as $rule ) {
+		if ( false === strpos( $rule[2], 'height: 30px' ) || false === strpos( $rule[2], 'border: 1px' ) ) {
+			continue;
+		}
+		if ( false === strpos( $rule[2], 'box-sizing: border-box' ) ) {
+			$not_border_box[] = trim( preg_replace( '/\s+/', ' ', substr( $rule[1], 0, 70 ) ) );
+		}
+	}
+}
+row_check(
+	empty( $not_border_box ),
+	'a fixed 30px height with a 1px border is always border-box' . ( empty( $not_border_box ) ? '' : ' — without it: ' . implode( ' | ', $not_border_box ) )
+);
+
 echo "\n";
 printf( "Checks: %d, failures: %d\n", $GLOBALS['row_checks'], $GLOBALS['row_failures'] );
 exit( $GLOBALS['row_failures'] > 0 ? 1 : 0 );

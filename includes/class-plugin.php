@@ -1093,8 +1093,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.10' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.10', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.11' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.11', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),

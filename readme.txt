@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.3.10
+Stable tag: 1.3.11
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,9 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.3.11 =
+* Fixed: Get Rates and Buy Label sat a pixel or two out of line. Get Rates is the only one of those buttons with a border, and with the default content-box its 30px height plus 1px borders measured 32px against its neighbour's 30px - baseline alignment then turned the difference into a visible offset, and made the shorter button look a shade bigger. Both are border-box now and aligned by their middles, so they share a top and bottom edge exactly.
 
 = 1.3.10 =
 * Changed: every button in the plugin is 30px high with 6px corners - Get Rates, Buy Label, Print, Refund, Reship, Reset Shipping, the bulk Apply, the pagination Go, the address panel's "Use selected address", the flagged-orders review button and the what's-new dismissal. They were 28px with 8px corners, and the ones built on WordPress's own .button class were carrying core's 3px corners, so a single row could show three different shapes.

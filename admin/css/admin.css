@@ -180,6 +180,8 @@
     max-width: 260px;
 }
 .shipping-desk-bulk-apply {
+    box-sizing: border-box;
+    vertical-align: middle;
     height: 30px;
     padding: 0 12px;
     border: 1px solid #d1d5db;
@@ -279,6 +281,13 @@
 .shipping-desk-refund-label,
 .shipping-desk-reship,
 .shipping-desk-reset-shipping {
+    /*
+     * border-box, because one of these (Get Rates) carries a 1px border and the rest do
+     * not: with the default content-box that button measured 32px against its neighbours'
+     * 30px, and baseline alignment turned the 2px difference into a visible offset.
+     */
+    box-sizing: border-box;
+    vertical-align: middle;
     border: none;
     border-radius: 6px;
     height: 30px;
@@ -672,6 +681,8 @@
 .shipping-desk-wrap .button.shipping-desk-whats-new-close,
 .shipping-desk-wrap .button.shipping-desk-remove-box,
 .shipping-desk-wrap #shipping-desk-add-box {
+    box-sizing: border-box;
+    vertical-align: middle;
     height: 30px;
     min-height: 0;
     line-height: 28px;
