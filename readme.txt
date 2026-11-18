@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.3.14
+Stable tag: 1.3.15
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,9 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 
 == Changelog ==
 
+= 1.3.15 =
+* Housekeeping, no functional change: the 1.3.12 entry below used a real customer address as its example, and a code comment described the same case with it. Both now use a fabricated address. Nothing else changed.
+
 = 1.3.14 =
 * Improved: text fields now match the buttons - 30px high with 6px corners, the same border colour and 12px type, on every screen of the plugin, including the settings pages whose fields had stayed square while the buttons beside them were rounded. Only text-entry fields are affected: checkboxes, radio buttons, hidden fields and the file picker stay exactly as WordPress renders them, and field widths are untouched, so .regular-text still sizes itself.
 
@@ -90,7 +93,7 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 * Fixed: some buttons kept WordPress's square corners and their own height - "Save Boxes" beside a rounded "Add Box", "Got it" in the what's-new dialog, and every button on the PrintNode screen. The stylesheet styled `.button` by naming particular classes under a page wrapper, so the buttons WordPress renders for the plugin (`submit_button()`, which adds no class of ours) and the dialog printed outside any wrapper matched no rule at all. One screen-wide rule now covers every button on every screen, and a gate fails the build if a new button is covered by neither that rule nor one of its own.
 
 = 1.3.12 =
-* Fixed: a suite the verifier folded into line 1 was printed twice on the label. 1.3.5 taught the order to drop the now-redundant second line, but the rate payload - which is what the provider turns into a shipment, and what the label is bought from - kept it, so a UPS label read "123 EXAMPLE ST APT 4B / APT641 / SPRINGFIELD, CO 62701-1234" while the order looked correct. Both now take their address from one shared function, so a fold cannot be applied to one and missed by the other.
+* Fixed: a suite the verifier folded into line 1 was printed twice on the label. 1.3.5 taught the order to drop the now-redundant second line, but the rate payload - which is what the provider turns into a shipment, and what the label is bought from - kept it, so a UPS label read "123 EXAMPLE ST APT 4B / APT4B / SPRINGFIELD, IL 62701-1234" while the order looked correct. Both now take their address from one shared function, so a fold cannot be applied to one and missed by the other.
 
 = 1.3.11 =
 * Fixed: Get Rates and Buy Label sat a pixel or two out of line. Get Rates is the only one of those buttons with a border, and with the default content-box its 30px height plus 1px borders measured 32px against its neighbour's 30px - baseline alignment then turned the difference into a visible offset, and made the shorter button look a shade bigger. Both are border-box now and aligned by their middles, so they share a top and bottom edge exactly.

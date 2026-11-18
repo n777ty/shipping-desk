@@ -321,7 +321,7 @@ $payload = [
 		'line1'        => '123 Example St',
 		'line2'        => 'Apt 4B',
 		'town'         => 'Springfield',
-		'county'       => 'CO',
+		'county'       => 'IL',
 		'postcode'     => '62701',
 		'country_code' => 'US',
 	],
@@ -333,7 +333,7 @@ $fold_validation = [
 	'recommended' => [
 		'line1'    => '123 EXAMPLE ST APT 4B',
 		'town'     => 'SPRINGFIELD',
-		'county'   => 'CO',
+		'county'   => 'IL',
 		'postcode' => '62701-1234',
 	],
 ];
