@@ -720,9 +720,10 @@
     /**
      * One line above the quotes recording what happened to the address.
      *
-     * Shown for every outcome, not just corrections: an intentional skip (the
-     * address already has a ZIP+4) and a feature that is not running would
-     * otherwise look identical.
+     * Shown for every outcome that changed something or could not run: an address
+     * that was never checked must not look checked, and a feature that is not
+     * running must not look clean. Corrections that were not worth a decision
+     * (see validation_needs_decision()) report nothing.
      */
     function renderAddressBadge($row, validation) {
         var $container = $row.find('.shipping-desk-rates-container');
@@ -746,7 +747,7 @@
             // that back, so claiming it here would promise what this screen never sees.
             text = 'Address: matched by ' + source;
         } else if (validation.status === 'skipped') {
-            text = 'Address: already has a ZIP+4, so it was not re-checked';
+            text = 'Address: not checked (verification applies to US addresses only)';
         } else if (validation.status === 'unavailable') {
             text = 'Address: not checked (the validator did not answer)';
         }
@@ -872,10 +873,20 @@
 
         // A pending decision comes back as a decision, not as empty rates: otherwise a
         // reload would look like validation never ran, and the bulk flag would vanish.
-        if (validation && !validation.applied && (validation.status === 'corrected' || validation.status === 'invalid')) {
-            renderAddressChoice($row, validation);
-            flagAddressRow($row);
-            return;
+        //
+        // Whether a correction needed a decision is the server's call (materiality),
+        // and it travels with the record. Records written before that flag existed
+        // keep the old behaviour for the few hours they can still be hydrated.
+        if (validation) {
+            var needsDecision = (typeof validation.needs_decision !== 'undefined')
+                ? !!validation.needs_decision
+                : (validation.status === 'corrected' || validation.status === 'invalid');
+
+            if (!validation.applied && needsDecision) {
+                renderAddressChoice($row, validation);
+                flagAddressRow($row);
+                return;
+            }
         }
 
         if (rates.length) {

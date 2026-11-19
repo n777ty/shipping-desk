@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-17T04:38:43+00:00\n"
+"POT-Creation-Date: 2026-11-19T04:58:39+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: shipping-desk\n"
@@ -78,12 +78,25 @@ msgstr ""
 msgid "Address"
 msgstr ""
 
+#: includes/class-plugin.php:2910
+msgid "Addresses are checked at checkout by %1$s, using the %2$s key."
+msgstr ""
+
+#: includes/class-plugin.php:376
+#: includes/class-plugin.php:377
+msgid "Address verification"
+msgstr ""
+
 #: includes/class-plugin.php:1535
 msgid "Adult signature"
 msgstr ""
 
 #: includes/class-plugin.php:2126
 msgid "Advanced Shipment Tracking is installed: tracking numbers are written to its shipment tracking fields, which feed its emails and the customer account page."
+msgstr ""
+
+#: includes/class-plugin.php:809
+msgid "Also offer suggestions on the checkout page"
 msgstr ""
 
 #: includes/class-plugin.php:2153
@@ -97,6 +110,10 @@ msgstr ""
 #: includes/class-easypost-client.php:563
 #: includes/class-shippo-client.php:429
 msgid "A refund for this label is already pending with the carrier."
+msgstr ""
+
+#: includes/class-plugin.php:786
+msgid "Automatic — EasyPost when a key is set, otherwise the label provider"
 msgstr ""
 
 #: includes/class-plugin.php:156
@@ -288,6 +305,10 @@ msgstr ""
 msgid "EasyPost insures a maximum of $%s per shipment. Lower the declared value or leave insurance off."
 msgstr ""
 
+#: includes/class-plugin.php:2927
+msgid "EasyPost is in %1$s mode while %2$s is in %3$s mode: customers would be shown corrections produced by that EasyPost key."
+msgstr ""
+
 #: includes/class-plugin.php:1185
 msgid "EasyPost is set to Production but has no Production API key. Add one under Settings → Label Provider first."
 msgstr ""
@@ -310,6 +331,10 @@ msgstr ""
 
 #: includes/class-easypost-client.php:300
 msgid "EasyPost needs a street address and a weight before it can rate a shipment."
+msgstr ""
+
+#: includes/class-plugin.php:787
+msgid "EasyPost only"
 msgstr ""
 
 #. translators: %d: HTTP status code
@@ -636,6 +661,18 @@ msgstr ""
 
 #: includes/class-plugin.php:1677
 msgid "No transaction or shipment with that id on the Shippo account and mode shown above."
+msgstr ""
+
+#: includes/class-plugin.php:813
+msgid "No verification happens while the verifier is Off, so there is nothing to offer at checkout."
+msgstr ""
+
+#: includes/class-plugin.php:2898
+msgid "No verifier is available yet: add an EasyPost key, or select a provider that can verify (Shippo can, Veeqo cannot)."
+msgstr ""
+
+#: includes/class-plugin.php:789
+msgid "Off — no address is checked anywhere"
 msgstr ""
 
 #. translators: %s: Shippo transaction status
@@ -966,6 +1003,10 @@ msgstr ""
 msgid "Shipping Desk: this label records insurance for %s, but EasyPost reported no premium for it. Confirm the cover in the EasyPost dashboard before shipping."
 msgstr ""
 
+#: includes/class-plugin.php:2465
+msgid "Shipping Desk supports US destinations only. This order ships to %s, so no rates were requested; use another tool for international labels."
+msgstr ""
+
 #: includes/class-plugin.php:1428
 msgid "Shipping Method"
 msgstr ""
@@ -1103,6 +1144,10 @@ msgstr ""
 msgid "Stored in wp_options; used for all Veeqo API calls."
 msgstr ""
 
+#: includes/helpers.php:430
+msgid "street format corrected"
+msgstr ""
+
 #: includes/helpers.php:206
 msgid "street standardised"
 msgstr ""
@@ -1166,6 +1211,10 @@ msgstr ""
 
 #: includes/class-plugin.php:2825
 msgid "That rate is no longer part of the stored quotes. Get rates again before buying."
+msgstr ""
+
+#: includes/class-plugin.php:788
+msgid "The active label provider only"
 msgstr ""
 
 #: includes/class-shippo-client.php:1055
@@ -1345,6 +1394,10 @@ msgstr ""
 msgid "Upload and Restore"
 msgstr ""
 
+#: includes/class-plugin.php:764
+msgid "US destinations only, including Puerto Rico, Guam, the US Virgin Islands, American Samoa and the Northern Mariana Islands; other countries are left untouched. Checkout is never blocked, and an unreachable verifier costs the sale nothing. One call per unique address per 90 days."
+msgstr ""
+
 #: includes/class-plugin.php:520
 msgid "Used for both EasyPost labels and address validation. Insurance is EasyPost's own and is priced at purchase, not in the quote."
 msgstr ""
@@ -1396,6 +1449,14 @@ msgstr ""
 msgid "Veeqo shipping label refunded/cancelled."
 msgstr ""
 
+#: includes/class-plugin.php:2888
+msgid "Verification is turned off, so neither checkout nor the address gate will ask."
+msgstr ""
+
+#: includes/class-plugin.php:793
+msgid "Verifier"
+msgstr ""
+
 #: includes/class-plugin.php:1517
 msgid "Weight"
 msgstr ""
@@ -1411,6 +1472,10 @@ msgstr ""
 #: includes/class-plugin.php
 #. translators: %s: plugin version, e.g. 1.1.0
 msgid "What's new in Shipping Desk %s"
+msgstr ""
+
+#: includes/class-plugin.php:2916
+msgid "When enabled, addresses would be checked by %1$s, using the %2$s key."
 msgstr ""
 
 #: includes/class-plugin.php:1862

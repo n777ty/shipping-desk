@@ -612,6 +612,11 @@
     cursor: default;
 }
 
+/* A control that cannot do anything right now: dimmed, never hidden. */
+.shipping-desk-screen .shipping-desk-disabled {
+    opacity: 0.55;
+}
+
 /* Address decision panel: shown in the rates cell when a quote needs an address choice. */
 .shipping-desk-wrap .shipping-desk-address-panel {
 	max-width: 520px;

@@ -1,0 +1,178 @@
+/**
+ * Address suggestions on the checkout page.
+ *
+ * Deliberately calm. The suggested address is more precise, not the customer's
+ * mistake: nothing here paints their own address as an error, and nothing labels
+ * the suggestion as "correct" — the verifier matched a postal record, which is a
+ * smaller claim than deliverable. Meaning is carried by the labels ("As you
+ * entered" / "Suggested") and by the change list, so colour is decoration and
+ * the design survives without it.
+ *
+ * The palette is the one the admin decision panel already uses: a warm amber
+ * border for "worth a glance", neutral everything else.
+ *
+ * Scoped to .shipping-desk-checkout-address so a theme is never fought over any
+ * other element on the page.
+ */
+
+.shipping-desk-checkout-address {
+    box-sizing: border-box;
+    margin: 0 0 1.25em;
+    padding: 0.875em 1em;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #3c434a;
+    font-size: 0.9375em;
+    line-height: 1.45;
+}
+
+.shipping-desk-checkout-address *,
+.shipping-desk-checkout-address *::before,
+.shipping-desk-checkout-address *::after {
+    box-sizing: inherit;
+}
+
+.shipping-desk-checkout-address__title {
+    margin: 0 0 0.625em;
+    font-weight: 600;
+}
+
+.shipping-desk-checkout-address__compare {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.625em;
+}
+
+.shipping-desk-checkout-address__original,
+.shipping-desk-checkout-address__suggested {
+    flex: 1 1 13em;
+    min-width: 0;
+    padding: 0.5em 0.75em;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    background: #f6f7f7;
+}
+
+/* The one accent: the same amber the admin panel uses for this decision. */
+.shipping-desk-checkout-address__suggested {
+    border-left: 3px solid #dba617;
+    background: #fffdf6;
+}
+
+.shipping-desk-checkout-address__label {
+    display: block;
+    margin-bottom: 0.25em;
+    color: #50575e;
+    font-size: 0.75em;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.shipping-desk-checkout-address__value {
+    display: block;
+    overflow-wrap: break-word;
+    color: #3c434a;
+}
+
+.shipping-desk-checkout-address__changes {
+    margin: 0.625em 0 0;
+    padding-left: 1.15em;
+    color: #8a5b00;
+    font-size: 0.875em;
+}
+
+.shipping-desk-checkout-address__changes li {
+    margin: 0 0 0.15em;
+}
+
+.shipping-desk-checkout-address__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75em;
+    margin-top: 0.875em;
+}
+
+.shipping-desk-checkout-address__actions .button {
+    margin: 0;
+}
+
+/*
+ * The "keep mine" and "undo" actions are quiet on purpose: a link, not a second
+ * button of equal weight. Not hidden, not greyed out — just not the default.
+ */
+.shipping-desk-checkout-address__keep,
+.shipping-desk-checkout-address__undo {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #2271b1;
+    font: inherit;
+    line-height: 1.4;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.shipping-desk-checkout-address__keep:hover,
+.shipping-desk-checkout-address__undo:hover {
+    text-decoration: none;
+}
+
+.shipping-desk-checkout-address__keep:focus,
+.shipping-desk-checkout-address__undo:focus,
+.shipping-desk-checkout-address__accept:focus {
+    outline: 2px solid #2271b1;
+    outline-offset: 2px;
+}
+
+.shipping-desk-checkout-address.is-accepted {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.625em;
+    padding: 0.625em 0.875em;
+    background: #f6f7f7;
+}
+
+.shipping-desk-checkout-address.is-accepted .shipping-desk-checkout-address__title {
+    margin: 0;
+    font-weight: 400;
+}
+
+/*
+ * Unverifiable address: one amber line, no actions. Nothing is forced and nothing
+ * is called an error — the verifier may simply not know this place yet.
+ */
+.shipping-desk-checkout-address.is-unconfirmed {
+    border-left: 3px solid #dba617;
+    background: #fffdf6;
+}
+
+.shipping-desk-checkout-address.is-unconfirmed .shipping-desk-checkout-address__title {
+    margin: 0;
+    font-weight: 400;
+}
+
+/* Small screens: stacked, original first, no sticky overlay and no height jump. */
+@media (max-width: 599px) {
+    .shipping-desk-checkout-address__compare {
+        display: block;
+    }
+
+    .shipping-desk-checkout-address__original {
+        margin-bottom: 0.5em;
+    }
+
+    .shipping-desk-checkout-address__actions {
+        display: block;
+    }
+
+    .shipping-desk-checkout-address__actions .button {
+        width: 100%;
+        margin-bottom: 0.5em;
+        text-align: center;
+    }
+}

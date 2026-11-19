@@ -105,12 +105,75 @@ helper_same( false, Shipping_Desk_Helpers::has_zip_plus_four( '33434 5844' ), 'a
 helper_same( false, Shipping_Desk_Helpers::has_zip_plus_four( '' ), 'an empty postcode has no +4' );
 helper_same( false, Shipping_Desk_Helpers::has_zip_plus_four( null ), 'a null postcode has no +4' );
 
-helper_section( 'needs_address_validation' );
+/*
+ * A ZIP+4 is a fact about a string, not about the address. There is no
+ * "already validated" shortcut any more (issue #2): the routing base is used to
+ * judge whether a correction is material, and for nothing else.
+ */
+helper_section( 'postcode_route_base' );
 
-helper_same( false, Shipping_Desk_Helpers::needs_address_validation( '33434-5844' ), 'skips an address the checkout already validated' );
-helper_same( true, Shipping_Desk_Helpers::needs_address_validation( '33434' ), 'validates a bare 5-digit ZIP' );
-helper_same( true, Shipping_Desk_Helpers::needs_address_validation( '' ), 'validates a missing postcode' );
-helper_same( true, Shipping_Desk_Helpers::needs_address_validation( 'K1A 0B1' ), 'treats a non-US postcode as needing validation' );
+helper_same( '33434', Shipping_Desk_Helpers::postcode_route_base( '33434' ), 'reads a bare 5-digit ZIP' );
+helper_same( '33434', Shipping_Desk_Helpers::postcode_route_base( '33434-5844' ), 'reads through a hyphenated ZIP+4' );
+helper_same( '33434', Shipping_Desk_Helpers::postcode_route_base( '334345844' ), 'reads through an unpunctuated ZIP+4' );
+helper_same( '33434', Shipping_Desk_Helpers::postcode_route_base( ' 33434-5844 ' ), 'ignores surrounding whitespace' );
+helper_same( '', Shipping_Desk_Helpers::postcode_route_base( '3343' ), 'a truncated ZIP has no routing base' );
+helper_same( '', Shipping_Desk_Helpers::postcode_route_base( 'K1A 0B1' ), 'a non-US postcode has no US routing base' );
+helper_same( '', Shipping_Desk_Helpers::postcode_route_base( '' ), 'an empty postcode has no routing base' );
+helper_same( '', Shipping_Desk_Helpers::postcode_route_base( null ), 'a null postcode has no routing base' );
+
+helper_section( 'normalise_address_text' );
+
+helper_same( '123 MAIN ST', Shipping_Desk_Helpers::normalise_address_text( '123 Main St.' ), 'folds case and punctuation' );
+helper_same( '123 MAIN ST', Shipping_Desk_Helpers::normalise_address_text( '123 main street' ), 'expands a spelled-out suffix' );
+helper_same( '123 MAIN ST APT 5', Shipping_Desk_Helpers::normalise_address_text( '123 Main St, Apartment 5' ), 'expands a unit word' );
+helper_same( '123 MAIN ST APT 5', Shipping_Desk_Helpers::normalise_address_text( '123 MAIN STREET #5' ), 'drops a hash and keeps the number' );
+helper_same( '123 MAIN ST APT 50', Shipping_Desk_Helpers::normalise_address_text( '123 Main St Apt 50' ), 'never folds two unit numbers together' );
+helper_same( '', Shipping_Desk_Helpers::normalise_address_text( '   ' ), 'whitespace normalises to nothing' );
+helper_same( '', Shipping_Desk_Helpers::normalise_address_text( null ), 'null normalises to nothing' );
+
+/*
+ * The one rule both surfaces use to decide whether to interrupt someone. Tiers
+ * are chosen by consequence, not by which field the verifier touched: a
+ * formatting change is free to ignore, a different place is not.
+ */
+helper_section( 'address_change_is_material' );
+
+$address = [
+    'line1'        => '504 Circle Dr',
+    'line2'        => '',
+    'town'         => 'Wharton',
+    'county'       => 'TX',
+    'postcode'     => '77488',
+    'country_code' => 'US',
+];
+
+helper_same( false, Shipping_Desk_Helpers::address_change_is_material( $address, [ 'postcode' => '77488-1234' ] ), 'adding a ZIP+4 is not material' );
+helper_same( false, Shipping_Desk_Helpers::address_change_is_material( [ 'postcode' => '77488-1234' ], [ 'postcode' => '77488' ] ), 'dropping a ZIP+4 is not material' );
+helper_same( false, Shipping_Desk_Helpers::address_change_is_material( $address, [ 'line1' => '504 CIRCLE DR', 'town' => 'WHARTON', 'county' => 'TX' ] ), 'case-only changes are not material' );
+helper_same( false, Shipping_Desk_Helpers::address_change_is_material( $address, [ 'line1' => '504 Circle Drive' ] ), 'a spelled-out street suffix is not material' );
+helper_same( true, Shipping_Desk_Helpers::address_change_is_material( $address, [ 'line1' => '504 Circle Street' ] ), 'a different street type is material' );
+helper_same( false, Shipping_Desk_Helpers::address_change_is_material( $address, [ 'line2' => 'Apt 5' ] ), 'a suite appearing on line 2 alone is not material' );
+helper_same( false, Shipping_Desk_Helpers::address_change_is_material( $address, [] ), 'an empty recommendation changes nothing' );
+helper_same( false, Shipping_Desk_Helpers::address_change_is_material( $address, [ 'line1' => '504 CIRCLE DR', 'postcode' => '77488-1234', 'country_code' => 'US' ] ), 'a full standardisation of the same place is not material' );
+
+$suite = [
+    'line1'        => '123 Main St',
+    'line2'        => 'Apt 5',
+    'town'         => 'Wharton',
+    'county'       => 'TX',
+    'postcode'     => '77488',
+    'country_code' => 'US',
+];
+helper_same( false, Shipping_Desk_Helpers::address_change_is_material( $suite, [ 'line1' => '123 MAIN ST APT 5', 'line2' => '' ] ), 'a suite folded into line 1 is not material' );
+helper_same( false, Shipping_Desk_Helpers::address_change_is_material( [ 'line1' => '123 Main St', 'line2' => '', 'postcode' => '77488' ], [ 'line2' => 'Apt 5' ] ), 'a suite moved onto line 2 is not material' );
+
+helper_same( true, Shipping_Desk_Helpers::address_change_is_material( $address, [ 'postcode' => '77489' ] ), 'a different routing base is material' );
+helper_same( true, Shipping_Desk_Helpers::address_change_is_material( $address, [ 'town' => 'El Campo' ] ), 'a different city is material' );
+helper_same( true, Shipping_Desk_Helpers::address_change_is_material( $address, [ 'county' => 'LA' ] ), 'a different state is material' );
+helper_same( true, Shipping_Desk_Helpers::address_change_is_material( $address, [ 'line1' => '506 Circle Dr' ] ), 'a different street number is material' );
+helper_same( true, Shipping_Desk_Helpers::address_change_is_material( $address, [ 'line1' => '504 Circle Dr Apt 5' ] ), 'a suite the verifier added is material' );
+helper_same( true, Shipping_Desk_Helpers::address_change_is_material( $address, [ 'country_code' => 'CA' ] ), 'a different country is material' );
+helper_same( true, Shipping_Desk_Helpers::address_change_is_material( [ 'postcode' => '' ], [ 'postcode' => '77488' ] ), 'filling in a missing postcode is material' );
 
 /*
  * Wording shown next to a validator suggestion. Shippo names the fields it
@@ -119,7 +182,7 @@ helper_same( true, Shipping_Desk_Helpers::needs_address_validation( 'K1A 0B1' ),
 helper_section( 'describe_address_changes' );
 
 helper_same(
-    [ 'ZIP+4 added', 'street standardised', 'suite moved to line 2' ],
+    [ 'ZIP+4 added', 'street format corrected', 'suite moved to line 2' ],
     Shipping_Desk_Helpers::describe_address_changes( [ 'postal_code', 'address_line_1', 'address_line_2' ] ),
     'maps Shippo field names to wording'
 );

@@ -27,6 +27,8 @@ delete_option( 'shipping_desk_complete_order_on_label' );
     delete_option( 'shipping_desk_easypost_api_key' );
     delete_option( 'shipping_desk_easypost_key_migrated' );
     delete_option( 'shipping_desk_provider_defaulted' );
+    delete_option( 'shipping_desk_checkout_validation' );
+    delete_option( 'shipping_desk_verifier' );
     delete_option( 'shipping_desk_from_address' );
     delete_option( 'shipping_desk_printnode_api_key' );
     delete_option( 'shipping_desk_printnode_printer_id' );

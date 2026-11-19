@@ -157,13 +157,14 @@ class Shipping_Desk_Helpers {
     }
 
     /**
-     * Does this postcode carry a US ZIP+4 route code?
+     * Does this postcode look like a US ZIP+4?
      *
-     * The checkout already validates addresses and writes back the +4 segment
-     * (`33434` -> `33434-5844`), and a `+4` only comes back when the house number
-     * and street matched a delivery point. So the presence of +4 is a free,
-     * local signal that an address has already been standardised — which is what
-     * decides whether Shippo's paid validation call is worth making.
+     * A test of the string, never of the address. Nine digits in a USPS shape do
+     * not mean a verifier produced them: customers type them, autofill supplies
+     * them from map data that is not CASS-certified, and a street edited after
+     * validation keeps the old route code. Kept for display ("already carries a
+     * +4") and for comparing routing bases — never as a reason to skip
+     * verification. That skip is what issue #2 removed.
      *
      * Both spellings count: `33434-5844` and the unpunctuated `334345844`.
      *
@@ -177,17 +178,240 @@ class Shipping_Desk_Helpers {
     }
 
     /**
-     * Is this address a candidate for validation before rate shopping?
+     * The 5-digit routing base of a postcode, or '' when there isn't one.
      *
-     * Only addresses without a ZIP+4 are interesting: anything else has already
-     * been through the checkout validator. PO boxes and rural routes legitimately
-     * have no +4, so they are validated every time — the right side to err on.
+     * `33434`, `33434-5844` and `334345844` all answer `33434`. That is the part
+     * a verifier can disagree about; the +4 only refines the same place, so an
+     * added or revised route code is not a correction worth interrupting anyone
+     * for.
      *
      * @param string $postcode Postcode as entered.
+     * @return string
+     */
+    public static function postcode_route_base( $postcode ) {
+        $digits = preg_replace( '/\D+/', '', (string) $postcode );
+        if ( ! is_string( $digits ) || strlen( $digits ) < 5 ) {
+            return '';
+        }
+
+        return substr( $digits, 0, 5 );
+    }
+
+    /**
+     * Comparable form of an address line.
+     *
+     * Folds only the differences a verifier makes for its own reasons — case,
+     * punctuation, whitespace and the usual street/unit abbreviations — so that
+     * "123 Main St." and "123 MAIN STREET" compare equal.
+     *
+     * Deliberately leaves numbers alone: "Apt 5" and "Apt 50" must never fold
+     * together, and neither must "Unit 4" and "Unit 4B".
+     *
+     * @param string $text Address line or locality.
+     * @return string
+     */
+    public static function normalise_address_text( $text ) {
+        $text = strtoupper( (string) $text );
+
+        // "#5" and "Apt 5" are the same unit; US customers use both.
+        $text  = preg_replace( '/\s*#\s*/', ' APT ', $text );
+        $text  = preg_replace( '/[^A-Z0-9]+/', ' ', (string) $text );
+        $words = preg_split( '/\s+/', trim( (string) $text ) );
+
+        if ( ! is_array( $words ) ) {
+            return '';
+        }
+
+        $map = [
+            'STREET'      => 'ST',
+            'ROAD'        => 'RD',
+            'AVENUE'      => 'AVE',
+            'AV'          => 'AVE',
+            'BOULEVARD'   => 'BLVD',
+            'DRIVE'       => 'DR',
+            'LANE'        => 'LN',
+            'COURT'       => 'CT',
+            'PLACE'       => 'PL',
+            'TERRACE'     => 'TER',
+            'PARKWAY'     => 'PKWY',
+            'HIGHWAY'     => 'HWY',
+            'CIRCLE'      => 'CIR',
+            'SQUARE'      => 'SQ',
+            'TRAIL'       => 'TRL',
+            'NORTH'       => 'N',
+            'SOUTH'       => 'S',
+            'EAST'        => 'E',
+            'WEST'        => 'W',
+            'NORTHEAST'   => 'NE',
+            'NORTHWEST'   => 'NW',
+            'SOUTHEAST'   => 'SE',
+            'SOUTHWEST'   => 'SW',
+            'APARTMENT'   => 'APT',
+            'SUITE'       => 'STE',
+            'FLOOR'       => 'FL',
+            'BUILDING'    => 'BLDG',
+            'ROUTE'       => 'RTE',
+        ];
+
+        $normalised = [];
+        foreach ( $words as $word ) {
+            if ( '' === $word ) {
+                continue;
+            }
+            $normalised[] = isset( $map[ $word ] ) ? $map[ $word ] : $word;
+        }
+
+        return implode( ' ', $normalised );
+    }
+
+    /**
+     * Which fields differ between what was entered and what a verifier matched.
+     *
+     * Uses the same vocabulary as the provider clients (`address_line_1`,
+     * `postal_code`, …) so the operator and the customer read the same phrases.
+     *
+     * Case-insensitive, because a change of case is not a correction. A field the
+     * verifier did not return is not a change either: blanking a value it said
+     * nothing about would delete real data.
+     *
+     * Needed because the checkout's address book stores what the verifier said
+     * about a *place*; the verdict and the wording belong to the question. Judging
+     * a cached answer against the address in hand is what keeps one customer's
+     * spelling from deciding what the next customer is told.
+     *
+     * @param array $original    Address as entered.
+     * @param array $recommended Address the verifier matched.
+     * @return string[]
+     */
+    public static function address_changes_between( array $original, array $recommended ) {
+        $map = [
+            'line1'        => 'address_line_1',
+            'line2'        => 'address_line_2',
+            'town'         => 'city_locality',
+            'county'       => 'state_province',
+            'postcode'     => 'postal_code',
+            'country_code' => 'country_code',
+        ];
+
+        $changes = [];
+        foreach ( $map as $field => $label ) {
+            $before = isset( $original[ $field ] ) && is_scalar( $original[ $field ] )
+                ? trim( (string) $original[ $field ] )
+                : '';
+            $after  = isset( $recommended[ $field ] ) && is_scalar( $recommended[ $field ] )
+                ? trim( (string) $recommended[ $field ] )
+                : '';
+
+            if ( '' === $after || 0 === strcasecmp( $before, $after ) ) {
+                continue;
+            }
+
+            $changes[] = $label;
+        }
+
+        return $changes;
+    }
+
+    /**
+     * Would ignoring this correction send the parcel somewhere else?
+     *
+     * The admin gate and the checkout suggestion both ask this question, so the
+     * two surfaces cannot disagree about what counts as a real change.
+     *
+     * A field the verifier did not return is not a change — that is the same
+     * rule apply_address_correction() follows, and blanking a field because it
+     * came back empty would delete real data.
+     *
+     * Line 2 never qualifies on its own. A suite folded into line 1 or moved
+     * between lines is worth reporting, but not worth blocking a quote for: the
+     * label prints what was quoted either way.
+     *
+     * @param array $original    Address as it stands.
+     * @param array $recommended Fields the verifier returned.
      * @return bool
      */
-    public static function needs_address_validation( $postcode ) {
-        return ! self::has_zip_plus_four( $postcode );
+    public static function address_change_is_material( array $original, array $recommended ) {
+        $field = function ( array $source, $key ) {
+            return isset( $source[ $key ] ) && is_scalar( $source[ $key ] )
+                ? trim( (string) $source[ $key ] )
+                : '';
+        };
+
+        // Country decides which postal system every other field belongs to.
+        $before = strtoupper( $field( $original, 'country_code' ) );
+        $after  = strtoupper( $field( $recommended, 'country_code' ) );
+        if ( '' !== $after && $before !== $after ) {
+            return true;
+        }
+
+        // A different routing base is a different place; a different +4 is not.
+        $before = $field( $original, 'postcode' );
+        $after  = $field( $recommended, 'postcode' );
+        if ( '' !== $after && 0 !== strcasecmp( $before, $after ) ) {
+            $base_before = self::postcode_route_base( $before );
+            $base_after  = self::postcode_route_base( $after );
+
+            if ( '' === $base_before || '' === $base_after ) {
+                // A postcode we cannot reduce to a US base (a non-US one, or an
+                // incomplete entry being filled in): any change is material.
+                return true;
+            }
+            if ( $base_before !== $base_after ) {
+                return true;
+            }
+        }
+
+        foreach ( [ 'town', 'county' ] as $key ) {
+            $before = self::normalise_address_text( $field( $original, $key ) );
+            $after  = self::normalise_address_text( $field( $recommended, $key ) );
+            if ( '' !== $after && $before !== $after ) {
+                return true;
+            }
+        }
+
+        // Line 1, with any suite carried into or out of it folded away first.
+        // "123 Main St" plus "Apt 5" and "123 Main St APT 5" describe the same
+        // building; only the suite's position differs, and position is not
+        // material.
+        $before = self::normalise_address_text( $field( $original, 'line1' ) );
+        $after  = self::normalise_address_text( $field( $recommended, 'line1' ) );
+
+        $units_before = $field( $original, 'line2' );
+        $units_after  = $field( $recommended, 'line2' );
+
+        $before = self::strip_secondary( $before, $units_before, $units_after );
+        $after  = self::strip_secondary( $after, $units_before, $units_after );
+
+        if ( '' !== $after && $before !== $after ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Remove a secondary-address fragment from a normalised line.
+     *
+     * A verifier moves a suite between lines (see address_line_carried()); the
+     * building is the same either way. Comparing the two shapes without this
+     * would report every fold as a different street.
+     *
+     * @param string $line  Normalised first line.
+     * @param string ...$units Secondary lines to remove, in either shape.
+     * @return string
+     */
+    private static function strip_secondary( $line, ...$units ) {
+        foreach ( $units as $unit ) {
+            $unit = self::normalise_address_text( $unit );
+            if ( '' === $unit || '' === $line ) {
+                continue;
+            }
+
+            $line = preg_replace( '/(^|\s)' . preg_quote( $unit, '/' ) . '($|\s)/', ' ', $line );
+            $line = trim( (string) preg_replace( '/\s+/', ' ', (string) $line ) );
+        }
+
+        return $line;
     }
 
     /**
@@ -203,7 +427,7 @@ class Shipping_Desk_Helpers {
     public static function describe_address_changes( array $changed ) {
         $labels = [
             'postal_code'    => __( 'ZIP+4 added', 'shipping-desk' ),
-            'address_line_1' => __( 'street standardised', 'shipping-desk' ),
+            'address_line_1' => __( 'street format corrected', 'shipping-desk' ),
             'address_line_2' => __( 'suite moved to line 2', 'shipping-desk' ),
             'address_line_2_folded' => __( 'suite folded into line 1', 'shipping-desk' ),
             'city_locality'  => __( 'city corrected', 'shipping-desk' ),
@@ -225,6 +449,64 @@ class Shipping_Desk_Helpers {
         }
 
         return array_values( array_unique( $phrases ) );
+    }
+
+    /**
+     * Add the display strings an address panel needs.
+     *
+     * Formatting is done once, server-side, so neither the operator's screen nor
+     * the customer's has anything to reconstruct, and both read the same words.
+     *
+     * @param array  $validation Normalised validator result.
+     * @param string $source     Verifier that answered: 'easypost' or 'shippo'.
+     * @return array
+     */
+    public static function describe_address_validation( array $validation, $source = 'shippo' ) {
+        $changed     = isset( $validation['changed'] ) && is_array( $validation['changed'] ) ? $validation['changed'] : [];
+        $original    = isset( $validation['original'] ) && is_array( $validation['original'] ) ? $validation['original'] : [];
+        $recommended = isset( $validation['recommended'] ) && is_array( $validation['recommended'] ) ? $validation['recommended'] : [];
+
+        // What to write if the customer accepts, computed here with the same rule
+        // the admin gate uses: a suite the verifier folded into line 1 must clear
+        // line 2, or the browser would print the apartment twice. Empty when there
+        // is nothing to apply, so a caller can never write a half-answer.
+        $effective = empty( $recommended ) ? [] : self::apply_address_correction( $original, $recommended );
+
+        /*
+         * The verifiers disagree about which way a suite travels: EasyPost folds
+         * line 2 into line 1, Shippo can move it out to line 2. The field name only
+         * says "line 2 changed", so the direction has to be read from the result —
+         * otherwise a fold is announced as "suite moved to line 2" while the
+         * suggestion plainly shows nothing on line 2.
+         */
+        $line2_before = isset( $original['line2'] ) && is_scalar( $original['line2'] ) ? trim( (string) $original['line2'] ) : '';
+        $line2_after  = isset( $effective['line2'] ) && is_scalar( $effective['line2'] ) ? trim( (string) $effective['line2'] ) : '';
+        $line1_after  = isset( $effective['line1'] ) && is_scalar( $effective['line1'] ) ? (string) $effective['line1'] : '';
+
+        $position = array_search( 'address_line_2', $changed, true );
+        if ( false !== $position
+            && '' !== $line2_before
+            && '' === $line2_after
+            && self::address_line_carried( $line1_after, $line2_before )
+        ) {
+            // Same word the order note uses, so the two surfaces cannot describe
+            // the same correction differently.
+            $changed[ $position ] = 'address_line_2_folded';
+        }
+
+        $phrases = self::describe_address_changes( $changed );
+
+        $validation['summary']          = implode( ', ', $phrases );
+        $validation['changes']          = $phrases;
+        $validation['apply']            = $effective;
+        $validation['original_line']    = self::format_address( $original );
+        $validation['recommended_line'] = empty( $effective ) ? '' : self::format_address( $effective );
+
+        // Which verifier answered. Two can be configured, and "test mode has no
+        // validator" and "the address is clean" would otherwise look identical.
+        $validation['validator'] = 'easypost' === $source ? 'easypost' : 'shippo';
+
+        return $validation;
     }
 
     /**
@@ -626,10 +908,61 @@ class Shipping_Desk_Helpers {
         return '';
     }
 
+    /**
+     * Which country this order is actually going to.
+     *
+     * Shipping address first, then billing (a virtual order has no shipping
+     * address), then the store's base country. Never a constant: a worldwide
+     * store must not have its orders described as US ones, and a US-only plugin
+     * must say so rather than invent an address that quotes cleanly.
+     *
+     * @param WC_Order $order Order being quoted.
+     * @return string Upper-case ISO country code, or 'US' when nothing else is known.
+     */
+    public static function destination_country( WC_Order $order ) {
+        foreach ( [ $order->get_shipping_country(), $order->get_billing_country() ] as $candidate ) {
+            $candidate = strtoupper( trim( (string) $candidate ) );
+            if ( '' !== $candidate ) {
+                return $candidate;
+            }
+        }
+
+        $base = explode( ':', (string) get_option( 'woocommerce_default_country', '' ) );
+        $base = strtoupper( trim( (string) reset( $base ) ) );
+
+        return '' !== $base ? $base : 'US';
+    }
+
+    /**
+     * Is this destination within the plugin's shipping scope?
+     *
+     * One list, one place. The rate payload, the admin address gate and the
+     * checkout validator all ask this, so "supported" cannot mean three
+     * different things on three screens.
+     *
+     * The territories belong here: they carry US ZIP codes, USPS prices them as
+     * domestic, WooCommerce lists them as US states, and EasyPost states that
+     * "U.S. territories are treated as domestic for verification purposes".
+     * Refusing them would have been a regression, not a safety measure.
+     *
+     * @param string $country_code ISO country code.
+     * @return bool
+     */
+    public static function is_supported_destination( $country_code ) {
+        $supported = [ 'US', 'PR', 'GU', 'VI', 'AS', 'MP' ];
+
+        return in_array( strtoupper( trim( (string) $country_code ) ), $supported, true );
+    }
+
     public static function build_shipping_desk_rate_payload( WC_Order $order, array $box, $total_weight_oz, $liability_amount = 0 ) {
+        // The destination, not a constant. Callers gate on
+        // is_supported_destination() before quoting, so a non-US order never
+        // reaches a provider dressed as a US one (issue #1).
+        $country = self::destination_country( $order );
+
         $shipping_address = [
             'name'         => $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name(),
-            'phone'        => self::normalise_phone( self::recipient_phone( $order ), 'US' ),
+            'phone'        => self::normalise_phone( self::recipient_phone( $order ), $country ),
             'email'        => $order->get_billing_email(),
             'line1'        => $order->get_shipping_address_1(),
             // Line 2 was never sent before, so a suite or apartment number lived
@@ -639,7 +972,7 @@ class Shipping_Desk_Helpers {
             'line2'        => $order->get_shipping_address_2(),
             'town'         => $order->get_shipping_city(),
             'postcode'     => $order->get_shipping_postcode(),
-            'country_code' => 'US',
+            'country_code' => $country,
             'county'       => $order->get_shipping_state(),
         ];
 
@@ -695,9 +1028,11 @@ class Shipping_Desk_Helpers {
             'box_h'        => '_shipping_desk_box_height',
             'box_weight'   => '_shipping_desk_box_weight_oz',
             'refunded'     => '_shipping_desk_label_refunded',
-            // Verdict for a specific address, keyed by its hash. A clean address
-            // never gains a ZIP+4, so without this the same order would be checked
-            // again (and billed again) every day it stayed unshipped.
+            // Verdict for a specific address, keyed by its hash. Get Rates is
+            // clicked again after every box, signature or insurance change, and
+            // validation is billed per call. Scoped to this order and this exact
+            // address: editing the address changes the hash and earns a new
+            // verdict, so a stale one can never follow the parcel.
             'address_checked' => '_shipping_desk_address_checked',
             // What the label cost, as recorded at purchase. Kept for the refund rule
             // (only a value we wrote is cleared) and for support questions.

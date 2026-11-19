@@ -336,6 +336,16 @@ class Shipping_Desk_Plugin {
         register_setting( 'shipping_desk_api_settings', 'shipping_desk_easypost_test_api_key' );
         register_setting( 'shipping_desk_api_settings', 'shipping_desk_easypost_live_api_key' );
 
+        // Checkout address validation: one switch and one verifier choice, both in
+        // the provider form because they decide who sees the customer's address,
+        // not how a label is bought.
+        register_setting( 'shipping_desk_api_settings', 'shipping_desk_checkout_validation', [ 'sanitize_callback' => function ( $value ) {
+            return $value ? 1 : 0;
+        } ] );
+        register_setting( 'shipping_desk_api_settings', 'shipping_desk_verifier', [ 'sanitize_callback' => function ( $value ) {
+            return in_array( $value, [ 'auto', 'easypost', 'provider', 'off' ], true ) ? $value : 'auto';
+        } ] );
+
         register_setting( 'shipping_desk_api_settings', 'shipping_desk_veeqo_api_key' );
         // The legacy single EasyPost key is deliberately NOT registered. It has no field on
         // this page, and any option registered to a settings group is set to null whenever a
@@ -354,8 +364,17 @@ class Shipping_Desk_Plugin {
         add_settings_field( 'shipping_desk_easypost_mode_field', __( 'EasyPost mode', 'shipping-desk' ), [ $this, 'render_easypost_mode_field' ], 'shipping_desk_api_settings', 'shipping_desk_provider_section' );
         add_settings_field( 'shipping_desk_easypost_keys_field', __( 'EasyPost API keys', 'shipping-desk' ), [ $this, 'render_easypost_keys_field' ], 'shipping_desk_api_settings', 'shipping_desk_provider_section' );
 
-        add_settings_section( 'shipping_desk_api_section', __( 'Veeqo API Settings', 'shipping-desk' ), '__return_false', 'shipping_desk_api_settings' );
-        add_settings_field( 'shipping_desk_veeqo_api_key_field', __( 'Veeqo API Key', 'shipping-desk' ), [ $this, 'render_api_key_field' ], 'shipping_desk_api_settings', 'shipping_desk_api_section' );
+        // One provider's key is not more special than another's, and Veeqo has no
+        // mode of its own to group with: it belongs beside the Shippo and EasyPost
+        // keys, not under a heading that makes it look like a separate feature.
+        add_settings_field( 'shipping_desk_veeqo_api_key_field', __( 'Veeqo API Key', 'shipping-desk' ), [ $this, 'render_api_key_field' ], 'shipping_desk_api_settings', 'shipping_desk_provider_section' );
+
+        // Its own section, last on the form. Verification serves the admin address
+        // gate and the checkout whichever provider buys the labels, so sitting
+        // between the EasyPost keys and the Veeqo key made it read as an EasyPost
+        // option - which it is not.
+        add_settings_section( 'shipping_desk_verification_section', __( 'Address verification', 'shipping-desk' ), [ $this, 'render_verification_section' ], 'shipping_desk_api_settings' );
+        add_settings_field( 'shipping_desk_checkout_validation_field', __( 'Address verification', 'shipping-desk' ), [ $this, 'render_checkout_validation_field' ], 'shipping_desk_api_settings', 'shipping_desk_verification_section' );
 
         add_settings_section( 'shipping_desk_from_address_section', __( 'From Address (Optional)', 'shipping-desk' ), '__return_false', 'shipping_desk_from_settings' );
         add_settings_field( 'shipping_desk_from_address_field', __( 'Shipment Origin', 'shipping-desk' ), [ $this, 'render_from_address_field' ], 'shipping_desk_from_settings', 'shipping_desk_from_address_section' );
@@ -401,6 +420,8 @@ class Shipping_Desk_Plugin {
             'shipping_desk_easypost_api_key',
             'shipping_desk_easypost_key_migrated',
             'shipping_desk_provider_defaulted',
+            'shipping_desk_checkout_validation',
+            'shipping_desk_verifier',
             'shipping_desk_from_address',
             'shipping_desk_boxes',
             'shipping_desk_print_mode',
@@ -730,6 +751,70 @@ class Shipping_Desk_Plugin {
             printf( '<div class="notice notice-warning inline"><p>%s</p></div>', esc_html( $warning ) );
         }
     }
+
+    /**
+     * Section intro for the verification block.
+     *
+     * The scope belongs here rather than beside the checkbox: it describes what
+     * the whole block does and does not cover.
+     */
+    public function render_verification_section() {
+        ?>
+        <p class="description">
+            <?php esc_html_e( 'US destinations only, including Puerto Rico, Guam, the US Virgin Islands, American Samoa and the Northern Mariana Islands; other countries are left untouched. Checkout is never blocked, and an unreachable verifier costs the sale nothing. One call per unique address per 90 days.', 'shipping-desk' ); ?>
+        </p>
+        <?php
+    }
+
+    /**
+     * Who verifies, and whether customers see it.
+     *
+     * Two questions, not one: "does anything get verified, and by whom" above,
+     * "does the customer see it at checkout" below. Verifier Off is not the same
+     * as unticking the checkbox — Off also stops the admin address gate, and is
+     * the only way to switch verification off without deleting the key. Hence the
+     * wording, and the disabled checkbox when Off is selected: a ticked box that
+     * can never do anything is a lie on screen.
+     */
+    public function render_checkout_validation_field() {
+        $enabled  = $this->checkout_validation_enabled();
+        $choice   = $this->verifier_choice();
+        $summary  = $this->verifier_summary();
+        $disabled = 'off' === $choice;
+
+        $options = [
+            'auto'     => __( 'Automatic — EasyPost when a key is set, otherwise the label provider', 'shipping-desk' ),
+            'easypost' => __( 'EasyPost only', 'shipping-desk' ),
+            'provider' => __( 'The active label provider only', 'shipping-desk' ),
+            'off'      => __( 'Off — no address is checked anywhere', 'shipping-desk' ),
+        ];
+        ?>
+        <p>
+            <label for="shipping_desk_verifier"><strong><?php esc_html_e( 'Verifier', 'shipping-desk' ); ?></strong></label><br />
+            <select id="shipping_desk_verifier" name="shipping_desk_verifier">
+                <?php foreach ( $options as $value => $label ) : ?>
+                    <option value="<?php echo esc_attr( $value ); ?>" <?php selected( $choice, $value ); ?>>
+                        <?php echo esc_html( $label ); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+        <p class="description"><?php echo esc_html( $summary['note'] ); ?></p>
+        <?php if ( '' !== $summary['warning'] ) : ?>
+            <div class="notice notice-warning inline"><p><?php echo esc_html( $summary['warning'] ); ?></p></div>
+        <?php endif; ?>
+        <p>
+            <label<?php echo $disabled ? ' class="shipping-desk-disabled"' : ''; ?>>
+                <input type="checkbox" name="shipping_desk_checkout_validation" value="1" <?php checked( $enabled ); ?> <?php disabled( $disabled ); ?> />
+                <?php esc_html_e( 'Also offer suggestions on the checkout page', 'shipping-desk' ); ?>
+            </label>
+        </p>
+        <?php if ( $disabled ) : ?>
+            <p class="description"><?php esc_html_e( 'No verification happens while the verifier is Off, so there is nothing to offer at checkout.', 'shipping-desk' ); ?></p>
+        <?php endif; ?>
+        <?php
+    }
+
 
     /**
      * Check the stored EasyPost keys against the slot they sit in.
@@ -1121,8 +1206,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.3.15' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.3.15', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.4.0' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.4.0', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -2367,6 +2452,24 @@ class Shipping_Desk_Plugin {
         if ( ! $order ) {
             wp_send_json_error( [ 'message' => __( 'Order not found.', 'shipping-desk' ) ], 404 );
         }
+        // Shipping Desk ships within the US. Refusing is the honest answer: a
+        // foreign address described as a US one quoted a rate that could not be
+        // bought, and then tripped an address gate over an address that was valid
+        // for its own country. See issue #1.
+        $destination = Shipping_Desk_Helpers::destination_country( $order );
+        if ( ! Shipping_Desk_Helpers::is_supported_destination( $destination ) ) {
+            wp_send_json_error(
+                [
+                    'message' => sprintf(
+                        /* translators: %s: ISO country code of the order's destination. */
+                        __( 'Shipping Desk supports US destinations only. This order ships to %s, so no rates were requested; use another tool for international labels.', 'shipping-desk' ),
+                        $destination
+                    ),
+                ],
+                400
+            );
+        }
+
         $box = ( isset( $_POST['box'] ) && is_array( $_POST['box'] ) ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['box'] ) ) : [];
         $total_weight = isset( $_POST['total_weight'] ) ? floatval( $_POST['total_weight'] ) : 0.0;
         if ( $total_weight <= 0 ) {
@@ -2404,20 +2507,30 @@ class Shipping_Desk_Plugin {
         $choice             = isset( $_POST['address_choice'] ) ? sanitize_key( wp_unslash( $_POST['address_choice'] ) ) : '';
         $wants_order_update = ! empty( $_POST['update_order_address'] );
 
-        $validator = $this->address_validator( $client );
+        $validator = $this->validator_client( $client );
 
         if ( null !== $validator ) {
             list( $validator_name, $validator_client ) = $validator;
             $to_address = isset( $payload['to_address'] ) && is_array( $payload['to_address'] ) ? $payload['to_address'] : [];
-            $postcode   = isset( $to_address['postcode'] ) ? $to_address['postcode'] : '';
+            $country    = isset( $to_address['country_code'] ) ? (string) $to_address['country_code'] : '';
 
-            // Only addresses the checkout never verified: a ZIP+4 comes back from
-            // validation, so its presence means this order has already been through
-            // it. Everything else would be a paid call for a known-good address.
-            if ( ! empty( $to_address ) && Shipping_Desk_Helpers::needs_address_validation( $postcode ) ) {
+            // Always verify. A ZIP+4 is not evidence that anything checked this
+            // address (issue #2) — what keeps the bill down is the cache inside
+            // validate_recipient_address(), not the shape of the postcode.
+            //
+            // Verification is a US-only capability: `zip4` is US-only at EasyPost,
+            // international AVS is a separate premium service, and this plugin does
+            // not ship internationally anyway. Anything else is reported below,
+            // never sent to a paid endpoint and never guessed at.
+            if ( ! empty( $to_address ) && Shipping_Desk_Helpers::is_supported_destination( $country ) ) {
                 $address_validation = $this->validate_recipient_address( $order, $to_address, $validator_client );
                 $address_validation = $this->describe_validation( $address_validation, $validator_name );
-                $needs_choice       = in_array( $address_validation['status'], [ 'corrected', 'invalid' ], true );
+                $needs_choice       = $this->validation_needs_decision( $address_validation );
+
+                // Carried into the stored record so a reload decides the same way
+                // the live request did: a correction nobody had to act on must not
+                // reopen as a pending decision hours later.
+                $address_validation['needs_decision'] = $needs_choice;
 
                 if ( $needs_choice && in_array( $choice, [ 'suggested', 'original' ], true ) ) {
                     $this->apply_address_choice( $payload, $address_validation, $choice );
@@ -2468,11 +2581,11 @@ class Shipping_Desk_Plugin {
                     ] );
                 }
             } elseif ( ! empty( $to_address ) ) {
-                // Skipped because the address already carries a ZIP+4. Reported
-                // rather than silent: otherwise an intentional skip and a feature
-                // that is not running look exactly the same on screen.
+                // Destination outside the plugin's scope. Reported rather than
+                // silent: an address that was never checked must not look checked.
                 $address_validation = [
                     'status'        => 'skipped',
+                    'reason'        => 'country_not_supported',
                     'original_line' => Shipping_Desk_Helpers::format_address( $to_address ),
                 ];
             }
@@ -2645,45 +2758,186 @@ class Shipping_Desk_Plugin {
      * @return array
      */
     protected function describe_validation( array $validation, $source = 'shippo' ) {
-        $changed     = isset( $validation['changed'] ) && is_array( $validation['changed'] ) ? $validation['changed'] : [];
+        return Shipping_Desk_Helpers::describe_address_validation( $validation, $source );
+    }
+
+    /**
+     * Does this verdict need the operator to choose?
+     *
+     * Not every correction is worth stopping a quote for. A verifier standardises
+     * everything it matches — upper case, abbreviation, ZIP+4 — so treating
+     * "corrected" as "ask the operator" put a mandatory click on every order whose
+     * address had never been through checkout validation. That is the shape the
+     * old ZIP+4 skip was hiding, and it is why the skip now has to be a real rule
+     * rather than a postcode test (issue #2).
+     *
+     * A decision is required only when ignoring the suggestion could send the
+     * parcel somewhere else: an invalid address, or a material change. Everything
+     * else is reported in the badge and the address is used as entered.
+     *
+     * @param array $validation Normalised result carrying `original` and `recommended`.
+     * @return bool
+     */
+    protected function validation_needs_decision( array $validation ) {
+        $status = isset( $validation['status'] ) ? (string) $validation['status'] : '';
+
+        if ( 'invalid' === $status ) {
+            return true;
+        }
+
+        if ( 'corrected' !== $status ) {
+            return false;
+        }
+
         $original    = isset( $validation['original'] ) && is_array( $validation['original'] ) ? $validation['original'] : [];
         $recommended = isset( $validation['recommended'] ) && is_array( $validation['recommended'] ) ? $validation['recommended'] : [];
 
-        $validation['summary']          = implode( ', ', Shipping_Desk_Helpers::describe_address_changes( $changed ) );
-        $validation['original_line']    = Shipping_Desk_Helpers::format_address( $original );
-        $validation['recommended_line'] = Shipping_Desk_Helpers::format_address( $recommended );
+        if ( empty( $recommended ) ) {
+            return false;
+        }
 
-        // Which verifier answered. Two can be configured, and "test mode has no
-        // validator" and "the address is clean" would otherwise look identical.
-        $validation['validator'] = 'easypost' === $source ? 'easypost' : 'shippo';
+        return Shipping_Desk_Helpers::address_change_is_material( $original, $recommended );
+    }
 
-        return $validation;
+
+    /**
+     * Which verifier the operator chose.
+     *
+     * @return string 'auto', 'easypost', 'provider' or 'off'.
+     */
+    public function verifier_choice() {
+        $choice = (string) get_option( 'shipping_desk_verifier', 'auto' );
+
+        return in_array( $choice, [ 'auto', 'easypost', 'provider', 'off' ], true ) ? $choice : 'auto';
     }
 
     /**
      * The address validator to use, with a name for display, or null for none.
      *
-     * EasyPost wins when the selected EasyPost key is set: it is independent of the
-     * label provider and returns the standardised address, which the provider's own
-     * validator does not always do. One mode and one key govern EasyPost here, so
-     * the verifier uses exactly the key the operator selected — there is no separate
-     * verification key and no cross-slot fallback. Otherwise the provider validates
-     * itself if it can — Shippo can, Veeqo cannot.
+     * One rule for both surfaces: the admin gate and the checkout endpoint both
+     * call this, so a customer and an operator can never be told different things
+     * about the same address.
      *
-     * @param object $provider_client Client for the active label provider.
+     * On `auto` EasyPost wins when a key is set: it is independent of the label
+     * provider and returns the standardised address, which the provider's own
+     * validator does not always do. Otherwise the provider validates itself if it
+     * can — Shippo can, Veeqo cannot. `provider` forces that order, `easypost`
+     * refuses to fall back to it, and `off` means never ask.
+     *
+     * There is no separate verifier key and no cross-slot fallback: the verifier
+     * uses exactly the key the operator selected for the current mode.
+     *
+     * @param object|null $provider_client Client already built for the active
+     *                                    provider, when the caller has one.
      * @return array|null [ name, validator client ].
      */
-    protected function address_validator( $provider_client ) {
-        $key = $this->easypost_api_key();
-        if ( '' !== $key && class_exists( 'Shipping_Desk_EasyPost_Client' ) ) {
-            return [ 'easypost', new Shipping_Desk_EasyPost_Client( $key ) ];
+    public function validator_client( $provider_client = null ) {
+        $choice = $this->verifier_choice();
+
+        if ( 'off' === $choice ) {
+            return null;
         }
 
-        if ( $provider_client instanceof Shipping_Desk_Address_Validator_Interface ) {
-            return [ 'shippo', $provider_client ];
+        if ( in_array( $choice, [ 'auto', 'easypost' ], true ) ) {
+            $key = $this->easypost_api_key();
+            if ( '' !== $key && class_exists( 'Shipping_Desk_EasyPost_Client' ) ) {
+                return [ 'easypost', new Shipping_Desk_EasyPost_Client( $key ) ];
+            }
+            if ( 'easypost' === $choice ) {
+                return null;
+            }
+        }
+
+        $client = null === $provider_client ? $this->api() : $provider_client;
+
+        if ( $client instanceof Shipping_Desk_Address_Validator_Interface ) {
+            return [ $this->provider(), $client ];
         }
 
         return null;
+    }
+
+    /**
+     * Is checkout-side validation switched on?
+     *
+     * @return bool
+     */
+    public function checkout_validation_enabled() {
+        return 1 === (int) get_option( 'shipping_desk_checkout_validation', 0 );
+    }
+
+    /**
+     * What the settings screen says about verification, in words.
+     *
+     * "No verifier configured" and "the address is clean" look identical on a
+     * panel that only shows a checkbox, so this states which verifier and which
+     * mode would actually answer — and warns when EasyPost's mode disagrees with
+     * the label provider's, which would otherwise show customers corrections
+     * produced by a test key.
+     *
+     * @return array name, mode, note, warning.
+     */
+    public function verifier_summary() {
+        $enabled  = $this->checkout_validation_enabled();
+        $provider = $this->provider();
+
+        if ( 'off' === $this->verifier_choice() ) {
+            return [
+                'name'    => '',
+                'mode'    => '',
+                'note'    => __( 'Verification is turned off, so neither checkout nor the address gate will ask.', 'shipping-desk' ),
+                'warning' => '',
+            ];
+        }
+
+        $validator = $this->validator_client();
+        if ( null === $validator ) {
+            return [
+                'name'    => '',
+                'mode'    => '',
+                'note'    => __( 'No verifier is available yet: add an EasyPost key, or select a provider that can verify (Shippo can, Veeqo cannot).', 'shipping-desk' ),
+                'warning' => '',
+            ];
+        }
+
+        list( $name ) = $validator;
+        $mode  = 'easypost' === $name ? $this->easypost_mode() : $this->shippo_mode();
+        $label = 'easypost' === $name ? 'EasyPost' : 'Shippo';
+
+        $note = $enabled
+            ? sprintf(
+                /* translators: 1: verifier name, 2: key mode (test or production). */
+                __( 'Addresses are checked at checkout by %1$s, using the %2$s key.', 'shipping-desk' ),
+                $label,
+                'live' === $mode ? __( 'production', 'shipping-desk' ) : __( 'test', 'shipping-desk' )
+            )
+            : sprintf(
+                /* translators: 1: verifier name, 2: key mode (test or production). */
+                __( 'When enabled, addresses would be checked by %1$s, using the %2$s key.', 'shipping-desk' ),
+                $label,
+                'live' === $mode ? __( 'production', 'shipping-desk' ) : __( 'test', 'shipping-desk' )
+            );
+
+        $warning = '';
+        if ( 'easypost' === $name && 'easypost' !== $provider ) {
+            $provider_mode = $this->provider_mode( $provider );
+            if ( '' !== $provider_mode && $provider_mode !== $mode ) {
+                $warning = sprintf(
+                    /* translators: 1: EasyPost key mode, 2: label provider name, 3: that provider's key mode. */
+                    __( 'EasyPost is in %1$s mode while %2$s is in %3$s mode: customers would be shown corrections produced by that EasyPost key.', 'shipping-desk' ),
+                    'live' === $mode ? __( 'production', 'shipping-desk' ) : __( 'test', 'shipping-desk' ),
+                    'shippo' === $provider ? 'Shippo' : ucfirst( $provider ),
+                    'live' === $provider_mode ? __( 'production', 'shipping-desk' ) : __( 'test', 'shipping-desk' )
+                );
+            }
+        }
+
+        return [
+            'name'    => $name,
+            'mode'    => $mode,
+            'note'    => $note,
+            'warning' => $warning,
+        ];
     }
 
     /**
