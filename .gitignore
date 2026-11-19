@@ -20,3 +20,6 @@ desktop.ini
 *.log
 # Scratch files
 .tmp-*
+# Run logs the gates and release tools write while working - never part of the plugin
+tests/*.txt
+

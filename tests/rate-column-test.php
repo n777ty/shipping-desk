@@ -102,6 +102,32 @@ rate_check(
 	'and clears it, so a later quote does not rewrite the order unasked'
 );
 
+echo "\n[the decision panel is not trapped in the rates scrollbox]\n";
+
+$choice = rate_function_body( $js, 'function renderAddressChoice($row, validation) {' );
+rate_check( '' !== $choice, 'renderAddressChoice() is present' );
+rate_check(
+	false !== strpos( $choice, "addClass('has-address-panel')" ),
+	'the panel asks its cell to size itself instead of scrolling inside 180px'
+);
+
+$reset = rate_function_body( $js, 'function resetRates($row, message) {' );
+rate_check( '' !== $reset, 'resetRates() is present' );
+rate_check(
+	false !== strpos( $reset, "removeClass('has-address-panel')" ),
+	'and the next quote puts the box back to a rate list'
+);
+
+$css = str_replace( "\r\n", "\n", (string) file_get_contents( dirname( __DIR__ ) . '/admin/css/admin.css' ) );
+rate_check(
+	false !== strpos( $css, '.shipping-desk-rates-container.has-address-panel' ),
+	'the stylesheet carries the rule that lifts the cap'
+);
+rate_check(
+	false !== strpos( $css, "max-height: none" ),
+	'by removing the height rather than enlarging it'
+);
+
 echo "\n[the insurance premium]\n";
 
 $premium = rate_function_body( $js, 'function insurancePremium($row) {' );

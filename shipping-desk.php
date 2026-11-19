@@ -3,7 +3,7 @@
  * Plugin Name: Shipping Desk
  * Plugin URI:  https://github.com/n777ty/shipping-desk
  * Description: Buy, print and refund Veeqo, Shippo and EasyPost shipping labels from the WooCommerce orders screen, with box presets, bulk buy/print and optional PrintNode server-side printing.
- * Version:     1.5.0
+ * Version:     1.5.1
  * Author:      Jailbreak777
  * Author URI:  https://t.me/Jailbreak777
  * License:     GPL-2.0-or-later
@@ -18,7 +18,7 @@
 defined( 'ABSPATH' ) || exit;
 
 if ( ! defined( 'SHIPPING_DESK_VERSION' ) ) {
-    define( 'SHIPPING_DESK_VERSION', '1.5.0' );
+    define( 'SHIPPING_DESK_VERSION', '1.5.1' );
 }
 
 /*

@@ -306,7 +306,9 @@
         $row.removeData('rates');
         $row.removeData('selected-rate');
         $row.find('.shipping-desk-buy-label').prop('disabled', true);
-        $row.find('.shipping-desk-rates-container').text(message);
+        // Clearing the panel flag matters: the next quote is a rate list again, and a
+        // rate list belongs in the 180px box. See renderAddressChoice().
+        $row.find('.shipping-desk-rates-container').removeClass('has-address-panel').text(message);
         resetServices($row, 'Get rates first');
     }
 
@@ -640,6 +642,11 @@
         if (!$container.length) return;
 
         resetRates($row, '');
+
+        // The panel is the whole cell while it is showing, so let it size itself
+        // instead of scrolling inside a box built for a rate list: two addresses, a
+        // tick box and Apply did not fit in 180px without scrolling.
+        $container.addClass('has-address-panel');
 
         var hasSuggestion = !!validation.recommended_line;
         var groupName = 'shipping-desk-address-' + ($row.data('order-id') || Math.random().toString(36).slice(2));

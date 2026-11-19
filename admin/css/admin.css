@@ -620,13 +620,24 @@
 /* Address decision panel: shown in the rates cell when a quote needs an address choice. */
 .shipping-desk-wrap .shipping-desk-address-panel {
 	max-width: 520px;
-	margin: 2px 0 8px;
-	padding: 8px 10px;
+	margin: 2px 0 4px;
+	padding: 6px 10px;
 	border: 1px solid #dcdcde;
 	border-left: 3px solid #dba617;
 	border-radius: 4px;
 	background: #fffdf6;
 	font-size: 12px;
+}
+
+/*
+ * The panel sizes itself. While it is showing it is the only thing in the rates
+ * cell, so the 180px scrollbox that suits a list of rates only hid it: the two
+ * addresses and the Apply button needed a scroll to be read.
+ */
+.shipping-desk-rates-container.has-address-panel {
+	max-height: none;
+	overflow-y: visible;
+	padding-bottom: 2px;
 }
 
 .shipping-desk-wrap .shipping-desk-address-head {
@@ -656,7 +667,7 @@
 	display: flex;
 	align-items: baseline;
 	gap: 6px;
-	padding: 2px 0;
+	padding: 1px 0;
 	cursor: pointer;
 }
 
@@ -671,7 +682,7 @@
 
 .shipping-desk-wrap .shipping-desk-address-update {
 	display: block;
-	margin: 6px 0;
+	margin: 4px 0;
 	color: #50575e;
 }
 

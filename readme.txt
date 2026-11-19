@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.5.0
+Stable tag: 1.5.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,9 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.5.1 =
+* Fixed: the address decision panel on the orders screen was drawn inside the rates cell's 180px scrolling box, so the two addresses and the Apply button needed a scroll to be read in full. The panel now sizes to its content; a rate list still scrolls in the same box, which is what it was built for. Spacing inside the panel is slightly tighter as well.
 
 = 1.5.0 =
 * New: address standardisation on the block checkout. The block checkout has no place to show the suggestion box, so the correction is applied on the server when the order is created: an address that only gains a ZIP+4, loses a formatting quirk, or has a suite folded into line 1 is written to the order with a note saying so, while anything that could move the parcel is left for the orders screen. One cached verifier call per order, nothing is ever blocked, and returning false from `shipping_desk_block_checkout_standardise` turns it off.
