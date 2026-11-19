@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.4.1
+Stable tag: 1.5.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,11 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.5.0 =
+* New: address standardisation on the block checkout. The block checkout has no place to show the suggestion box, so the correction is applied on the server when the order is created: an address that only gains a ZIP+4, loses a formatting quirk, or has a suite folded into line 1 is written to the order with a note saying so, while anything that could move the parcel is left for the orders screen. One cached verifier call per order, nothing is ever blocked, and returning false from `shipping_desk_block_checkout_standardise` turns it off.
+* New: the settings screen says which checkout the store is on, so a store using the block checkout is never told suggestions are running when there is nowhere to show them.
+* Note: the checkout type is read from the checkout page's content, not from the theme - a theme does not choose the checkout.
 
 = 1.4.1 =
 * New: an address correction too small to stop a quote for is now offered on the orders screen instead of passing silently. The row reads "Address: standardised version available (ZIP+4 added, suite folded into line 1)" with a one-click Use standardised, which quotes again on that address and saves it to the order, so the order and the label finally describe the same place. Nothing is required, and nothing blocks the quote.

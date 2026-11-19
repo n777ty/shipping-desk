@@ -1206,8 +1206,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.4.1' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.4.1', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.5.0' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.5.0', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -2927,6 +2927,13 @@ class Shipping_Desk_Plugin {
                 $label,
                 'live' === $mode ? __( 'production', 'shipping-desk' ) : __( 'test', 'shipping-desk' )
             );
+
+        // A store on the block checkout is never told suggestions are running when
+        // its checkout has nowhere to show them: the server standardises the order
+        // instead, and material corrections wait for the orders screen.
+        if ( $enabled && class_exists( 'Shipping_Desk_Block_Checkout' ) && Shipping_Desk_Block_Checkout::is_block_checkout() ) {
+            $note .= ' ' . __( 'This store uses the block checkout, which has nowhere to show a suggestion: a correction that cannot move the parcel is applied to the order automatically and noted, while a material one waits for the orders screen.', 'shipping-desk' );
+        }
 
         $warning = '';
         if ( 'easypost' === $name && 'easypost' !== $provider ) {

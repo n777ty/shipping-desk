@@ -3,7 +3,7 @@
  * Plugin Name: Shipping Desk
  * Plugin URI:  https://github.com/n777ty/shipping-desk
  * Description: Buy, print and refund Veeqo, Shippo and EasyPost shipping labels from the WooCommerce orders screen, with box presets, bulk buy/print and optional PrintNode server-side printing.
- * Version:     1.4.1
+ * Version:     1.5.0
  * Author:      Jailbreak777
  * Author URI:  https://t.me/Jailbreak777
  * License:     GPL-2.0-or-later
@@ -18,7 +18,7 @@
 defined( 'ABSPATH' ) || exit;
 
 if ( ! defined( 'SHIPPING_DESK_VERSION' ) ) {
-    define( 'SHIPPING_DESK_VERSION', '1.4.1' );
+    define( 'SHIPPING_DESK_VERSION', '1.5.0' );
 }
 
 /*
@@ -64,6 +64,7 @@ require_once $base . 'includes/class-easypost-client.php';
     require_once $base . 'includes/class-printnode-client.php';
     require_once $base . 'includes/class-plugin.php';
     require_once $base . 'includes/class-checkout-address.php';
+    require_once $base . 'includes/class-block-checkout.php';
 
     $plugin = new Shipping_Desk_Plugin( __FILE__ );
     $plugin->init();
@@ -72,4 +73,9 @@ require_once $base . 'includes/class-easypost-client.php';
     // until the setting is on and a verifier resolves.
     $checkout_address = new Shipping_Desk_Checkout_Address( $plugin );
     $checkout_address->init();
+
+    // The block checkout has no browser hook to offer the address, so it is settled
+    // on the server when the Store API creates the order. See class-block-checkout.php.
+    $block_checkout = new Shipping_Desk_Block_Checkout( $plugin );
+    $block_checkout->init();
 }, 20 );

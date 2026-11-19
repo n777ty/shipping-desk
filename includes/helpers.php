@@ -407,7 +407,17 @@ class Shipping_Desk_Helpers {
                 continue;
             }
 
-            $line = preg_replace( '/(^|\s)' . preg_quote( $unit, '/' ) . '($|\s)/', ' ', $line );
+            // The designator travels with the unit. The customer typed "2H" on line 2
+            // and the fold came back as "APT 2H", so stripping the identifier alone
+            // left a dangling "APT": "123 example st apt" then compared as a different
+            // street from "123 example st", which made a plain fold look material - a
+            // hard panel on the orders screen, and a block-checkout order skipped by
+            // design because material changes are left for the operator.
+            $line = preg_replace(
+                '/(^|\s)(?:(?:' . self::unit_designators() . ')\s*)?' . preg_quote( $unit, '/' ) . '($|\s)/i',
+                ' ',
+                $line
+            );
             $line = trim( (string) preg_replace( '/\s+/', ' ', (string) $line ) );
         }
 

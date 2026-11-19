@@ -165,6 +165,38 @@ $suite = [
     'country_code' => 'US',
 ];
 helper_same( false, Shipping_Desk_Helpers::address_change_is_material( $suite, [ 'line1' => '123 MAIN ST APT 5', 'line2' => '' ] ), 'a suite folded into line 1 is not material' );
+
+/*
+ * The reported shape: nothing on line 1, a bare identifier on line 2.
+ *
+ * "2H" is what the customer typed; the fold comes back as "APT 2H". Stripping the
+ * identifier alone left "123 example st apt" against "123 example st", which read
+ * as a different street - so a plain fold demanded a decision on the orders screen
+ * and was skipped on the block checkout.
+ */
+$bare = [
+	'line1'        => '123 Example St',
+	'line2'        => '2H',
+	'town'         => 'Wharton',
+	'county'       => 'TX',
+	'postcode'     => '77488',
+	'country_code' => 'US',
+];
+helper_same(
+	false,
+	Shipping_Desk_Helpers::address_change_is_material( $bare, [ 'line1' => '123 EXAMPLE ST APT 2H', 'line2' => '', 'postcode' => '77488-1234' ] ),
+	'a bare identifier carried into line 1 is not material'
+);
+helper_same(
+	false,
+	Shipping_Desk_Helpers::address_change_is_material( $bare, [ 'line1' => '123 EXAMPLE ST UNIT 2H', 'line2' => '' ] ),
+	'and it stays immaterial whatever designator the verifier chose'
+);
+helper_same(
+	true,
+	Shipping_Desk_Helpers::address_change_is_material( [ 'line1' => '123 Example St', 'line2' => '', 'town' => 'Wharton', 'county' => 'TX', 'postcode' => '77488', 'country_code' => 'US' ], [ 'line1' => '123 EXAMPLE ST APT 9', 'line2' => '' ] ),
+	'but a unit the customer never mentioned is still material'
+);
 helper_same( false, Shipping_Desk_Helpers::address_change_is_material( [ 'line1' => '123 Main St', 'line2' => '', 'postcode' => '77488' ], [ 'line2' => 'Apt 5' ] ), 'a suite moved onto line 2 is not material' );
 
 helper_same( true, Shipping_Desk_Helpers::address_change_is_material( $address, [ 'postcode' => '77489' ] ), 'a different routing base is material' );
