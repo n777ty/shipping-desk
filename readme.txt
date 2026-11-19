@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.5.1
+Stable tag: 1.6.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,13 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.6.0 =
+* New: Shipment Lookup can now ask a provider other than the one selected for labels. It resolves per lookup - the provider and mode chosen on the form, then the provider and mode recorded on the order when its label was bought, then the settings - so an older label from another provider, or one bought in test mode, can be found without changing what buys the next label. The page says which of the three decided, and a missing key for that mode is explained rather than reported as "id not found".
+* Improved: the form states what the next lookup will do before it runs ("Will look up on Auto - the provider and mode recorded on the order, else the label setting (EasyPost, test)"), rewrites that line as the provider and mode chips change, and afterwards reports what did happen rather than what was configured. The form starts on Auto every visit and does not remember the last choice, deliberately: a one-off lookup on another provider must not become the default for the next one. With Veeqo selected the mode chip is pinned to Live and disabled, because Veeqo has one account and no test mode.
+* Fixed: three controls had been left to WordPress core's own styling because no rule named them - the Export button on the Settings page (an `<a class="button">`, so it kept core's 3px corners beside 30px buttons on the same table), the Verifier dropdown (no class at all, and outside the page wrapper the select rule was scoped to), and the "Choose file" button in the import row. All three now match the controls beside them. The rule that keeps it that way is written down in the stylesheet and this project's README, and enforced by the test suite: every control is styled and named, or deliberately native (checkbox, radio, hidden, the file picker's box) and listed as an exception with its reason.
+* Fixed: the reship-email advice. "Completed email on reship" is off by default and the text claimed a tracking plugin would email the customer; Advanced Shipment Tracking sends nothing when tracking is added to an already-completed order, because the status never changes. The text now says to test it, and the order note says which setting to tick.
+* Note: the release zip now includes README.md. The plugin itself is unchanged by this - it is there so the download explains itself.
 
 = 1.5.1 =
 * Fixed: the address decision panel on the orders screen was drawn inside the rates cell's 180px scrolling box, so the two addresses and the Apply button needed a scroll to be read in full. The panel now sizes to its content; a rate list still scrolls in the same box, which is what it was built for. Spacing inside the panel is slightly tighter as well.

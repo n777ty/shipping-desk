@@ -56,15 +56,28 @@ that caused it.
 
 ## Development
 
-No Composer, no PHPUnit: six standalone checks that run anywhere PHP runs.
+No Composer, no PHPUnit: nineteen standalone checks that run anywhere PHP runs.
 
 ```bash
-php tests/helpers-test.php
-php tests/veeqo-client-rate-test.php
-php tests/shippo-client-reflection-test.php
+php tests/address-apply-test.php
+php tests/block-checkout-test.php
+php tests/button-style-test.php
+php tests/checkout-validator-test.php
 php tests/easypost-client-test.php
 php tests/easypost-provider-test.php
+php tests/header-layout-test.php
+php tests/helpers-test.php
+php tests/input-style-test.php
+php tests/lookup-test.php
+php tests/rate-column-test.php
+php tests/rate-payload-test.php
 php tests/rebrand-guard-test.php    # fails if a pre-1.0 internal name returns
+php tests/row-alignment-test.php
+php tests/settings-forms-test.php
+php tests/shippo-client-reflection-test.php
+php tests/tracking-relay-test.php
+php tests/update-checker-test.php
+php tests/veeqo-client-rate-test.php
 ```
 
 Each exits 0 on success. They stub the WordPress HTTP layer, so they exercise the real

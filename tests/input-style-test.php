@@ -1,6 +1,6 @@
 <?php
 /**
- * Gate for text fields: one geometry, on every screen, and only where it belongs.
+ * Gate for form controls: one geometry, on every screen, and only where it belongs.
  *
  * The buttons had been brought into line in 1.3.13 while the fields beside them stayed
  * square, because the only styled inputs in the plugin were the four that happen to carry a
@@ -8,11 +8,18 @@
  * renders comes from WordPress markup with `.regular-text` and nothing of ours, so it fell
  * through to core - the same shape of bug as "Save Boxes", one layer over.
  *
- * Two things make this gate worth more than a screenshot: it requires every text-entry type
- * the plugin actually renders to be named in the rule, so a new field type cannot arrive
- * unstyled; and it requires the types that must stay native - checkbox, radio, hidden, file -
- * to be absent from it, because a fixed height and a border on a checkbox is a defect, not a
- * style.
+ * The rule this gate is half of: every control the plugin renders is reached by a rule in
+ * admin.css - styled, or a listed native exception with a reason - and none of it is left as
+ * a plain element for core to draw. The three ways that went wrong were a control with no
+ * class (the Verifier select), a rule that did not name the element (the file picker's button,
+ * and the Export anchor in button-style-test.php), and a rule scoped to a page wrapper the
+ * control was not inside.
+ *
+ * So the gate requires every text-entry type the plugin renders to be named in the field rule;
+ * requires the types that must stay native - checkbox, radio, hidden - to be absent from it,
+ * because a fixed height and a border on a checkbox is a defect, not a style; requires the
+ * file picker's box to stay native while its button carries the geometry; and requires the
+ * selects and the file picker to be reachable from the screen scope rather than a wrapper.
  *
  * Run:  php tests/input-style-test.php
  * Exit: 0 when every check passes, 1 otherwise.
@@ -116,6 +123,14 @@ foreach ( array_keys( $types ) as $type ) {
 			false !== strpos( $css, '.shipping-desk-screen input[type="' . $type . '"]' ),
 			"type=\"{$type}\" is named in the rule"
 		);
+	} elseif ( 'file' === $type ) {
+		// Native box, styled button: the box is the browser's to draw, the button inside it is
+		// ours to shape. So the input is only allowed to appear in the stylesheet with a
+		// pseudo-element after it, which is the section below.
+		in_check(
+			0 === preg_match( '/\.shipping-desk-screen input\[type="file"\](?!::)/', $css ),
+			'type="file" keeps its native box - only the button inside it is styled'
+		);
 	} elseif ( in_array( $type, $native, true ) ) {
 		in_check(
 			false === strpos( $css, '.shipping-desk-screen input[type="' . $type . '"]' ),
@@ -148,6 +163,45 @@ $textarea = in_css_rule( $css, '.shipping-desk-screen textarea {' );
 in_check( '' !== $textarea, 'a textarea rule exists, so a future one is not square' );
 in_check( false !== strpos( $textarea, 'border-radius: 6px' ), 'with the same 6px corners' );
 in_check( ! preg_match( '/(?<!-)height:/', $textarea ), 'and no fixed height, which would collapse it to one line' );
+
+echo "\n[the file picker's button is shaped like the button beside it]\n";
+
+$file_rule   = in_css_rule( $css, '.shipping-desk-screen input[type="file"]::file-selector-button {' );
+$webkit_rule = in_css_rule( $css, '.shipping-desk-screen input[type="file"]::-webkit-file-upload-button {' );
+
+in_check( '' !== $file_rule, 'the button inside the file picker has a rule' );
+in_check( '' !== $webkit_rule, "the older -webkit- alias is written out as well" );
+in_check( $file_rule === $webkit_rule, 'both carry identical declarations, so they cannot drift apart' );
+in_check(
+	false === strpos( $css, '::file-selector-button,' ) && false === strpos( $css, '::-webkit-file-upload-button,' ),
+	'and they are separate rules: CSS drops a selector list whole when one selector in it is invalid'
+);
+in_check( false !== strpos( $file_rule, 'height: 30px' ), '30px high, like every other button on the page' );
+in_check( false !== strpos( $file_rule, 'border-radius: 6px' ), 'with the 6px corners' );
+in_check( false !== strpos( $file_rule, 'font-size: 12px' ), 'and 12px type' );
+in_check( false !== strpos( $file_rule, 'padding: 0 12px' ), 'the same horizontal padding' );
+in_check( false !== strpos( $file_rule, 'cursor: pointer' ), 'and a pointer, because it is a button' );
+
+echo "\n[every select is reached from the screen, not from a wrapper]\n";
+
+// The Verifier dropdown lives on the settings page inside a paragraph - outside
+// .shipping-desk-wrap - and had no class, so it kept core's square corners beside the
+// plugin's rounded ones. Both halves of that are checked here and in row-alignment-test.php:
+// a control must have a class, and the rule must be scoped where a control can be.
+$select_rule = in_css_rule( $css, '.shipping-desk-screen select.shipping-desk-box-select,' );
+
+in_check( '' !== $select_rule, 'the selects share one rule, found by its screen scope' );
+in_check( false !== strpos( $select_rule, 'height: 30px' ), '30px high, like the fields beside them' );
+in_check( false !== strpos( $select_rule, 'border-radius: 6px' ), 'with the same 6px corners' );
+in_check( false !== strpos( $select_rule, 'font-size: 12px' ), 'and the same 12px type' );
+in_check(
+	false !== strpos( $css, '.shipping-desk-screen select.shipping-desk-verifier-select' ),
+	'the settings-page Verifier select is in that rule, not left to core'
+);
+in_check(
+	false !== strpos( $php, 'class="shipping-desk-verifier-select"' ),
+	'and the markup gives it the class the rule needs'
+);
 
 echo "\n";
 

@@ -91,7 +91,7 @@ $css  = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/admin/c
 $php  = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/includes/class-plugin.php' ) );
 $js   = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/admin/js/admin.js' ) );
 
-$selector = ".shipping-desk-screen input.button,\n.shipping-desk-screen button.button";
+$selector = ".shipping-desk-screen a.button,\n.shipping-desk-screen input.button,\n.shipping-desk-screen button.button";
 
 echo "Shipping Desk button checks\n";
 echo "===========================\n\n";
@@ -99,7 +99,7 @@ echo "===========================\n\n";
 echo "[one rule, one geometry]\n";
 
 $rule = btn_css_rule( $css, $selector );
-btn_check( '' !== $rule, 'input.button and button.button share a single rule' );
+btn_check( '' !== $rule, 'a.button, input.button and button.button share a single rule' );
 btn_check( false !== strpos( $rule, 'box-sizing: border-box' ), 'border-box, so a bordered button is not 2px taller' );
 btn_check( false !== strpos( $rule, 'height: 30px' ), '30px high, the same as the plugin\'s own buttons' );
 btn_check( false !== strpos( $rule, 'min-height: 0' ), "with core's min-height neutralised, or it would win" );
@@ -146,6 +146,43 @@ foreach ( array_unique( $button_classes ) as $class_list ) {
 		"<button class=\"{$class_list}\"> is .button, or has a rule of its own"
 	);
 }
+
+/*
+ * Anchors too. The Export control is an <a class="button">, and it was the one control this
+ * section could not see: the scans above look for <button> tags and for JS-built buttons.
+ * The rule named input.button and button.button, so the anchor fell through to core and kept
+ * its 3px corners beside 30px buttons on the same table. The element is named in the rule
+ * now, and this scan keeps it named.
+ */
+$anchor_classes = array();
+$offset         = 0;
+while ( false !== ( $at = strpos( $php, '<a ', $offset ) ) ) {
+	// PHP blocks are blanked first: the PHP closing tag ends with a ">", so a tag whose
+	// attributes carry inline PHP would otherwise be cut off before its class was reached.
+	$window = (string) preg_replace( '/<\?php.*?\?>/s', ' ', substr( $php, $at, 320 ) );
+	$end    = strpos( $window, '>' );
+	$tag    = false === $end ? $window : substr( $window, 0, $end );
+
+	if ( preg_match( '/class="([^"]+)"/', $tag, $found ) ) {
+		$anchor_classes[] = $found[1];
+	}
+	$offset = $at + 3;
+}
+
+$anchor_buttons = array();
+foreach ( $anchor_classes as $class_list ) {
+	$clean = trim( (string) preg_replace( '/<\?php.*?\?>/s', ' ', $class_list ) );
+
+	if ( preg_match( '/(^|\s)button(\s|$)/', $clean ) ) {
+		$anchor_buttons[] = $clean;
+	}
+}
+
+btn_check( array() !== $anchor_buttons, 'the markup renders an anchor carrying .button (' . count( $anchor_buttons ) . ' found)' );
+btn_check(
+	false !== strpos( $selector, 'a.button' ),
+	'and the shared rule names a.button, or that anchor keeps core geometry'
+);
 
 $submit_calls = substr_count( $php, 'submit_button(' );
 

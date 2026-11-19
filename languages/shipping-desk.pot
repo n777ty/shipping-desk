@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-19T04:58:39+00:00\n"
+"POT-Creation-Date: 2026-11-19T23:56:52+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: shipping-desk\n"
@@ -112,8 +112,41 @@ msgstr ""
 msgid "A refund for this label is already pending with the carrier."
 msgstr ""
 
+#: includes/class-plugin.php:2225
+msgid "A test label is not on the live account, which is why Auto follows the order. Veeqo has no modes."
+msgstr ""
+
+#: includes/class-plugin.php:2209
+#: includes/class-plugin.php:2226
+msgid "Auto"
+msgstr ""
+
+#: includes/class-plugin.php:2221
+msgid "Auto - the mode the label was bought in"
+msgstr ""
+
+#: includes/class-plugin.php:2209
+msgid "Auto - the order, then the provider setting"
+msgstr ""
+
+#: includes/class-plugin.php:2217
+msgid "Auto: the mode the label was bought in. Click for Test."
+msgstr ""
+
 #: includes/class-plugin.php:786
 msgid "Automatic — EasyPost when a key is set, otherwise the label provider"
+msgstr ""
+
+#: includes/class-plugin.php:2229
+msgid "Auto uses the provider and mode recorded on the order, then the label setting. Grey means not chosen; the chosen mode takes its own colour. None of this changes which provider buys the next label."
+msgstr ""
+
+#: includes/class-plugin.php:2241
+msgid "Auto uses the provider and mode recorded on the order, then the label setting. The mode chip cycles Auto, Test and Live. None of this changes which provider buys the next label."
+msgstr ""
+
+#: includes/class-plugin.php:2290
+msgid "Auto uses the provider and mode recorded on the order, then the label setting. The mode chip cycles Auto, Test and Live. Veeqo has one account, so its chip pins to Live and cannot be cycled."
 msgstr ""
 
 #: includes/class-plugin.php:156
@@ -193,6 +226,10 @@ msgstr ""
 #: includes/class-plugin.php:1566
 #: includes/class-plugin.php:1595
 msgid "Carrier"
+msgstr ""
+
+#: includes/class-plugin.php:2191
+msgid "chosen for this lookup."
 msgstr ""
 
 #: includes/class-plugin.php:638
@@ -409,6 +446,10 @@ msgstr ""
 msgid "From Address (Optional)"
 msgstr ""
 
+#: includes/class-plugin.php:2193
+msgid "from the provider setting."
+msgstr ""
+
 #: includes/class-plugin.php:1550
 msgid "Get Rates"
 msgstr ""
@@ -471,6 +512,10 @@ msgstr ""
 #. Author of the plugin
 #: shipping-desk.php
 msgid "Jailbreak777"
+msgstr ""
+
+#: includes/class-plugin.php:2225
+msgid "Key mode to look up"
 msgstr ""
 
 #: includes/class-plugin.php:1798
@@ -540,8 +585,28 @@ msgstr ""
 msgid "live"
 msgstr ""
 
+#: includes/class-plugin.php:2226
+msgid "Live"
+msgstr ""
+
+#: includes/class-plugin.php:2219
+msgid "Live: real labels. Click to go back to Auto."
+msgstr ""
+
 #: includes/class-plugin.php:824
 msgid "Loading..."
+msgstr ""
+
+#: includes/class-plugin.php:2191
+msgid "Looked up on %1$s (%2$s) — %3$s"
+msgstr ""
+
+#: includes/class-plugin.php:2190
+msgid "Looked up on %1$s — %2$s"
+msgstr ""
+
+#: includes/class-plugin.php:2178
+msgid "Looking up on %1$s (%2$s)"
 msgstr ""
 
 #. translators: %s: EasyPost key mode
@@ -556,8 +621,16 @@ msgstr ""
 msgid "Looking up on Shippo (%s)."
 msgstr ""
 
+#: includes/class-plugin.php:2174
+msgid "Looking up on Veeqo"
+msgstr ""
+
 #: includes/class-plugin.php:1722
 msgid "Look up"
+msgstr ""
+
+#: includes/class-plugin.php:2206
+msgid "Look up on"
 msgstr ""
 
 #: includes/class-plugin.php:2150
@@ -572,6 +645,10 @@ msgstr ""
 msgid "Matched a transaction id. The parent shipment id is listed below if you need it."
 msgstr ""
 
+#: includes/class-plugin.php:2218
+msgid "Mode"
+msgstr ""
+
 #: includes/class-plugin.php:633
 #: includes/class-plugin.php:1860
 msgid "Name"
@@ -583,6 +660,10 @@ msgstr ""
 
 #: includes/class-plugin.php:1391
 msgid "Next &raquo;"
+msgstr ""
+
+#: includes/class-plugin.php:2131
+msgid "No %1$s %2$s key is configured, so this id cannot be looked up there. Choose the provider and mode the label was bought with."
 msgstr ""
 
 #. translators: %s: list of missing fields, e.g. "phone number / email address"
@@ -613,6 +694,10 @@ msgstr ""
 #: includes/class-plugin.php:1533
 #: includes/class-plugin.php:1543
 msgid "None"
+msgstr ""
+
+#: includes/class-plugin.php:2292
+msgid "None of this changes which provider buys the next label."
 msgstr ""
 
 #: includes/class-plugin.php:852
@@ -659,6 +744,10 @@ msgstr ""
 msgid "nothing"
 msgstr ""
 
+#: includes/class-plugin.php:2144
+msgid "No transaction or shipment with that id on %1$s (%2$s)."
+msgstr ""
+
 #: includes/class-plugin.php:1677
 msgid "No transaction or shipment with that id on the Shippo account and mode shown above."
 msgstr ""
@@ -669,6 +758,10 @@ msgstr ""
 
 #: includes/class-plugin.php:2898
 msgid "No verifier is available yet: add an EasyPost key, or select a provider that can verify (Shippo can, Veeqo cannot)."
+msgstr ""
+
+#: includes/class-plugin.php:2374
+msgid "Off by default: a tracking plugin may email the customer itself when it sees new tracking, and two emails are worse than one. Do not assume it does, though - a reship of a completed order never changes status, and Advanced Shipment Tracking sent nothing in exactly that case when tested. Do one test reship; if the customer hears nothing, tick this box."
 msgstr ""
 
 #: includes/class-plugin.php:789
@@ -715,6 +808,10 @@ msgstr ""
 
 #: includes/class-plugin.php:1412
 msgid "Page number"
+msgstr ""
+
+#: includes/class-plugin.php:2219
+msgid "Paste the shipment or transaction id from the order note. On Auto the provider and mode come from the order that owns that id, and from the label setting when no order matches."
 msgstr ""
 
 #: includes/class-plugin.php:779
@@ -811,6 +908,14 @@ msgstr ""
 msgid "Production API key"
 msgstr ""
 
+#: includes/class-plugin.php:2206
+msgid "Provider"
+msgstr ""
+
+#: includes/class-plugin.php:2208
+msgid "Provider to look up"
+msgstr ""
+
 #: includes/class-plugin.php:2790
 msgid "Rate ID missing."
 msgstr ""
@@ -829,6 +934,10 @@ msgstr ""
 
 #: includes/class-plugin.php:1837
 msgid "Raw response"
+msgstr ""
+
+#: includes/class-plugin.php:2187
+msgid "recorded on order #%d."
 msgstr ""
 
 #: includes/class-plugin.php:801
@@ -989,6 +1098,10 @@ msgstr ""
 
 #: includes/class-plugin.php:2939
 msgid "Shipping Desk: reshipped completed order. No customer email sent (disabled in Settings)."
+msgstr ""
+
+#: includes/class-plugin.php:3711
+msgid "Shipping Desk: reshipped completed order. No customer email was sent, because \"Completed email on reship\" is off in Settings; add a customer note here to tell them about the new tracking."
 msgstr ""
 
 #: includes/class-plugin.php:2937
@@ -1188,6 +1301,10 @@ msgstr ""
 msgid "test"
 msgstr ""
 
+#: includes/class-plugin.php:2218
+msgid "Test: labels cost nothing. Click for Live."
+msgstr ""
+
 #: includes/class-plugin.php:1225
 msgid "Test: labels cost nothing. Click to switch to Production."
 msgstr ""
@@ -1334,8 +1451,16 @@ msgstr ""
 msgid "This order has no stored label id."
 msgstr ""
 
+#: includes/class-plugin.php:2291
+msgid "This page starts on Auto every time: the choice is not remembered between visits."
+msgstr ""
+
 #: includes/class-shippo-client.php:420
 msgid "This Shippo label has already been refunded."
+msgstr ""
+
+#: includes/class-plugin.php:2935
+msgid "This store uses the block checkout, which has nowhere to show a suggestion: a correction that cannot move the parcel is applied to the order automatically and noted, while a material one waits for the orders screen."
 msgstr ""
 
 #: includes/class-plugin.php
@@ -1356,6 +1481,14 @@ msgstr ""
 
 #: includes/class-shippo-client.php:503
 msgid "Transaction not found in Shippo."
+msgstr ""
+
+#: includes/class-plugin.php:2195
+msgid "Tried %1$s (%2$s) — %3$s"
+msgstr ""
+
+#: includes/class-plugin.php:2194
+msgid "Tried %1$s — %2$s"
 msgstr ""
 
 #: includes/class-api-client.php:187
@@ -1435,6 +1568,10 @@ msgstr ""
 msgid "Veeqo has no test or production mode."
 msgstr ""
 
+#: includes/class-plugin.php:2248
+msgid "Veeqo has one account and no test mode, so it always runs live. Choose another provider to pick a mode."
+msgstr ""
+
 #: includes/class-api-client.php:259
 #, php-format
 msgid "Veeqo refund failed: %d"
@@ -1478,8 +1615,28 @@ msgstr ""
 msgid "When enabled, addresses would be checked by %1$s, using the %2$s key."
 msgstr ""
 
+#: includes/class-plugin.php:2212
+msgid "Where to look the shipment up"
+msgstr ""
+
+#: includes/class-plugin.php:2214
+msgid "Which provider to ask. This does not change which provider buys the next label."
+msgstr ""
+
 #: includes/class-plugin.php:1862
 msgid "Width (in)"
+msgstr ""
+
+#: includes/class-plugin.php:2208
+msgid "Will look up on %1$s (%2$s)."
+msgstr ""
+
+#: includes/class-plugin.php:2205
+msgid "Will look up on %s."
+msgstr ""
+
+#: includes/class-plugin.php:2199
+msgid "Will look up on Auto — the provider and mode recorded on the order, else the label setting (%s)."
 msgstr ""
 
 #: includes/class-plugin.php:2129

@@ -1,4 +1,32 @@
 /*
+ * Shipping Desk admin stylesheet.
+ *
+ * THE RULE: every control this plugin renders is styled here, and none of it is a plain
+ * element. What a bare `<select>`, `<a>` or `<input>` looks like is WordPress core's
+ * decision, and leaving one to core has been wrong three times in this plugin's history -
+ * "Save Boxes" (submit_button() markup, no class of ours), the Export control (an
+ * <a class="button"> the rule did not name) and the Verifier select (no class at all). Each
+ * time, one control rendered square or core-sized beside controls that were not.
+ *
+ * So a control is added one of two ways, never a third:
+ *
+ *   1. Styled. It carries WordPress's `.button`, or a plugin class that has a rule - and that
+ *      rule names the element and is scoped to `.shipping-desk-screen`, the body class every
+ *      plugin screen carries. Element plus class outranks `.wp-core-ui .button` and
+ *      `.wp-core-ui select`; a single-class rule ties with core and loses on load order, and
+ *      a wrapper-scoped rule misses whatever lives outside that wrapper.
+ *   2. Deliberately native, and named. Checkboxes, radios, hidden inputs and the box of the
+ *      file picker stay exactly as WordPress and the browser draw them: a fixed height and a
+ *      border on a checkbox is a defect, not a style. Every native exception is listed in the
+ *      gates with its reason.
+ *
+ * `tests/button-style-test.php` and `tests/input-style-test.php` enforce it. They read the
+ * markup, collect every button, anchor, input and select the plugin renders, and fail when
+ * one is neither reached by a rule nor a listed exception - so a new control with no rule
+ * breaks the build instead of shipping square.
+ */
+
+/*
  * Header: the title on its own line, then one row holding the provider control and today's
  * spend. The title is set here rather than left to core, because core's 23px/400 title lost
  * to the badge's 22px/700 total - the number read as the most important thing on the page.
@@ -110,6 +138,29 @@
 	color: #125c26;
 }
 
+/*
+ * The lookup page uses the same track and chips as the provider switch, in its own
+ * container class so the header's click handlers (which switch the label provider) never
+ * see them. Provider and mode share the one pill; the mode is a single chip that cycles,
+ * exactly like the header's, and it carries its own colour: neutral for auto, amber for
+ * test, green for live.
+ */
+.shipping-desk-wrap .shipping-desk-lookup-mode.is-auto {
+	background: #f6f7f7;
+	color: #50575e;
+	box-shadow: inset 0 0 0 1px #c3c4c7;
+}
+
+/*
+ * Pinned to Live because the selected provider has no other mode (Veeqo has one
+ * account). It is a disabled button, so the dimming says "not a choice" rather than
+ * "something is broken", and the ring keeps it legible against the Live green.
+ */
+.shipping-desk-wrap .shipping-desk-lookup-mode:disabled {
+	cursor: default;
+	box-shadow: inset 0 0 0 1px rgba( 0, 0, 0, 0.15 );
+}
+
 .shipping-desk-wrap .shipping-desk-provider-msg {
 	font-size: 12px;
 	color: #646970;
@@ -212,23 +263,26 @@
 }
 
 /*
- * One control style for every select and number input on the page: same height, radius,
- * border and type, so the row's controls read as a set.
+ * One control style for every select the plugin renders, on every screen: same height,
+ * radius, border and type, so the controls on a page read as a set.
  *
- * Scoped to .shipping-desk-wrap on purpose. WordPress core styles these with
- * `.wp-core-ui select` and `input[type="number"]` - one class plus an element - which
- * outranks a single-class plugin rule. Every rule here used to be single-class, so it
- * never applied: the Box select and the weight/insurance inputs were rendering with core's
- * radius, height and type, while the Signature select (whose override happened to be two
- * classes) took the plugin's. That is why one control looked square and the others round.
+ * The element and the class are both named, so the rule outranks core's `.wp-core-ui select`
+ * whatever the load order says. Every rule here used to be single-class, so none of them
+ * applied: the Box select and the weight/insurance inputs rendered with core's radius, height
+ * and type, while the Signature select (whose override happened to be two classes) took the
+ * plugin's. That is why one control looked square and the others round.
+ *
+ * The scope is the body class, not a page wrapper. The Verifier select is on the settings
+ * page inside a paragraph - outside `.shipping-desk-wrap`, and for a long time without a
+ * class, which is how it kept core's square corners beside the plugin's rounded ones. A
+ * rule scoped to a wrapper cannot reach a control that is not in that wrapper.
  */
-.shipping-desk-wrap select.shipping-desk-box-select,
-.shipping-desk-wrap select.shipping-desk-service-select,
-.shipping-desk-wrap select.shipping-desk-signature-confirmation,
-.shipping-desk-wrap select.shipping-desk-bulk-action-select {
+.shipping-desk-screen select.shipping-desk-box-select,
+.shipping-desk-screen select.shipping-desk-service-select,
+.shipping-desk-screen select.shipping-desk-signature-confirmation,
+.shipping-desk-screen select.shipping-desk-bulk-action-select,
+.shipping-desk-screen select.shipping-desk-verifier-select {
     box-sizing: border-box;
-    width: 100%;
-    max-width: 100%;
     height: 30px;              /* core's own control height */
     min-height: 0;             /* core sets min-height, which would otherwise win */
     padding: 0 24px 0 8px;     /* right side leaves room for core's select arrow */
@@ -240,6 +294,24 @@
     line-height: 28px;
     box-shadow: 0 1px 2px rgba(0,0,0,.05);
     vertical-align: middle;
+}
+
+/*
+ * Width is the one thing the surroundings decide, so it is not in the rule above: the
+ * in-table selects fill their column, the bulk toolbar pins its own width (see above), and
+ * the Verifier - a settings-page select in a paragraph, with no column to fill - takes
+ * WordPress's own 25rem cap rather than stretching the full width of the page.
+ */
+.shipping-desk-screen select.shipping-desk-box-select,
+.shipping-desk-screen select.shipping-desk-service-select,
+.shipping-desk-screen select.shipping-desk-signature-confirmation {
+    width: 100%;
+    max-width: 100%;
+}
+
+.shipping-desk-screen select.shipping-desk-verifier-select {
+    width: 100%;
+    max-width: 25rem;
 }
 
 .shipping-desk-wrap input[type="number"].shipping-desk-total-weight,
@@ -259,10 +331,11 @@
     vertical-align: middle;
 }
 
-.shipping-desk-wrap select.shipping-desk-box-select:focus,
-.shipping-desk-wrap select.shipping-desk-service-select:focus,
-.shipping-desk-wrap select.shipping-desk-signature-confirmation:focus,
-.shipping-desk-wrap select.shipping-desk-bulk-action-select:focus {
+.shipping-desk-screen select.shipping-desk-box-select:focus,
+.shipping-desk-screen select.shipping-desk-service-select:focus,
+.shipping-desk-screen select.shipping-desk-signature-confirmation:focus,
+.shipping-desk-screen select.shipping-desk-bulk-action-select:focus,
+.shipping-desk-screen select.shipping-desk-verifier-select:focus {
     border-color: #2563eb;
     box-shadow: 0 0 0 3px rgba(37,99,235,.15);
     outline: none;
@@ -690,9 +763,11 @@
  * Every button on every screen of the plugin, in one rule.
  *
  * These carry WordPress's own .button class: submit_button() renders an <input
- * type="submit">, the plugin's own markup renders a <button>, and core styles both with
- * `.wp-core-ui .button` - two classes, so a single-class selector loses whatever the load
- * order says. Naming the element gives this rule one class more and it wins outright.
+ * type="submit">, the plugin's own markup renders a <button>, and the Export control is an
+ * <a>. Core styles all three with `.wp-core-ui .button` - two classes, so a single-class
+ * selector loses whatever the load order says. Naming the element gives this rule one class
+ * more and it wins outright. All three elements are named: the anchor was the one left out
+ * (1.6.0), and it kept core's 3px corners beside 30px buttons on the same table.
  *
  * The scope is the body, not a page wrapper. The wrappers are not uniform (four screens
  * use shipping-desk-wrap, PrintNode uses shipping-desk-settings) and the what's-new dialog
@@ -701,6 +776,7 @@
  * submit_button() markup with no plugin class of its own - kept core's 3px corners and its
  * own height while the button beside it was 30px with 6px corners.
  */
+.shipping-desk-screen a.button,
 .shipping-desk-screen input.button,
 .shipping-desk-screen button.button {
     box-sizing: border-box;
@@ -717,11 +793,12 @@
  * The same idea for text fields: one geometry for every field the plugin renders, on every
  * screen, so a settings input is not square beside a rounded button.
  *
- * Only text-entry types are named. Checkboxes, radios, hidden inputs and the file picker stay
- * exactly as WordPress renders them - a fixed height and a border on a checkbox is a bug, and
- * the file picker is drawn by the browser. `select` is not listed either: all three of the
- * plugin's selects are in the shared in-table rule above, which also pins their width and
- * leaves room for core's arrow; a new select should get a class and join that rule.
+ * Only text-entry types are named. Checkboxes, radios, hidden inputs and the box of the file
+ * picker stay exactly as WordPress and the browser render them - a fixed height and a border
+ * on a checkbox is a bug, and the file picker's box is drawn by the browser. `select` is not
+ * listed either: every select is in the shared select rule above, which names the element,
+ * leaves room for core's arrow and is scoped to the screen - a new select gets a class and
+ * joins that rule.
  *
  * Width is deliberately not set: .regular-text, .small-text and the table cells each decide
  * their own, and overriding it would undo WordPress's own layout.
@@ -771,6 +848,49 @@
     border-color: #2563eb;
     box-shadow: 0 0 0 3px rgba(37,99,235,.15);
     outline: none;
+}
+
+/*
+ * The import field's "Choose file" button.
+ *
+ * The input itself is deliberately left alone: its box belongs to the browser, and forcing a
+ * height and a border onto it is how a file picker ends up with the filename jammed against a
+ * doubled edge. The button inside it, however, is a real element in every current browser, so
+ * it can carry the same geometry as the "Upload and Restore" button beside it, in core's
+ * secondary colours so the two match instead of merely being the same size.
+ *
+ * The two selectors are separate rules on purpose and must stay that way: CSS drops a whole
+ * selector list when any one selector in it is invalid, so a combined list would lose the
+ * styling in exactly the older engine that needs the -webkit- alias. An engine that
+ * understands neither ignores both rules and keeps its native picker - the correct fallback,
+ * because an unstyled picker still works while a half-styled one does not.
+ */
+.shipping-desk-screen input[type="file"]::file-selector-button {
+    box-sizing: border-box;
+    height: 30px;
+    margin: 0 8px 0 0;
+    padding: 0 12px;
+    border: 1px solid #2271b1;
+    border-radius: 6px;
+    background: #f6f7f7;
+    color: #2271b1;
+    font-size: 12px;
+    line-height: 28px;
+    cursor: pointer;
+}
+
+.shipping-desk-screen input[type="file"]::-webkit-file-upload-button {
+    box-sizing: border-box;
+    height: 30px;
+    margin: 0 8px 0 0;
+    padding: 0 12px;
+    border: 1px solid #2271b1;
+    border-radius: 6px;
+    background: #f6f7f7;
+    color: #2271b1;
+    font-size: 12px;
+    line-height: 28px;
+    cursor: pointer;
 }
 
 .shipping-desk-wrap .shipping-desk-address-apply {

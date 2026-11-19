@@ -70,7 +70,7 @@ echo "================================\n\n";
 
 echo "[the selects are one control]\n";
 
-$select_rule = row_css_rule( $css, ".shipping-desk-wrap select.shipping-desk-box-select,\n.shipping-desk-wrap select.shipping-desk-service-select,\n.shipping-desk-wrap select.shipping-desk-signature-confirmation" );
+$select_rule = row_css_rule( $css, ".shipping-desk-screen select.shipping-desk-box-select,\n.shipping-desk-screen select.shipping-desk-service-select,\n.shipping-desk-screen select.shipping-desk-signature-confirmation" );
 row_check( '' !== $select_rule, 'box, service and signature selects share one rule' );
 row_check( false !== strpos( $select_rule, 'border-radius: 6px' ), 'at 6px, the slightly-rounded edge' );
 row_check( false !== strpos( $select_rule, 'height: 30px' ), '30px high' );
@@ -89,24 +89,46 @@ row_check( false !== strpos( $input_rule, 'min-height: 0' ), 'with core\'s min-h
 
 echo "\n[every select is covered]\n";
 
-// Each <select> the plugin renders has a static class, so every one can be required to
+// Each <select> the plugin renders must have a static class, so every one can be required to
 // appear in the shared rule by name. Tags are not parsed with a regex: every one of them
 // embeds PHP in an attribute, and the ">" of that closing tag ends a naive match early -
-// which is exactly how the bulk-actions select was missed. Instead each "<select" is
-// followed by a short window in which its class attribute must appear.
+// which is exactly how the bulk-actions select was missed. Instead each "<select" is followed
+// by its own tag, up to the first ">", in which its class attribute must appear.
+//
+// A select with NO class used to be skipped in silence - only the ones that had a class were
+// collected - which is how the Verifier dropdown on the settings page kept core's square
+// corners beside the plugin's rounded ones for a whole release. It is a failure now, not a
+// skip: a control with no class is invisible to every rule this file can check.
 $php = str_replace( "\r\n", "\n", (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-plugin.php' ) );
 
-$select_classes = array();
-$offset         = 0;
+$select_classes    = array();
+$selects_without   = array();
+$selects_seen      = 0;
+$offset            = 0;
 while ( false !== ( $at = strpos( $php, '<select', $offset ) ) ) {
-	if ( preg_match( '/class="([^"]+)"/', substr( $php, $at, 320 ), $found ) ) {
+	$window = substr( $php, $at, 320 );
+
+	// PHP blocks are blanked before the tag is cut at its first ">", because the PHP closing
+	// tag ends with a ">" and would otherwise finish the tag early - which is what made the
+	// bulk-actions select look class-less. Blanking keeps attribute positions, so the class is
+	// still found.
+	$window = (string) preg_replace( '/<\?php.*?\?>/s', ' ', $window );
+	$close  = strpos( $window, '>' );
+	$tag    = false === $close ? $window : substr( $window, 0, $close );
+	$line   = substr_count( $php, "\n", 0, $at ) + 1;
+	$selects_seen++;
+
+	if ( preg_match( '/class="([^"]+)"/', $tag, $found ) ) {
 		$select_classes[] = $found[1];
+	} else {
+		$selects_without[] = 'line ' . $line;
 	}
 	$offset = $at + 7;
 }
 $select_classes = array_unique( $select_classes );
 
-row_check( count( $select_classes ) >= 3, 'the markup renders the selects to check (' . count( $select_classes ) . ' found: ' . implode( ', ', $select_classes ) . ')' );
+row_same( 0, count( $selects_without ), 'every select carries a class (' . implode( ', ', $selects_without ) . ' has none)' );
+row_check( $selects_seen >= 4, 'the markup renders the selects to check (' . $selects_seen . ' found: ' . implode( ', ', $select_classes ) . ')' );
 foreach ( $select_classes as $select_class ) {
 	row_check(
 		false !== strpos( $css, 'select.' . $select_class . ',' ) || false !== strpos( $css, 'select.' . $select_class . ' {' ),
@@ -117,8 +139,8 @@ foreach ( $select_classes as $select_class ) {
 echo "\n[strong enough to beat WordPress core]\n";
 
 row_check(
-	false !== strpos( $css, '.shipping-desk-wrap select.shipping-desk-box-select' ),
-	'the select rule is scoped to the page wrapper and qualified with the element'
+	false !== strpos( $css, '.shipping-desk-screen select.shipping-desk-box-select' ),
+	'the select rule is scoped to the screen body class, not a page wrapper, and the element is named'
 );
 row_check(
 	false !== strpos( $css, '.shipping-desk-wrap input[type="number"].shipping-desk-total-weight' ),
@@ -157,7 +179,7 @@ if ( preg_match_all( '/([^{}]+)\{([^}]*)\}/', $css, $rules, PREG_SET_ORDER ) ) {
 row_check( ! empty( $uniform ), 'the 30px / 6px button rules are found (' . count( $uniform ) . ' classes)' );
 
 // Pills by design: the provider segments and the live/test chip sit inside a track.
-$pills = array( 'shipping-desk-provider-btn', 'shipping-desk-mode-chip' );
+$pills = array( 'shipping-desk-provider-btn', 'shipping-desk-mode-chip', 'shipping-desk-lookup-chip', 'shipping-desk-lookup-mode' );
 
 $button_classes = array();
 $with_button    = array();
@@ -192,7 +214,7 @@ foreach ( array( 'shipping-desk-address-apply', 'shipping-desk-review-flagged' )
  * scoped to the screen body class instead. A button is correct if its own class carries the
  * rule, or if it carries .button and the screen-wide rule provides it.
  */
-$shared_rule = row_css_rule( $css, ".shipping-desk-screen input.button,\n.shipping-desk-screen button.button" );
+$shared_rule = row_css_rule( $css, ".shipping-desk-screen a.button,\n.shipping-desk-screen input.button,\n.shipping-desk-screen button.button" );
 $shared_ok   = false !== strpos( $shared_rule, 'height: 30px' ) && false !== strpos( $shared_rule, 'border-radius: 6px' );
 row_check( $shared_ok, 'the screen-wide .button rule provides the same 30px / 6px shape' );
 

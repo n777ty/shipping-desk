@@ -547,6 +547,11 @@
      * be bought against the wrong account.
      */
     $(document).on('click', '.shipping-desk-provider-btn', function () {
+        // The lookup page's chips share these classes but have no data-provider: they set
+        // a form field, they do not switch the label provider.
+        if (!$(this).attr('data-provider')) {
+            return;
+        }
         var $btn = $(this);
         var $wrap = $btn.closest('.shipping-desk-provider-switch');
 
@@ -588,6 +593,10 @@
      * chip and the stored quotes in step with the new mode.
      */
     $(document).on('click', '.shipping-desk-mode-chip', function () {
+        // The lookup page's mode chip cycles a form field rather than the store's mode.
+        if ($(this).hasClass('shipping-desk-lookup-mode')) {
+            return;
+        }
         var $chip = $(this);
         var $wrap = $chip.closest('.shipping-desk-provider-switch');
         if ($wrap.hasClass('is-busy')) {
@@ -1025,6 +1034,163 @@
      * built: leaving the choice set would rewrite the order on every later Get
      * Rates press without anyone asking.
      */
+    /**
+     * Lookup page: the provider and mode chips.
+     *
+     * They are buttons, not inputs, so they look exactly like the provider switch - which
+     * means the click has to carry the value itself. That page is a plain POST form with
+     * no AJAX, so this only sets the hidden field and moves the highlight; nothing is sent
+     * until "Look up" is pressed.
+     */
+    $(document).on('click', '.shipping-desk-lookup-chip', function () {
+        var $chip  = $(this);
+        var target = $chip.data('target');
+
+        if (!target) return;
+
+        // Provider and mode share one pill, so "the group" is the field being fed, not
+        // the container: choosing a mode must not clear the chosen provider.
+        $('.shipping-desk-lookup-chip[data-target="' + target + '"]').each(function () {
+            var $other = $(this);
+            var active = $other.is($chip);
+
+            $other.toggleClass('is-active', active).attr('aria-pressed', active ? 'true' : 'false');
+        });
+
+        $('#' + target).val($chip.data('value'));
+
+        if ('lookup_provider' === target) {
+            syncLookupModeChip($chip.data('value'));
+        }
+    });
+
+    /**
+     * Lookup page: the mode chip follows the provider, because not every provider has modes.
+     *
+     * Veeqo is one account with no test mode, so offering it a cycling chip was offering
+     * choices it does not have. While Veeqo is selected the chip is pinned to Live and
+     * disabled; on the way back the mode chosen before the detour is restored, so a look at
+     * Veeqo does not quietly reset a deliberate Test.
+     */
+    function syncLookupModeChip(provider) {
+        var $chip = $('.shipping-desk-lookup-mode');
+        if (!$chip.length) return;
+
+        var labels = $chip.data('labels') || {};
+        var titles = $chip.data('titles') || {};
+
+        if ('veeqo' !== provider) {
+            var mode = $chip.data('unlockedMode') || 'auto';
+
+            $chip.removeData('unlockedMode')
+                .prop('disabled', false)
+                .attr('data-mode', mode)
+                .removeClass('is-auto is-test is-live')
+                .addClass('is-' + mode)
+                .text(labels[mode] || mode)
+                .attr('title', titles[mode] || '')
+                .attr('aria-label', titles[mode] || '');
+
+            $('#lookup_mode').val(mode);
+            return;
+        }
+
+        if (!$chip.data('unlockedMode')) {
+            $chip.data('unlockedMode', $chip.attr('data-mode') || 'auto');
+        }
+
+        var locked = $chip.attr('data-locked-title') || '';
+
+        $chip.prop('disabled', true)
+            .attr('data-mode', 'live')
+            .removeClass('is-auto is-test is-live')
+            .addClass('is-live')
+            .text(labels.live || 'Live')
+            .attr('title', locked)
+            .attr('aria-label', locked);
+
+        $('#lookup_mode').val('live');
+    }
+
+    /**
+     * Lookup page: the mode chip cycles Auto, Test, Live.
+     *
+     * One chip rather than three, because three lit chips in a row read as three separate
+     * switches. It carries its own colour, so the current mode is legible without being
+     * decoded, and the labels and titles travel in data attributes so they stay translated.
+     */
+    $(document).on('click', '.shipping-desk-lookup-mode', function () {
+        var $chip  = $(this);
+        var order  = ['auto', 'test', 'live'];
+        var labels = $chip.data('labels') || {};
+        var titles = $chip.data('titles') || {};
+        var next   = order[(order.indexOf($chip.attr('data-mode')) + 1) % order.length];
+
+        // Pinned to Live because the provider has no other mode. A disabled button does not
+        // dispatch clicks, so this is for the programmatic ones (a trigger, a test harness).
+        if ($chip.prop('disabled')) {
+            return;
+        }
+
+        $chip.attr('data-mode', next)
+            .removeClass('is-auto is-test is-live')
+            .addClass('is-' + next)
+            .text(labels[next] || next)
+            .attr('title', titles[next] || '')
+            .attr('aria-label', titles[next] || '');
+
+        $('#lookup_mode').val(next);
+    });
+
+    /**
+     * Lookup page: keep the line above the form honest as the chips change.
+     *
+     * The sentence is rendered server-side from the lookup that just ran. Before a lookup
+     * there is nothing to report, so it says what would happen - and choosing another
+     * provider has to rewrite it, otherwise the page goes on naming the provider setting
+     * while the chips say something else.
+     */
+    function lookupTargetText() {
+        var $track  = $('#shipping-desk-lookup-track');
+        if (!$track.length) return '';
+
+        var $chip     = $track.find('.shipping-desk-lookup-chip.is-active').first();
+        var $modeChip = $track.find('.shipping-desk-lookup-mode');
+        var value     = $chip.attr('data-value');
+        var provider  = $.trim($chip.text());
+        var setting   = $track.attr('data-default-provider') || '';
+        var settingMode = $track.attr('data-default-mode') || '';
+        // The words the server uses for a mode, so the line reads the same either side of
+        // a submit: "(production)", not the chip's "Live".
+        var words = {
+            test: $track.attr('data-mode-test') || 'test',
+            live: $track.attr('data-mode-live') || 'live'
+        };
+
+        if (settingMode) {
+            setting += ', ' + settingMode;
+        }
+
+        if ('auto' === value) {
+            return 'Will look up on Auto \u2014 the provider and mode recorded on the order, else the label setting (' + setting + ').';
+        }
+
+        // Veeqo has one account and no modes, so it is never asked for one.
+        if ('veeqo' === value) {
+            return 'Will look up on Veeqo.';
+        }
+
+        if ('auto' === $modeChip.attr('data-mode')) {
+            return 'Will look up on ' + provider + ' \u2014 the mode from the ' + provider + ' label settings.';
+        }
+
+        return 'Will look up on ' + provider + ' (' + (words[$modeChip.attr('data-mode')] || '') + ').';
+    }
+
+    $(document).on('click', '.shipping-desk-lookup-chip, .shipping-desk-lookup-mode', function () {
+        $('#lookup-target-line').text(lookupTargetText());
+    });
+
     $(document).on('click', '.shipping-desk-use-standardised', function () {
         var $row = $(this).closest('[data-order-id]');
         if (!$row.length) return;
