@@ -1206,8 +1206,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.4.0' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.4.0', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.4.1' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.4.1', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -2532,7 +2532,17 @@ class Shipping_Desk_Plugin {
                 // reopen as a pending decision hours later.
                 $address_validation['needs_decision'] = $needs_choice;
 
-                if ( $needs_choice && in_array( $choice, [ 'suggested', 'original' ], true ) ) {
+                // A minor correction does not stop the quote, but it is still an
+                // address worth having. Checkout offers the same standardisation to
+                // the customer, so a customer who kept their own spelling leaves the
+                // order reading that way while the label prints the standardised
+                // form - the two disagree on every such order. Honouring a choice
+                // whenever there is something to apply is what lets the one-click
+                // offer in the badge reach the order. Nothing is applied unasked: a
+                // choice only arrives when somebody clicked.
+                $can_apply = ! empty( $address_validation['apply'] );
+
+                if ( in_array( $choice, [ 'suggested', 'original' ], true ) && ( $needs_choice || $can_apply ) ) {
                     $this->apply_address_choice( $payload, $address_validation, $choice );
 
                     // The order is corrected here, not at purchase: the operator has

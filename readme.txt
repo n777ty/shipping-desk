@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,12 +83,19 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 
 == Changelog ==
 
+= 1.4.1 =
+* New: an address correction too small to stop a quote for is now offered on the orders screen instead of passing silently. The row reads "Address: standardised version available (ZIP+4 added, suite folded into line 1)" with a one-click Use standardised, which quotes again on that address and saves it to the order, so the order and the label finally describe the same place. Nothing is required, and nothing blocks the quote.
+* Fixed: 1.4.0 said those minor corrections were "reported in the badge", and they were not - the badge had no branch for that verdict, so the screen showed nothing and "checked and standardisable" looked identical to "never checked".
+* Fixed: a suite the verifier renamed while folding it ("Unit A" comes back inside line 1 as "APT A") was not recognised as the same unit, so line 2 survived and the label printed the apartment twice. Line 2 is now cleared when its unit is already in line 1 whatever the designator, and a second line that is not a unit, or names a different one, is never touched.
+* Docs: the checkout page has always offered every correction, including a bare ZIP+4. Materiality only ever decided whether the orders screen stops the quote, and the documentation now says so.
+* Unchanged: nothing blocks a checkout, there is still no re-validation on submit, and an unreachable verifier still leaves the address exactly as entered.
+
 = 1.4.0 =
 * New: address suggestions on the checkout page, for classic checkout. When a US address can be matched to a postal record more precisely, the customer sees the address they entered beside the suggested one, with the change named in words ("ZIP+4 added", "street standardised"), and can accept it in one click. Accepting rewrites the fields, re-prices the shipping and can be undone. Advisory only: nothing here blocks a checkout, there is no re-validation on submit, and an unreachable verifier leaves the address exactly as entered. Off by default.
 * New: a verifier setting - Automatic (EasyPost when a key is set, otherwise the label provider), EasyPost only, the active label provider only, or Off. The settings screen says which verifier and which key mode would actually answer, and warns when EasyPost's mode differs from the label provider's, because a customer should never be shown a correction produced by a test key.
 * New: an address the checkout has already checked is remembered for 90 days, so repeat customers and repeat attempts do not pay for the same lookup twice.
 * Improved: every address is now verified, whatever its postcode looks like. A ZIP+4 used to be treated as proof that the address had already been checked; it is only proof that nine digits are present. Customers type them, autofill supplies them from map data that is not CASS-certified, and a street edited after validation keeps the old route code.
-* Improved: a correction only asks the operator to decide when ignoring it could send the parcel elsewhere - an invalid address, or a different ZIP, city, state, country or materially different street. A ZIP+4-only or formatting-only change is reported in the badge and the address is used as entered, so the gate no longer adds a click to every order a verifier standardises.
+* Improved: a correction only asks the operator to decide when ignoring it could send the parcel elsewhere - an invalid address, or a different ZIP, city, state, country or materially different street. A ZIP+4-only or formatting-only change does not stop the quote and the address is used as entered, so the gate no longer adds a click to every order a verifier standardises.
 * Fixed: the destination country was hard-coded to US in the rate request, so an international order was quoted as a domestic one and then tripped an address check over an address that was valid for its own country. The country now comes from the order, and a destination outside the US and its territories is refused with a clear message rather than quoted as something it is not. Puerto Rico, Guam, the US Virgin Islands, American Samoa and the Northern Mariana Islands remain in scope.
 * Privacy: the checkout suggestion sends only address fields to the verifier - never the customer's name, email or phone - and the site's privacy policy text now says so.
 

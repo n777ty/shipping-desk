@@ -307,6 +307,29 @@ apply_check( false === Shipping_Desk_Helpers::address_line_carried( '123 Suite 5
 apply_check( false === Shipping_Desk_Helpers::address_line_carried( '123 Main St', '' ), 'an empty line 2 is never carried' );
 apply_check( false === Shipping_Desk_Helpers::address_line_carried( '', 'Apt 5' ), 'nor is one carried into an empty line 1' );
 
+/*
+ * The designator is a spelling, not information.
+ *
+ * A verifier renames it as it folds: the customer's "Unit 5" comes back inside the
+ * corrected line 1 as "APT 5". Compared as sentences those are two suites, so line 2
+ * survived and the label printed the unit twice - once in each style.
+ */
+apply_check( true === Shipping_Desk_Helpers::address_line_carried( '123 Main St APT 5', 'Unit 5' ), 'a renamed designator is still the same unit' );
+apply_check( true === Shipping_Desk_Helpers::address_line_carried( '123 Main St Apt 5', 'Ste 5' ), 'so is Suite against Apt' );
+apply_check( true === Shipping_Desk_Helpers::address_line_carried( '123 Main St APT 5', '#5' ), 'and a bare number sign' );
+apply_check( true === Shipping_Desk_Helpers::address_line_carried( '123 Main St APT 2H', 'Unit 2H' ), 'including a compound identifier' );
+apply_check( false === Shipping_Desk_Helpers::address_line_carried( '123 Main St APT 5', 'Unit 6' ), 'a different unit is a different line' );
+apply_check( false === Shipping_Desk_Helpers::address_line_carried( '123 Main St APT 5', 'Unit 2H' ), 'a longer identifier is not swallowed by a shorter one' );
+apply_check( false === Shipping_Desk_Helpers::address_line_carried( '123 Main St', 'Unit 5' ), 'a unit that never reached line 1 is kept' );
+apply_check( false === Shipping_Desk_Helpers::address_line_carried( '123 Main St', 'Rear entrance' ), 'and a second line that is not a unit is never cleared' );
+
+$renamed = Shipping_Desk_Helpers::apply_address_correction(
+    [ 'line1' => '123 Main St APT 5', 'line2' => 'Unit 5', 'town' => 'Wharton', 'county' => 'TX', 'postcode' => '77488', 'country_code' => 'US' ],
+    [ 'line1' => '123 MAIN ST APT 5', 'line2' => '', 'town' => 'WHARTON', 'county' => 'TX', 'postcode' => '77488-1234', 'country_code' => 'US' ]
+);
+apply_same( '', $renamed['line2'], 'so a fold that renamed the designator clears line 2 instead of duplicating it' );
+apply_same( '123 MAIN ST APT 5', $renamed['line1'], 'and line 1 keeps the verifier spelling' );
+
 /* -- the payload the label is bought from -------------------------------- */
 
 echo "\n[the payload that prints]\n";

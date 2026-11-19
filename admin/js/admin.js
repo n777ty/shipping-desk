@@ -722,8 +722,10 @@
      *
      * Shown for every outcome that changed something or could not run: an address
      * that was never checked must not look checked, and a feature that is not
-     * running must not look clean. Corrections that were not worth a decision
-     * (see validation_needs_decision()) report nothing.
+     * running must not look clean. A correction too small to stop a quote for (see
+     * validation_needs_decision()) is reported with a one-click offer instead of a
+     * panel: nothing is required, but taking it is what leaves the order carrying
+     * the same address the label prints.
      */
     function renderAddressBadge($row, validation) {
         var $container = $row.find('.shipping-desk-rates-container');
@@ -741,6 +743,15 @@
             text += validation.order_updated ? ' \u00b7 order address updated' : ' \u00b7 order address left as entered';
         } else if (validation.applied === 'original') {
             text = 'Address: as entered (a correction was offered)' + (validation.summary ? ' - ' + validation.summary : '');
+        } else if (validation.status === 'corrected') {
+            // Corrected, but not by enough to stop the quote: no panel, nothing
+            // required. Silent was wrong - "checked and standardisable" and "never
+            // checked" looked identical - and offering it here is the only way an
+            // order the customer left in their own spelling ever gains the address
+            // the label actually prints.
+            text = 'Address: standardised version available'
+                + (validation.summary ? ' (' + validation.summary + ')' : '')
+                + ' \u00b7 order address as entered';
         } else if (validation.status === 'valid') {
             // "Matched", not "verified": the carrier standardises the address at label
             // time (adds the ZIP+4, drops punctuation) and the verifier does not report
@@ -771,6 +782,19 @@
             $badge.attr('title', validation.error);
         } else if (validation.recommended_line) {
             $badge.attr('title', 'Verified: ' + validation.recommended_line);
+        }
+
+        // One click, no panel. The gate did not stop for this change, so nothing is
+        // demanded; taking it quotes again on the standardised address and saves it
+        // on the order, which is the point - otherwise order and label disagree
+        // forever. Absent once a choice has been applied (offered === applied).
+        if (validation.status === 'corrected' && !validation.applied && validation.recommended_line) {
+            $badge.append($('<button>', {
+                type: 'button',
+                'class': 'button button-small shipping-desk-use-standardised',
+                text: 'Use standardised',
+                title: 'Quote again with this address and save it on the order'
+            }));
         }
 
         $container.prepend($badge);
@@ -983,6 +1007,24 @@
 
     $(document).on('click', '.shipping-desk-get-rates', function () {
         fetchRatesForRow($(this).closest('tr'));
+    });
+
+    /**
+     * Take the standardised form on a correction that was not big enough to block.
+     *
+     * Sends exactly what the decision panel sends, so the server rebuilds the
+     * address from its own cached validation instead of trusting the browser, and
+     * then writes the order the same way. Cleared immediately after the request is
+     * built: leaving the choice set would rewrite the order on every later Get
+     * Rates press without anyone asking.
+     */
+    $(document).on('click', '.shipping-desk-use-standardised', function () {
+        var $row = $(this).closest('[data-order-id]');
+        if (!$row.length) return;
+
+        $row.data('address-choice', 'suggested').data('update-order-address', 1);
+        fetchRatesForRow($row);
+        $row.removeData('address-choice').removeData('update-order-address');
     });
 
     function getPurchaseError($row) {

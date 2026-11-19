@@ -213,6 +213,12 @@ payload_same( false, strpos( $helpers, 'function needs_address_validation' ), 't
 payload_same( false, strpos( $plugin, 'needs_address_validation' ), 'and nothing still calls it' );
 payload_same( true, substr_count( $plugin, 'is_supported_destination' ) >= 2, 'the scope is checked before quoting and before verifying' );
 payload_same( true, substr_count( $plugin, 'validation_needs_decision' ) >= 2, 'the gate asks the materiality rule' );
+payload_same( true, false !== strpos( $plugin, '$can_apply' ), 'a correction below that bar can still be applied on request' );
+payload_same(
+    true,
+    false !== strpos( $plugin, '( $needs_choice || $can_apply )' ),
+    'so the apply path is not gated on the materiality rule alone'
+);
 
 echo PHP_EOL . 'Checks: ' . $GLOBALS['payload_checks'] . ', failures: ' . $GLOBALS['payload_failures'] . PHP_EOL;
 exit( 0 === $GLOBALS['payload_failures'] ? 0 : 1 );

@@ -776,6 +776,11 @@
 	color: #125c26;
 }
 
+.shipping-desk-wrap .shipping-desk-address-badge .button {
+	margin-left: 8px;
+	vertical-align: middle;
+}
+
 .shipping-desk-wrap .shipping-desk-address-flag {
 	height: auto;
 	min-height: 0;

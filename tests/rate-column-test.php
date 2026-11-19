@@ -73,6 +73,35 @@ rate_check(
 	'it restates the totals through refreshRateTotals(), so the premium is included'
 );
 
+echo "\n[the standardised-address offer]\n";
+
+$badge = rate_function_body( $js, 'function renderAddressBadge($row, validation) {' );
+rate_check( '' !== $badge, 'renderAddressBadge() is present' );
+rate_check(
+	false !== strpos( $badge, "validation.status === 'corrected'" ),
+	'a correction below the materiality bar is reported rather than silent'
+);
+rate_check(
+	false !== strpos( $badge, 'shipping-desk-use-standardised' ),
+	'and it carries a one-click way to take it'
+);
+rate_check(
+	false !== strpos( $badge, '!validation.applied' ),
+	'the offer is withdrawn once a choice has been applied'
+);
+rate_check(
+	false !== strpos( $js, "'.shipping-desk-use-standardised'" ),
+	'the button is wired to a handler'
+);
+rate_check(
+	false !== strpos( $js, "data('address-choice', 'suggested')" ),
+	'which sends the same address_choice the decision panel sends'
+);
+rate_check(
+	false !== strpos( $js, "removeData('address-choice')" ),
+	'and clears it, so a later quote does not rewrite the order unasked'
+);
+
 echo "\n[the insurance premium]\n";
 
 $premium = rate_function_body( $js, 'function insurancePremium($row) {' );

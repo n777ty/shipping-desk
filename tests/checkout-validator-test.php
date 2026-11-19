@@ -353,6 +353,35 @@ cv_same(
     'a field the verifier did not return is not a change'
 );
 
+/*
+ * The checkout offers every correction, including the ones too small to stop a
+ * quote for. That is deliberate and it is not the materiality rule: a ZIP+4 or a
+ * folded suite still makes a better stored address, and the order is written from
+ * the fields the customer accepted. Materiality only decides whether the *admin*
+ * gate demands a click before it will quote.
+ */
+$minor = Shipping_Desk_Helpers::describe_address_validation(
+    [
+        'status'      => 'corrected',
+        'recommended' => [ 'line1' => '123 MAIN ST APT 5', 'line2' => '', 'postcode' => '77488-1234' ],
+        'changed'     => [ 'address_line_1', 'address_line_2', 'postal_code' ],
+    ],
+    'easypost'
+);
+
+cv_same( '123 MAIN ST APT 5', $minor['apply']['line1'], 'a folded suite is put into line 1' );
+cv_same( '', $minor['apply']['line2'], 'and cleared from line 2, so the label cannot print it twice' );
+cv_same( '77488-1234', $minor['apply']['postcode'], 'a ZIP+4 is offered like any other change' );
+cv_same( true, '' !== $minor['recommended_line'], 'so the customer is shown a suggestion for it' );
+cv_same(
+    false,
+    Shipping_Desk_Helpers::address_change_is_material(
+        [ 'line1' => '123 Main St', 'line2' => 'Apt 5', 'town' => 'Wharton', 'county' => 'TX', 'postcode' => '77488', 'country_code' => 'US' ],
+        [ 'line1' => '123 MAIN ST APT 5', 'line2' => '', 'postcode' => '77488-1234' ]
+    ),
+    'even though the admin gate would not stop the quote for it'
+);
+
 cv_section( 'cache replay' );
 
 $replay = new ReflectionMethod( 'Shipping_Desk_Checkout_Address', 'replay_cached' );

@@ -521,6 +521,14 @@ class Shipping_Desk_Helpers {
      * as carried into "Suite 500". Case and punctuation are ignored, because both
      * verifiers standardise them - the comparison is about the words, not the spelling.
      *
+     * The words themselves are not enough: a verifier renames the designator as it
+     * folds, so the customer's "Unit 5" comes back inside the corrected line 1 as
+     * "APT 5". Compared literally those are two different suites, line 2 is kept,
+     * and the label prints the unit twice - once in each style. When the literal
+     * match fails, the designator is therefore stripped from line 2 and the
+     * identifier is looked for after a designator in line 1. A line 2 that is not a
+     * unit at all never matches, because a wrong match here deletes a real suite.
+     *
      * @param string $line1 First address line, as it will be written.
      * @param string $line2 Second address line, as it stands.
      * @return bool
@@ -538,7 +546,55 @@ class Shipping_Desk_Helpers {
             return false;
         }
 
-        return 1 === preg_match( '/(^|[^a-z0-9])' . preg_quote( $second, '/' ) . '($|[^a-z0-9])/', $first );
+        if ( 1 === preg_match( '/(^|[^a-z0-9])' . preg_quote( $second, '/' ) . '($|[^a-z0-9])/', $first ) ) {
+            return true;
+        }
+
+        $unit = self::unit_designator_identifier( $second );
+        if ( '' === $unit ) {
+            return false;
+        }
+
+        return 1 === preg_match(
+            '/(?:^|[^a-z0-9])(?:' . self::unit_designators() . ')\s*' . preg_quote( $unit, '/' ) . '($|[^a-z0-9])/',
+            $first
+        );
+    }
+
+    /**
+     * Words that introduce a suite, flat, floor or bay in a secondary line.
+     *
+     * One list, used both to read a unit out of line 2 and to find it in line 1,
+     * so the two halves of the comparison cannot disagree.
+     *
+     * @return string Alternation for use inside a pattern.
+     */
+    private static function unit_designators() {
+        return 'apt|apartment|unit|ste|suite|fl|floor|flat|rm|room|bldg|building|dept|lot|spc|space|trlr|trailer';
+    }
+
+    /**
+     * The identifying part of a secondary-address line.
+     *
+     * "unit 5", "apt 5", "ste 5", "#5" and a bare "5" all name the same suite; the
+     * designator is a spelling, not information. Returns '' for a line that is not
+     * a unit ("rear entrance", "c/o Jane"), which is what keeps a real second line
+     * from being cleared.
+     *
+     * @param string $folded Lowercased, punctuation-stripped line.
+     * @return string
+     */
+    private static function unit_designator_identifier( $folded ) {
+        if ( 1 === preg_match( '/^(?:' . self::unit_designators() . ')\s*([a-z0-9][a-z0-9-]*)$/', $folded, $m ) ) {
+            return $m[1];
+        }
+
+        // A bare identifier: "#5" folds to "5", and "5" is what line 1 would say.
+        if ( 1 === preg_match( '/^([a-z0-9][a-z0-9-]*)$/', $folded ) ) {
+            return $folded;
+        }
+
+        return '';
     }
 
     /**
