@@ -88,7 +88,10 @@ function btn_is_styled( $css, $class_list ) {
 
 $root = dirname( __DIR__ );
 $css  = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/admin/css/admin.css' ) );
-$php  = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/includes/class-plugin.php' ) );
+// The plugin and the settings class together, so the buttons in the moved settings fields stay checked.
+// The orders screen too: it carries most of the plugin's buttons, and a gate that stopped reading
+// it when it moved would go on passing while checking almost none of them.
+$php  = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/includes/class-plugin.php' ) . "\n" . (string) file_get_contents( $root . '/includes/class-settings.php' ) . "\n" . (string) file_get_contents( $root . '/includes/class-orders-screen.php' ) . "\n" . (string) file_get_contents( $root . '/includes/class-lookup-page.php' ) );
 $js   = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/admin/js/admin.js' ) );
 
 $selector = ".shipping-desk-screen a.button,\n.shipping-desk-screen input.button,\n.shipping-desk-screen button.button";

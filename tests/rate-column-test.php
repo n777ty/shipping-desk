@@ -164,7 +164,7 @@ rate_check( '' !== $estimate, 'refreshLiabilityEstimate() is present' );
 rate_check( false !== strpos( $estimate, 'No insurance' ), 'an EasyPost row says when nothing is insured' );
 rate_check( false !== strpos( $estimate, 'priced into the rate' ), 'a Shippo row says why there is no figure to add' );
 rate_check(
-	false !== strpos( (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-plugin.php' ), 'shipping-desk-liability-estimate' ),
+	false !== strpos( (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-orders-screen.php' ), 'shipping-desk-liability-estimate' ),
 	'the field is rendered with somewhere to put that sentence'
 );
 

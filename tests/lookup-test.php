@@ -52,7 +52,10 @@ function lookup_body( $source, $signature ) {
 
 // Normalised: the file is checked out with CRLF on Windows and the method
 // boundaries below are written against bare newlines, as in the other gates.
-$source = str_replace( "\r\n", "\n", (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-plugin.php' ) );
+// The Lookup page lives in its own class; the plugin keeps the header switch it shares and the menu
+// entry that opens it. $source is the page, $plugin_source is the plugin.
+$source        = str_replace( "\r\n", "\n", (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-lookup-page.php' ) );
+$plugin_source = str_replace( "\r\n", "\n", (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-plugin.php' ) );
 
 echo "Shipping Desk shipment lookup checks\n";
 echo "====================================\n\n";
@@ -69,7 +72,10 @@ lookup_check( 1 === substr_count( $source, 'shipping-desk-lookup-mode' ), 'the m
 lookup_check( false !== strpos( $source, 'data-mode="' ), 'which carries the current mode' );
 lookup_check( false !== strpos( $source, 'data-labels="' ), 'and its translated labels' );
 lookup_check( false !== strpos( $source, 'data-titles="' ), 'and the sentence explaining what a click does' );
-lookup_check( 2 <= substr_count( $source, "' is-active' : ''" ), 'the resolved provider starts highlighted' );
+// One highlighted-chip expression on the page itself, and one on the header switch it is modelled
+// on (which stayed in the plugin because the orders screen shares it).
+lookup_check( 1 <= substr_count( $source, "' is-active' : ''" ), 'the resolved provider starts highlighted' );
+lookup_check( 1 <= substr_count( $plugin_source, "' is-active' : ''" ), 'and so does the header switch it copies' );
 lookup_check( false !== strpos( $source, 'None of this changes which provider buys the next label.' ), 'and says none of it is the label setting' );
 
 $js = str_replace( "\r\n", "\n", (string) file_get_contents( dirname( __DIR__ ) . '/admin/js/admin.js' ) );
@@ -95,7 +101,7 @@ lookup_check( '' !== $resolve, 'resolve_lookup_target() is present' );
 
 $chosen   = strpos( $resolve, 'in_array( $wanted_provider, $valid, true )' );
 $recorded = strpos( $resolve, 'in_array( $recorded_provider, $valid, true )' );
-$setting  = strpos( $resolve, '$this->provider()' );
+$setting  = strpos( $resolve, '$this->plugin->provider()' );
 
 lookup_check( false !== $chosen && false !== $recorded && false !== $setting, 'it considers all three sources' );
 lookup_check( $chosen < $recorded, 'a chosen provider wins over the record' );
@@ -173,6 +179,23 @@ lookup_check( false !== strpos( $js, "'#lookup-target-line'" ), 'the script rewr
 lookup_check( false !== strpos( $js, "'#shipping-desk-lookup-track'" ), 'reading the chips it is about' );
 lookup_check( false !== strpos( $js, "'.shipping-desk-lookup-chip, .shipping-desk-lookup-mode'" ), 'on both the provider and the mode' );
 lookup_check( false !== strpos( $js, '\u2014 the provider and mode recorded on the order' ), 'and keeps the Auto case qualified' );
+
+echo "\n[the page is reached through its own class]\n";
+lookup_check( 1 === substr_count( $plugin_source, "[ \$this->lookup_page(), 'render_lookup_page' ]" ), 'the submenu entry calls the page method through the accessor' );
+lookup_check( 0 === substr_count( $plugin_source, "[ \$this, 'render_lookup_page' ]" ), 'and nothing points the menu at a plugin method that no longer exists' );
+foreach ( array( 'render_lookup_page', 'resolve_lookup_target', 'lookup_shipment', 'find_order_for_shipment' ) as $method ) {
+	lookup_check( 0 === substr_count( $plugin_source, "function {$method}(" ) && 1 === substr_count( $source, "function {$method}(" ), "{$method} is defined once, in the page class" );
+}
+lookup_check( 1 === preg_match( '/public function render_lookup_page\(/', $source ), 'the page method is public, because WordPress calls it from outside the class' );
+lookup_check( 0 === preg_match( '/\$this->(provider|provider_mode|api|normalize_provider|shippo_api_key|easypost_api_key)\(/', $source ), 'the page asks the plugin for the provider, mode, client and keys: it calls none of them as its own' );
+lookup_check( 1 === substr_count( $plugin_source, 'new Shipping_Desk_Lookup_Page(' ), 'and the plugin builds the page class once' );
+$lookup_manifest = dirname( __DIR__ ) . '/tools/build-public.php';
+if ( is_file( $lookup_manifest ) ) {
+	lookup_check( false !== strpos( (string) file_get_contents( $lookup_manifest ), "'includes/class-lookup-page.php'" ), 'the class is on the publish list' );
+} else {
+	echo "  ..    the publish list is checked in the working repository (skipped: the published tree has no build manifest)\n";
+}
+lookup_check( is_file( dirname( __DIR__ ) . '/includes/class-lookup-page.php' ), 'the class file is present in this tree' );
 
 echo PHP_EOL . 'Checks: ' . $GLOBALS['lookup_checks'] . ', failures: ' . $GLOBALS['lookup_failures'] . PHP_EOL;
 

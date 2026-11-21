@@ -180,7 +180,9 @@ cv_same( true, false !== strpos( $described['recommended_line'], '77488-1234' ),
 cv_section( 'source guarantees' );
 
 $class_source   = (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-checkout-address.php' );
-$plugin_source  = (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-plugin.php' );
+// The plugin and the settings class together: the verification field and its registration moved.
+$plugin_source  = (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-plugin.php' )
+	. "\n" . (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-settings.php' );
 $uninstall      = (string) file_get_contents( dirname( __DIR__ ) . '/uninstall.php' );
 // tools/ is internal and is never copied into the published tree, so the manifest
 // checks run only where a manifest exists. In the built tree the files are there

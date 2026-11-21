@@ -49,4 +49,12 @@ delete_option( 'shipping_desk_complete_order_on_label' );
     foreach ( $meta_keys as $key ) {
         $wpdb->delete( $wpdb->postmeta, [ 'meta_key' => $key ], [ '%s' ] );
     }
+
+    // Purchase locks that were never released (a request killed mid-purchase).
+    $wpdb->query(
+        $wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $wpdb->esc_like( 'shipping_desk_buy_lock_' ) . '%'
+        )
+    );
 }

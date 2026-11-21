@@ -99,7 +99,9 @@ echo "\n[every select is covered]\n";
 // collected - which is how the Verifier dropdown on the settings page kept core's square
 // corners beside the plugin's rounded ones for a whole release. It is a failure now, not a
 // skip: a control with no class is invisible to every rule this file can check.
-$php = str_replace( "\r\n", "\n", (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-plugin.php' ) );
+// The plugin and the settings class together: the settings fields were moved out of the plugin
+// without changing their markup, and a select moved there must still be checked.
+$php = str_replace( "\r\n", "\n", (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-plugin.php' ) . "\n" . (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-settings.php' ) . "\n" . (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-orders-screen.php' ) . "\n" . (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-lookup-page.php' ) );
 
 $select_classes    = array();
 $selects_without   = array();

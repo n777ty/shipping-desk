@@ -60,7 +60,10 @@ function in_css_rule( $css, $selector ) {
 
 $root = dirname( __DIR__ );
 $css  = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/admin/css/admin.css' ) );
-$php  = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/includes/class-plugin.php' ) );
+// The plugin and the settings class together: the settings fields were moved out of the plugin
+// without changing their markup, and this gate must keep seeing them.
+// The orders screen too: its rows hold the number and select inputs this rule styles.
+$php  = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/includes/class-plugin.php' ) . "\n" . (string) file_get_contents( $root . '/includes/class-settings.php' ) . "\n" . (string) file_get_contents( $root . '/includes/class-orders-screen.php' ) . "\n" . (string) file_get_contents( $root . '/includes/class-lookup-page.php' ) );
 $js   = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/admin/js/admin.js' ) );
 
 $selector = '.shipping-desk-screen input[type="text"],';

@@ -56,7 +56,9 @@ function header_css_rule( $css, $selector ) {
 
 // Normalised: the files are checked out with CRLF on Windows.
 $root = dirname( __DIR__ );
-$php  = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/includes/class-plugin.php' ) );
+// The orders screen (header, rows, tables) lives in its own class; the plugin keeps the
+// provider switch and the spend badge it renders. Both are read, so a check sees either.
+$php  = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/includes/class-plugin.php' ) . "\n" . (string) file_get_contents( $root . '/includes/class-orders-screen.php' ) );
 $css  = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/admin/css/admin.css' ) );
 $js   = str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/admin/js/admin.js' ) );
 

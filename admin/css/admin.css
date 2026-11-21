@@ -760,6 +760,17 @@
 }
 
 /*
+ * "Label refunded." and what to do next. The sentence tells the operator to Reset Shipping and
+ * then Reship, so it is longer than the status words it replaced; on its own line above the
+ * buttons it wraps in the cell instead of pushing them around.
+ */
+.shipping-desk-wrap .shipping-desk-label-refunded {
+	display: block;
+	margin: 0 0 6px;
+	color: #50575e;
+}
+
+/*
  * Every button on every screen of the plugin, in one rule.
  *
  * These carry WordPress's own .button class: submit_button() renders an <input

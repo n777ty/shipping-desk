@@ -36,7 +36,10 @@ function form_check( $condition, $label, $detail = '' ) {
 	echo "  FAIL  {$label}" . ( '' !== $detail ? ' - ' . $detail : '' ) . "\n";
 }
 
-$source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-plugin.php' );
+// The plugin and the settings class together: the pages (forms) are in the plugin, and the
+// registrations and fields they submit are in the settings class.
+$source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-plugin.php' )
+	. "\n" . (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-settings.php' );
 
 echo "Shipping Desk settings form checks\n";
 echo "=================================\n";

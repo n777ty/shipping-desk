@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.6.0
+Stable tag: 1.6.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,12 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.6.1 =
+* Fixed: a label could be bought twice for one order if two requests arrived at once - a second browser tab, a second person, or a bulk purchase overlapping a single click - because the "already purchased" check only sees what has been saved so far. Each purchase now takes a per-order lock first; the second request is told a purchase is already in progress and buys nothing. The lock is released however the request ends, and kept (for five minutes) only when a request dies between asking the carrier and saving the answer, because nobody then knows whether a label exists.
+* Improved: after a refund the row says what to do next - "Label refunded. To buy a replacement, click Reset Shipping, then Reship." - at the moment of the refund and after a reload. Wording only.
+* Changed: no behaviour. The plugin's largest file was taken apart so the code that buys, refunds and resets labels can be tested: buying, label actions (print, refund, reset), stored quotes, the orders screen, Shipment Lookup, settings and settings export/import now live in their own files, each moved line for line. Refund, reset and the shipment lookup have tests for the first time. Twenty-three gates.
+* Note: uninstalling with "Remove data on uninstall" ticked also removes any purchase lock left behind.
 
 = 1.6.0 =
 * New: Shipment Lookup can now ask a provider other than the one selected for labels. It resolves per lookup - the provider and mode chosen on the form, then the provider and mode recorded on the order when its label was bought, then the settings - so an older label from another provider, or one bought in test mode, can be found without changing what buys the next label. The page says which of the three decided, and a missing key for that mode is explained rather than reported as "id not found".

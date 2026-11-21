@@ -5,23 +5,6 @@
 class Shipping_Desk_Plugin {
 
     /**
-     * How long a validation result is reused, in seconds.
-     *
-     * Addresses do not change while a row is being worked on, and Get Rates is
-     * clicked again after every box, signature or insurance change. One paid call
-     * per address per half-day.
-     */
-    const ADDRESS_VALIDATION_TTL = 43200;
-
-    /**
-     * Hard cap on how long a stored quote may be reused, in hours.
-     *
-     * The dispatch day is the real limit and is checked at read time; this cap only
-     * stops a quiet weekend from leaving Friday's prices on screen on Tuesday.
-     */
-    const QUOTE_RECORD_CAP_HOURS = 72;
-
-    /**
      * Orders per bulk-buy request.
      *
      * A purchase is paced (~350 ms live, 1.4 s on a Shippo test key) plus a round trip,
@@ -43,16 +26,26 @@ class Shipping_Desk_Plugin {
     /** @var Shipping_Desk_PrintNode_Client|null */
     protected $_printnode_client = null;
 
-    /**
-     * What was bought, once the purchase is durable.
-     *
-     * Set the moment the label meta is saved, so a fatal raised afterwards — by an email
-     * template, a notification hook, anything that runs on completion — can still report
-     * the purchase instead of looking like a failure.
-     *
-     * @var array
-     */
-    protected $committed_purchase = [];
+    /** @var Shipping_Desk_Settings|null */
+    protected $_settings = null;
+
+    /** @var Shipping_Desk_Lookup_Page|null */
+    protected $_lookup_page = null;
+
+    /** @var Shipping_Desk_Orders_Screen|null */
+    protected $_orders_screen = null;
+
+    /** @var Shipping_Desk_Label_Actions|null */
+    protected $_label_actions = null;
+
+    /** @var Shipping_Desk_Labels|null */
+    protected $_labels = null;
+
+    /** @var Shipping_Desk_Quote_Store|null */
+    protected $_quote_store = null;
+
+    /** @var Shipping_Desk_Settings_Transfer|null */
+    protected $_settings_transfer = null;
 
     public function __construct( $file ) {
         $this->file = $file;
@@ -63,22 +56,20 @@ class Shipping_Desk_Plugin {
     public function init() {
         add_action( 'init', [ $this, 'load_textdomain' ] );
         add_action( 'admin_menu', [ $this, 'register_admin_pages' ] );
-        add_action( 'admin_init', [ $this, 'register_settings' ] );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
         add_action( 'admin_footer', [ $this, 'render_whats_new_modal' ] );
         // One body class for every screen of the plugin, so styling does not have to
         // know which page wrapper a given page happens to use.
         add_filter( 'admin_body_class', [ $this, 'add_screen_body_class' ] );
-        // Runs before settings are used so legacy options are carried over.
-        add_action( 'admin_init', [ $this, 'maybe_migrate_legacy_settings' ], 1 );
-        add_action( 'admin_init', [ $this, 'maybe_migrate_easypost_key' ], 2 );
-        add_action( 'admin_init', [ $this, 'maybe_default_legacy_provider' ], 3 );
-        add_action( 'admin_post_shipping_desk_export_settings', [ $this, 'handle_export_settings' ] );
-        add_action( 'admin_post_shipping_desk_import_settings', [ $this, 'handle_import_settings' ] );
+        $this->settings()->init();
+        $this->settings_transfer()->init();
+        $this->labels()->init();
+        $this->label_actions()->init();
+        $this->orders_screen()->init();
         add_filter( 'plugin_action_links_' . plugin_basename( $this->file ), [ $this, 'filter_action_links' ] );
 
         // AJAX
-        foreach ( [ 'shipping_desk_get_rates', 'shipping_desk_buy_label', 'shipping_desk_print_label', 'shipping_desk_print_pdf', 'shipping_desk_refund_label', 'shipping_desk_reset_shipping', 'shipping_desk_render_purchase_row', 'shipping_desk_printnode_refresh_printers', 'shipping_desk_printnode_print_label', 'shipping_desk_printnode_status', 'shipping_desk_bulk_buy', 'shipping_desk_switch_provider', 'shipping_desk_dismiss_whats_new' ] as $action ) {
+        foreach ( [ 'shipping_desk_get_rates', 'shipping_desk_printnode_refresh_printers', 'shipping_desk_printnode_status', 'shipping_desk_switch_provider', 'shipping_desk_dismiss_whats_new' ] as $action ) {
             add_action( 'wp_ajax_' . $action, [ $this, $action ] );
         }
     }
@@ -269,7 +260,7 @@ class Shipping_Desk_Plugin {
             __( 'Shipping Desk', 'shipping-desk' ),
             'manage_woocommerce',
             'shipping-desk',
-            [ $this, 'render_orders_page' ],
+            [ $this->orders_screen(), 'render_orders_page' ],
             'dashicons-admin-generic',
             56
         );
@@ -280,7 +271,7 @@ class Shipping_Desk_Plugin {
             __( 'Shipment Lookup', 'shipping-desk' ),
             'manage_woocommerce',
             'shipping-desk-lookup',
-            [ $this, 'render_lookup_page' ]
+            [ $this->lookup_page(), 'render_lookup_page' ]
         );
 
         add_submenu_page(
@@ -311,97 +302,6 @@ class Shipping_Desk_Plugin {
         );
     }
 
-    public function register_settings() {
-        register_setting( 'shipping_desk_box_settings', 'shipping_desk_boxes', [ 'sanitize_callback' => [ $this, 'sanitize_boxes' ] ] );
-
-        // Label provider. Defaults to Shippo; EasyPost and Veeqo are one radio
-        // button away, and old labels keep their own provider marker either way.
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_provider', [ 'sanitize_callback' => function ( $value ) {
-            return in_array( $value, [ 'veeqo', 'shippo', 'easypost' ], true ) ? $value : 'shippo';
-        } ] );
-        // Shippo keeps both keys: switching between test and production must not
-        // destroy the other one.
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_shippo_mode', [ 'sanitize_callback' => function ( $value ) {
-            return 'live' === $value ? 'live' : 'test';
-        } ] );
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_shippo_test_api_key' );
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_shippo_live_api_key' );
-
-        // EasyPost is both a label provider and the address verifier, so one mode
-        // and one pair of keys govern both jobs. There is deliberately no third,
-        // verifier-only key.
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_easypost_mode', [ 'sanitize_callback' => function ( $value ) {
-            return 'live' === $value ? 'live' : 'test';
-        } ] );
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_easypost_test_api_key' );
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_easypost_live_api_key' );
-
-        // Checkout address validation: one switch and one verifier choice, both in
-        // the provider form because they decide who sees the customer's address,
-        // not how a label is bought.
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_checkout_validation', [ 'sanitize_callback' => function ( $value ) {
-            return $value ? 1 : 0;
-        } ] );
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_verifier', [ 'sanitize_callback' => function ( $value ) {
-            return in_array( $value, [ 'auto', 'easypost', 'provider', 'off' ], true ) ? $value : 'auto';
-        } ] );
-
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_veeqo_api_key' );
-        // The legacy single EasyPost key is deliberately NOT registered. It has no field on
-        // this page, and any option registered to a settings group is set to null whenever a
-        // form in that group is saved without it - which would erase the key before
-        // maybe_migrate_easypost_key() could copy it into its slot. Unregistered, nothing
-        // here can touch it.
-        // Its own group, not the keys' group: WordPress saves a group, so sharing one would
-        // mean saving an address re-posts every key - and any field absent from that POST
-        // is nulled. The gate in tests/settings-forms-test.php enforces the split.
-        register_setting( 'shipping_desk_from_settings', 'shipping_desk_from_address', [ 'sanitize_callback' => [ $this, 'sanitize_from_address' ] ] );
-
-        add_settings_section( 'shipping_desk_provider_section', __( 'Label Provider', 'shipping-desk' ), '__return_false', 'shipping_desk_api_settings' );
-        add_settings_field( 'shipping_desk_provider_field', __( 'Active provider', 'shipping-desk' ), [ $this, 'render_provider_field' ], 'shipping_desk_api_settings', 'shipping_desk_provider_section' );
-        add_settings_field( 'shipping_desk_shippo_mode_field', __( 'Shippo mode', 'shipping-desk' ), [ $this, 'render_shippo_mode_field' ], 'shipping_desk_api_settings', 'shipping_desk_provider_section' );
-        add_settings_field( 'shipping_desk_shippo_keys_field', __( 'Shippo API keys', 'shipping-desk' ), [ $this, 'render_shippo_keys_field' ], 'shipping_desk_api_settings', 'shipping_desk_provider_section' );
-        add_settings_field( 'shipping_desk_easypost_mode_field', __( 'EasyPost mode', 'shipping-desk' ), [ $this, 'render_easypost_mode_field' ], 'shipping_desk_api_settings', 'shipping_desk_provider_section' );
-        add_settings_field( 'shipping_desk_easypost_keys_field', __( 'EasyPost API keys', 'shipping-desk' ), [ $this, 'render_easypost_keys_field' ], 'shipping_desk_api_settings', 'shipping_desk_provider_section' );
-
-        // One provider's key is not more special than another's, and Veeqo has no
-        // mode of its own to group with: it belongs beside the Shippo and EasyPost
-        // keys, not under a heading that makes it look like a separate feature.
-        add_settings_field( 'shipping_desk_veeqo_api_key_field', __( 'Veeqo API Key', 'shipping-desk' ), [ $this, 'render_api_key_field' ], 'shipping_desk_api_settings', 'shipping_desk_provider_section' );
-
-        // Its own section, last on the form. Verification serves the admin address
-        // gate and the checkout whichever provider buys the labels, so sitting
-        // between the EasyPost keys and the Veeqo key made it read as an EasyPost
-        // option - which it is not.
-        add_settings_section( 'shipping_desk_verification_section', __( 'Address verification', 'shipping-desk' ), [ $this, 'render_verification_section' ], 'shipping_desk_api_settings' );
-        add_settings_field( 'shipping_desk_checkout_validation_field', __( 'Address verification', 'shipping-desk' ), [ $this, 'render_checkout_validation_field' ], 'shipping_desk_api_settings', 'shipping_desk_verification_section' );
-
-        add_settings_section( 'shipping_desk_from_address_section', __( 'From Address (Optional)', 'shipping-desk' ), '__return_false', 'shipping_desk_from_settings' );
-        add_settings_field( 'shipping_desk_from_address_field', __( 'Shipment Origin', 'shipping-desk' ), [ $this, 'render_from_address_field' ], 'shipping_desk_from_settings', 'shipping_desk_from_address_section' );
-
-        register_setting( 'shipping_desk_printnode_settings', 'shipping_desk_printnode_api_key' );
-        register_setting( 'shipping_desk_printnode_settings', 'shipping_desk_printnode_printer_id', [ 'sanitize_callback' => 'absint' ] );
-        register_setting( 'shipping_desk_printnode_settings', 'shipping_desk_print_mode', [ 'sanitize_callback' => function ( $value ) {
-            return in_array( $value, [ 'browser', 'printnode' ], true ) ? $value : 'browser';
-        } ] );
-
-        // Each of these lives in its own settings group, because WordPress saves a *group*,
-        // not a form: every option registered to the submitted group is overwritten, and
-        // ones missing from the POST are set to null. Sharing one group across several
-        // forms meant saving the reship checkbox wiped the API keys and the provider.
-        register_setting( 'shipping_desk_uninstall_settings', 'shipping_desk_delete_data_on_uninstall', [ 'sanitize_callback' => function ( $value ) {
-            return $value ? 1 : 0;
-        } ] );
-
-        register_setting( 'shipping_desk_reship_settings', 'shipping_desk_reship_send_completed_email', [ 'sanitize_callback' => function ( $value ) {
-            return $value ? 1 : 0;
-        } ] );
-
-        register_setting( 'shipping_desk_tracking_settings', 'shipping_desk_complete_order_on_label', [ 'sanitize_callback' => function ( $value ) {
-            return $value ? 1 : 0;
-        } ] );
-    }
-
     /**
      * Option keys owned by this plugin.
      *
@@ -430,245 +330,6 @@ class Shipping_Desk_Plugin {
         ];
     }
 
-    /**
-     * Copy settings from the pre-refactor plugin ("Woo Veeqo Rate Shop").
-     *
-     * That plugin stored its options under woo_veeqo_* keys. Because this
-     * plugin is a different WordPress plugin entirely, an "upgrade" leaves the
-     * old options in place but invisible, which looks like settings were wiped.
-     * This carries them across once, never overwriting values already set.
-     */
-    public function maybe_migrate_legacy_settings() {
-        if ( get_option( 'shipping_desk_legacy_migrated' ) ) {
-            return;
-        }
-        if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            return;
-        }
-
-        $map = [
-            'shipping_desk_veeqo_api_key'              => 'woo_veeqo_api_key',
-            'shipping_desk_boxes'                => 'woo_veeqo_boxes',
-            'shipping_desk_from_address'         => 'woo_veeqo_from_address',
-            'shipping_desk_printnode_api_key'    => 'woo_veeqo_printnode_api_key',
-            'shipping_desk_printnode_printer_id' => 'woo_veeqo_printnode_printer_id',
-            'shipping_desk_print_mode'           => 'woo_veeqo_print_mode',
-        ];
-
-        $migrated = [];
-
-        foreach ( $map as $new_key => $old_key ) {
-            $existing = get_option( $new_key, null );
-            // Never overwrite a value that is already configured.
-            if ( null !== $existing && '' !== $existing && [] !== $existing ) {
-                continue;
-            }
-            $legacy = get_option( $old_key, null );
-            if ( null === $legacy || '' === $legacy || [] === $legacy ) {
-                continue;
-            }
-            update_option( $new_key, $legacy );
-            $migrated[] = $new_key;
-        }
-
-        update_option( 'shipping_desk_legacy_migrated', 1 );
-
-        if ( $migrated ) {
-            set_transient( 'shipping_desk_migration_notice', $migrated, 60 );
-        }
-    }
-
-    /**
-     * Export the current settings as JSON.
-     */
-    public function handle_export_settings() {
-        if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            wp_die( esc_html__( 'You do not have permission to export settings.', 'shipping-desk' ) );
-        }
-        check_admin_referer( 'shipping_desk_export_settings' );
-
-        $boxes = get_option( 'shipping_desk_boxes', [] );
-        $payload = [
-            'plugin'      => 'shipping-desk',
-            'version'     => defined( 'SHIPPING_DESK_VERSION' ) ? SHIPPING_DESK_VERSION : '',
-            'exported_at' => gmdate( 'c' ),
-            'settings'    => [
-                'api_key'              => (string) get_option( 'shipping_desk_veeqo_api_key', '' ),
-                'provider'             => $this->provider(),
-                'shippo_mode'          => $this->shippo_mode(),
-                'shippo_test_api_key'  => (string) get_option( 'shipping_desk_shippo_test_api_key', '' ),
-                'shippo_live_api_key'  => (string) get_option( 'shipping_desk_shippo_live_api_key', '' ),
-                'easypost_mode'        => $this->easypost_mode(),
-                'easypost_test_api_key' => (string) get_option( 'shipping_desk_easypost_test_api_key', '' ),
-                'easypost_live_api_key' => (string) get_option( 'shipping_desk_easypost_live_api_key', '' ),
-                'from_address'         => get_option( 'shipping_desk_from_address', [] ),
-                'boxes'                => is_array( $boxes ) ? array_values( $boxes ) : [],
-                'print_mode'           => (string) get_option( 'shipping_desk_print_mode', 'browser' ),
-                'printnode_api_key'    => (string) get_option( 'shipping_desk_printnode_api_key', '' ),
-                'printnode_printer_id' => (int) get_option( 'shipping_desk_printnode_printer_id', 0 ),
-            ],
-        ];
-
-        $filename = 'shipping-desk-settings-' . gmdate( 'Ymd-His' ) . '.json';
-
-        nocache_headers();
-        header( 'Content-Type: application/json; charset=utf-8' );
-        header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
-        echo wp_json_encode( $payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
-        exit;
-    }
-
-    /**
-     * Import settings from an uploaded JSON export.
-     */
-    public function handle_import_settings() {
-        if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            wp_die( esc_html__( 'You do not have permission to import settings.', 'shipping-desk' ) );
-        }
-        check_admin_referer( 'shipping_desk_import_settings' );
-
-        $redirect = add_query_arg( 'page', 'shipping-desk-settings', admin_url( 'admin.php' ) );
-
-        if ( empty( $_FILES['shipping_desk_import_file']['tmp_name'] ) ) {
-            wp_safe_redirect( add_query_arg( 'shipping_desk_import', 'nofile', $redirect ) );
-            exit;
-        }
-
-        $file    = $_FILES['shipping_desk_import_file'];
-        $raw     = file_get_contents( $file['tmp_name'] );
-        $decoded = json_decode( (string) $raw, true );
-
-        if ( ! is_array( $decoded ) || empty( $decoded['settings'] ) || ! is_array( $decoded['settings'] ) ) {
-            wp_safe_redirect( add_query_arg( 'shipping_desk_import', 'invalid', $redirect ) );
-            exit;
-        }
-
-        $settings = $decoded['settings'];
-        $imported = [];
-
-        if ( isset( $settings['api_key'] ) ) {
-            update_option( 'shipping_desk_veeqo_api_key', sanitize_text_field( (string) $settings['api_key'] ) );
-            $imported[] = 'api_key';
-        }
-
-        if ( isset( $settings['provider'] ) ) {
-            update_option( 'shipping_desk_provider', $this->normalize_provider( $settings['provider'], 'shippo' ) );
-            $imported[] = 'provider';
-        }
-
-        if ( isset( $settings['shippo_mode'] ) ) {
-            update_option( 'shipping_desk_shippo_mode', 'live' === $settings['shippo_mode'] ? 'live' : 'test' );
-            $imported[] = 'shippo_mode';
-        }
-
-        if ( isset( $settings['shippo_test_api_key'] ) ) {
-            update_option( 'shipping_desk_shippo_test_api_key', sanitize_text_field( (string) $settings['shippo_test_api_key'] ) );
-            $imported[] = 'shippo_test_api_key';
-        }
-
-        if ( isset( $settings['shippo_live_api_key'] ) ) {
-            update_option( 'shipping_desk_shippo_live_api_key', sanitize_text_field( (string) $settings['shippo_live_api_key'] ) );
-            $imported[] = 'shippo_live_api_key';
-        }
-
-        if ( isset( $settings['easypost_mode'] ) ) {
-            update_option( 'shipping_desk_easypost_mode', 'live' === $settings['easypost_mode'] ? 'live' : 'test' );
-            $imported[] = 'easypost_mode';
-        }
-
-        if ( isset( $settings['easypost_test_api_key'] ) ) {
-            update_option( 'shipping_desk_easypost_test_api_key', sanitize_text_field( (string) $settings['easypost_test_api_key'] ) );
-            $imported[] = 'easypost_test_api_key';
-        }
-
-        if ( isset( $settings['easypost_live_api_key'] ) ) {
-            update_option( 'shipping_desk_easypost_live_api_key', sanitize_text_field( (string) $settings['easypost_live_api_key'] ) );
-            $imported[] = 'easypost_live_api_key';
-        }
-
-        if ( isset( $settings['from_address'] ) && is_array( $settings['from_address'] ) ) {
-            update_option( 'shipping_desk_from_address', $this->sanitize_from_address( $settings['from_address'] ) );
-            $imported[] = 'from_address';
-        }
-
-        if ( isset( $settings['boxes'] ) && is_array( $settings['boxes'] ) ) {
-            update_option( 'shipping_desk_boxes', $this->sanitize_boxes( $settings['boxes'] ) );
-            $imported[] = 'boxes';
-        }
-
-        if ( isset( $settings['print_mode'] ) ) {
-            $mode = in_array( $settings['print_mode'], [ 'browser', 'printnode' ], true ) ? $settings['print_mode'] : 'browser';
-            update_option( 'shipping_desk_print_mode', $mode );
-            $imported[] = 'print_mode';
-        }
-
-        if ( isset( $settings['printnode_api_key'] ) ) {
-            update_option( 'shipping_desk_printnode_api_key', sanitize_text_field( (string) $settings['printnode_api_key'] ) );
-            $imported[] = 'printnode_api_key';
-        }
-
-        if ( isset( $settings['printnode_printer_id'] ) ) {
-            update_option( 'shipping_desk_printnode_printer_id', absint( $settings['printnode_printer_id'] ) );
-            $imported[] = 'printnode_printer_id';
-        }
-
-        set_transient( 'shipping_desk_import_notice', $imported, 60 );
-        wp_safe_redirect( add_query_arg( 'shipping_desk_import', 'ok', $redirect ) );
-        exit;
-    }
-
-    public function sanitize_boxes( $value ) {
-        if ( is_string( $value ) ) {
-            $decoded = json_decode( $value, true );
-            if ( is_array( $decoded ) ) {
-                $value = $decoded;
-            } else {
-                return [];
-            }
-        }
-        if ( ! is_array( $value ) ) {
-            return [];
-        }
-        $clean = [];
-        foreach ( $value as $box ) {
-            if ( ! is_array( $box ) ) {
-                continue;
-            }
-            $name   = isset( $box['name'] ) ? sanitize_text_field( $box['name'] ) : '';
-            $length = isset( $box['length'] ) ? floatval( $box['length'] ) : 0;
-            $width  = isset( $box['width'] ) ? floatval( $box['width'] ) : 0;
-            $height = isset( $box['height'] ) ? floatval( $box['height'] ) : 0;
-            $weight = isset( $box['weight'] ) ? floatval( $box['weight'] ) : 0;
-            // Skip completely empty rows.
-            if ( $name === '' && $length == 0 && $width == 0 && $height == 0 && $weight == 0 ) {
-                continue;
-            }
-            $clean[] = [
-                'name'   => $name,
-                'length' => $length,
-                'width'  => $width,
-                'height' => $height,
-                'weight' => $weight,
-            ];
-        }
-        return array_values( $clean );
-    }
-
-
-    public function sanitize_from_address( $value ) {
-        if ( ! is_array( $value ) ) {
-            return [];
-        }
-        $value  = wp_unslash( $value );
-        $clean  = [];
-        $fields = [ 'name', 'company', 'phone', 'email', 'line1', 'town', 'county', 'postcode', 'country_code' ];
-        foreach ( $fields as $field ) {
-            $clean[ $field ] = isset( $value[ $field ] ) ? sanitize_text_field( $value[ $field ] ) : '';
-        }
-        $clean['email']        = sanitize_email( $clean['email'] );
-        $clean['country_code'] = strtoupper( $clean['country_code'] );
-        return $clean;
-    }
 
     /**
      * From-address values the carriers need but the store does not supply.
@@ -679,7 +340,7 @@ class Shipping_Desk_Plugin {
      *
      * @return string[] Human-readable field names, empty when everything resolves.
      */
-    protected function from_address_problems() {
+    public function from_address_problems() {
         $from   = Shipping_Desk_Helpers::get_from_address();
         $fields = [
             'phone' => __( 'phone number', 'shipping-desk' ),
@@ -696,388 +357,6 @@ class Shipping_Desk_Plugin {
         return $missing;
     }
 
-    /**
-     * EasyPost key mode.
-     *
-     * One mode governs everything EasyPost does here — buying labels *and*
-     * verifying addresses — because they share a key. There is deliberately no
-     * separate verifier key: the selected key is the one used for both jobs.
-     */
-    public function render_easypost_mode_field() {
-        $mode = $this->easypost_mode();
-        ?>
-        <fieldset>
-            <label>
-                <input type="radio" name="shipping_desk_easypost_mode" value="test" <?php checked( 'test', $mode ); ?> />
-                <?php esc_html_e( 'Test', 'shipping-desk' ); ?>
-            </label><br />
-            <label>
-                <input type="radio" name="shipping_desk_easypost_mode" value="live" <?php checked( 'live', $mode ); ?> />
-                <?php esc_html_e( 'Production', 'shipping-desk' ); ?>
-            </label>
-            <p class="description">
-                <?php esc_html_e( 'Test buys test labels with no money spent; Production spends real money. Both keys are kept, so switching back and forth does not lose either. The selected key is also the one used for EasyPost address validation.', 'shipping-desk' ); ?>
-            </p>
-        </fieldset>
-        <?php
-    }
-
-    /**
-     * EasyPost keys, one per mode.
-     *
-     * The key itself carries the mode (`EZTK…` test, `EZAK…` production), so the
-     * slot is checked against the prefix rather than trusting the paste.
-     */
-    public function render_easypost_keys_field() {
-        $test_key = (string) get_option( 'shipping_desk_easypost_test_api_key', '' );
-        $live_key = (string) get_option( 'shipping_desk_easypost_live_api_key', '' );
-        ?>
-        <p>
-            <label for="shipping_desk_easypost_test_api_key"><strong><?php esc_html_e( 'Test API key', 'shipping-desk' ); ?></strong></label><br />
-            <input type="password" id="shipping_desk_easypost_test_api_key" name="shipping_desk_easypost_test_api_key"
-                   value="<?php echo esc_attr( $test_key ); ?>" <?php echo $this->api_key_attributes(); // phpcs:ignore WordPress.Security.EscapeOutput -- static attribute string ?> />
-        </p>
-        <p>
-            <label for="shipping_desk_easypost_live_api_key"><strong><?php esc_html_e( 'Production API key', 'shipping-desk' ); ?></strong></label><br />
-            <input type="password" id="shipping_desk_easypost_live_api_key" name="shipping_desk_easypost_live_api_key"
-                   value="<?php echo esc_attr( $live_key ); ?>" <?php echo $this->api_key_attributes(); // phpcs:ignore WordPress.Security.EscapeOutput -- static attribute string ?> />
-        </p>
-        <p class="description">
-            <?php esc_html_e( 'Used for both EasyPost labels and address validation. Insurance is EasyPost\'s own and is priced at purchase, not in the quote.', 'shipping-desk' ); ?>
-        </p>
-        <?php
-        $warning = $this->easypost_key_warning( $test_key, $live_key );
-        if ( '' !== $warning ) {
-            printf( '<div class="notice notice-warning inline"><p>%s</p></div>', esc_html( $warning ) );
-        }
-    }
-
-    /**
-     * Section intro for the verification block.
-     *
-     * The scope belongs here rather than beside the checkbox: it describes what
-     * the whole block does and does not cover.
-     */
-    public function render_verification_section() {
-        ?>
-        <p class="description">
-            <?php esc_html_e( 'US destinations only, including Puerto Rico, Guam, the US Virgin Islands, American Samoa and the Northern Mariana Islands; other countries are left untouched. Checkout is never blocked, and an unreachable verifier costs the sale nothing. One call per unique address per 90 days.', 'shipping-desk' ); ?>
-        </p>
-        <?php
-    }
-
-    /**
-     * Who verifies, and whether customers see it.
-     *
-     * Two questions, not one: "does anything get verified, and by whom" above,
-     * "does the customer see it at checkout" below. Verifier Off is not the same
-     * as unticking the checkbox — Off also stops the admin address gate, and is
-     * the only way to switch verification off without deleting the key. Hence the
-     * wording, and the disabled checkbox when Off is selected: a ticked box that
-     * can never do anything is a lie on screen.
-     */
-    public function render_checkout_validation_field() {
-        $enabled  = $this->checkout_validation_enabled();
-        $choice   = $this->verifier_choice();
-        $summary  = $this->verifier_summary();
-        $disabled = 'off' === $choice;
-
-        $options = [
-            'auto'     => __( 'Automatic — EasyPost when a key is set, otherwise the label provider', 'shipping-desk' ),
-            'easypost' => __( 'EasyPost only', 'shipping-desk' ),
-            'provider' => __( 'The active label provider only', 'shipping-desk' ),
-            'off'      => __( 'Off — no address is checked anywhere', 'shipping-desk' ),
-        ];
-        ?>
-        <p>
-            <label for="shipping_desk_verifier"><strong><?php esc_html_e( 'Verifier', 'shipping-desk' ); ?></strong></label><br />
-            <select class="shipping-desk-verifier-select" id="shipping_desk_verifier" name="shipping_desk_verifier">
-                <?php foreach ( $options as $value => $label ) : ?>
-                    <option value="<?php echo esc_attr( $value ); ?>" <?php selected( $choice, $value ); ?>>
-                        <?php echo esc_html( $label ); ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </p>
-        <p class="description"><?php echo esc_html( $summary['note'] ); ?></p>
-        <?php if ( '' !== $summary['warning'] ) : ?>
-            <div class="notice notice-warning inline"><p><?php echo esc_html( $summary['warning'] ); ?></p></div>
-        <?php endif; ?>
-        <p>
-            <label<?php echo $disabled ? ' class="shipping-desk-disabled"' : ''; ?>>
-                <input type="checkbox" name="shipping_desk_checkout_validation" value="1" <?php checked( $enabled ); ?> <?php disabled( $disabled ); ?> />
-                <?php esc_html_e( 'Also offer suggestions on the checkout page', 'shipping-desk' ); ?>
-            </label>
-        </p>
-        <?php if ( $disabled ) : ?>
-            <p class="description"><?php esc_html_e( 'No verification happens while the verifier is Off, so there is nothing to offer at checkout.', 'shipping-desk' ); ?></p>
-        <?php endif; ?>
-        <?php
-    }
-
-
-    /**
-     * Check the stored EasyPost keys against the slot they sit in.
-     *
-     * Test keys begin EZTK and production keys EZAK. Pasting the production key
-     * into the test field is an easy way to spend real money, so the prefix is
-     * verified rather than trusted.
-     *
-     * @param string $test_key Stored test key.
-     * @param string $live_key Stored production key.
-     * @return string Warning message, or ''.
-     */
-    protected function easypost_key_warning( $test_key, $live_key ) {
-        $test_key = trim( (string) $test_key );
-        $live_key = trim( (string) $live_key );
-
-        if ( '' !== $test_key && 0 !== strpos( $test_key, 'EZTK' ) ) {
-            return __( 'The Test API key does not start with "EZTK". Check which key was pasted.', 'shipping-desk' );
-        }
-
-        if ( '' !== $live_key && 0 !== strpos( $live_key, 'EZAK' ) ) {
-            return __( 'The Production API key does not start with "EZAK". Check which key was pasted.', 'shipping-desk' );
-        }
-
-        if ( 'easypost' === $this->provider() && '' === $this->easypost_api_key() ) {
-            return 'live' === $this->easypost_mode()
-                ? __( 'EasyPost is the active provider but no Production API key is set, so rate and label requests will fail.', 'shipping-desk' )
-                : __( 'EasyPost is the active provider but no Test API key is set, so rate and label requests will fail.', 'shipping-desk' );
-        }
-
-        return '';
-    }
-
-    /**
-     * Copy the pre-0.9.69 single EasyPost key into the slot its prefix implies.
-     *
-     * That field was labelled "Address Validation" and had no mode; leaving it
-     * unread would silently switch verification off for every existing install.
-     * Runs once, never overwrites a slot that is already filled.
-     */
-    public function maybe_migrate_easypost_key() {
-        if ( get_option( 'shipping_desk_easypost_key_migrated' ) ) {
-            return;
-        }
-
-        $legacy = trim( (string) get_option( 'shipping_desk_easypost_api_key', '' ) );
-        if ( '' !== $legacy ) {
-            $slot = 0 === strpos( $legacy, 'EZAK' ) ? 'shipping_desk_easypost_live_api_key' : 'shipping_desk_easypost_test_api_key';
-            if ( '' === trim( (string) get_option( $slot, '' ) ) ) {
-                update_option( $slot, $legacy );
-            }
-            // The key decides the mode too, otherwise the pasted key would sit in
-            // a slot the plugin never reads.
-            if ( ! get_option( 'shipping_desk_easypost_mode' ) ) {
-                update_option( 'shipping_desk_easypost_mode', 0 === strpos( $legacy, 'EZAK' ) ? 'live' : 'test' );
-            }
-        }
-
-        update_option( 'shipping_desk_easypost_key_migrated', 1 );
-    }
-
-    /**
-     * Keep an install that has never saved Settings on Veeqo after the default moved.
-     *
-     * `shipping_desk_provider` only exists once the Settings form has been saved, so
-     * a store that has been buying Veeqo labels since before the option existed has
-     * none. 0.9.69 changed the default to Shippo; without this such a store would
-     * switch provider on upgrade, which is the one thing a default must never do.
-     *
-     * Shippo and EasyPost both require keys, and keys require saving the form, so any
-     * stored label without the option is Veeqo's. Runs once.
-     */
-    public function maybe_default_legacy_provider() {
-        if ( get_option( 'shipping_desk_provider_defaulted' ) ) {
-            return;
-        }
-        update_option( 'shipping_desk_provider_defaulted', 1 );
-
-        if ( false !== get_option( 'shipping_desk_provider', false ) ) {
-            return;
-        }
-        if ( ! function_exists( 'wc_get_orders' ) ) {
-            return;
-        }
-
-        $shipped = wc_get_orders( [
-            'limit'      => 1,
-            'return'     => 'ids',
-            'meta_query' => [
-                [
-                    'key'     => '_shipping_desk_remote_shipment_id',
-                    'compare' => 'EXISTS',
-                ],
-            ],
-        ] );
-
-        if ( ! empty( $shipped ) ) {
-            update_option( 'shipping_desk_provider', 'veeqo' );
-        }
-    }
-
-    public function render_from_address_field() {
-        $value    = get_option( 'shipping_desk_from_address', [] );
-        $defaults = Shipping_Desk_Helpers::get_default_from_address();
-        $fields   = [
-            'name'         => __( 'Name', 'shipping-desk' ),
-            'company'      => __( 'Company', 'shipping-desk' ),
-            'phone'        => __( 'Phone', 'shipping-desk' ),
-            'email'        => __( 'Email', 'shipping-desk' ),
-            'line1'        => __( 'Address', 'shipping-desk' ),
-            'town'         => __( 'City', 'shipping-desk' ),
-            'county'       => __( 'State / Region', 'shipping-desk' ),
-            'postcode'     => __( 'ZIP / Postcode', 'shipping-desk' ),
-            'country_code' => __( 'Country Code', 'shipping-desk' ),
-        ];
-        ?>
-        <p class="description"><?php esc_html_e( 'Optional. Leave any field blank to use the existing WooCommerce store value. Phone is expected by both carriers and USPS refuses a label without it; Email is required by USPS. Blanks fall back to the admin phone (or store phone) and the WordPress admin email.', 'shipping-desk' ); ?></p>
-        <?php
-        $missing = $this->from_address_problems();
-        if ( ! empty( $missing ) ) {
-            printf(
-                '<div class="notice notice-warning inline"><p>%s</p></div>',
-                esc_html( sprintf(
-                    /* translators: %s: list of missing fields, e.g. "phone number / email address" */
-                    __( 'No %s is available from either this form or the store settings. Carriers expect a phone number and USPS requires both, so label purchases will fail until one is set here.', 'shipping-desk' ),
-                    implode( ' / ', $missing )
-                ) )
-            );
-        }
-        ?>
-        <?php foreach ( $fields as $key => $label ) :
-            $field_id    = 'shipping-desk-from-' . $key;
-            $field_value = is_array( $value ) && isset( $value[ $key ] ) ? $value[ $key ] : '';
-            $placeholder = $defaults[ $key ] ?? '';
-            $class       = $key === 'country_code' ? 'small-text' : 'regular-text';
-            ?>
-            <p>
-                <label for="<?php echo esc_attr( $field_id ); ?>"><strong><?php echo esc_html( $label ); ?></strong></label><br />
-                <input type="text" id="<?php echo esc_attr( $field_id ); ?>" name="shipping_desk_from_address[<?php echo esc_attr( $key ); ?>]" value="<?php echo esc_attr( $field_value ); ?>" class="<?php echo esc_attr( $class ); ?>" placeholder="<?php echo esc_attr( $placeholder ); ?>" />
-            </p>
-        <?php endforeach; ?>
-        <?php
-    }
-
-    /**
-     * Attributes that keep password managers out of an API key field.
-     *
-     * `autocomplete="off"` is the one they ignore, which is how a manager filled a key
-     * while the operator was editing the origin address. `new-password` is the signal
-     * browsers honour, and the data-* attributes are the vendor equivalents - LastPass,
-     * 1Password, Bitwarden, Dashlane.
-     *
-     * Static string, no user input: echo it directly, or `esc_attr()` would mangle the
-     * quotes into one useless attribute.
-     *
-     * @return string
-     */
-    protected function api_key_attributes() {
-        return 'class="regular-text shipping-desk-api-key" autocomplete="new-password" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other"';
-    }
-
-    public function render_api_key_field() {
-        $api_key = get_option( 'shipping_desk_veeqo_api_key', '' );
-        printf(
-            '<input type="password" name="shipping_desk_veeqo_api_key" value="%s" %s /><p class="description">%s</p>',
-            esc_attr( $api_key ), $this->api_key_attributes(),
-            esc_html__( 'Stored in wp_options; used for all Veeqo API calls.', 'shipping-desk' )
-        );
-    }
-
-    public function render_provider_field() {
-        $provider = $this->provider();
-        ?>
-        <fieldset>
-            <label>
-                <input type="radio" name="shipping_desk_provider" value="veeqo" <?php checked( 'veeqo', $provider ); ?> />
-                <?php esc_html_e( 'Veeqo', 'shipping-desk' ); ?>
-            </label><br />
-            <label>
-                <input type="radio" name="shipping_desk_provider" value="shippo" <?php checked( 'shippo', $provider ); ?> />
-                <?php esc_html_e( 'Shippo', 'shipping-desk' ); ?>
-            </label><br />
-            <label>
-                <input type="radio" name="shipping_desk_provider" value="easypost" <?php checked( 'easypost', $provider ); ?> />
-                <?php esc_html_e( 'EasyPost', 'shipping-desk' ); ?>
-            </label>
-            <p class="description">
-                <?php esc_html_e( 'Used for new rate requests and new purchases. Switching back is one radio button; labels already bought keep the provider that sold them.', 'shipping-desk' ); ?>
-            </p>
-        </fieldset>
-        <?php
-    }
-
-    public function render_shippo_mode_field() {
-        $mode = $this->shippo_mode();
-        ?>
-        <fieldset>
-            <label>
-                <input type="radio" name="shipping_desk_shippo_mode" value="test" <?php checked( 'test', $mode ); ?> />
-                <?php esc_html_e( 'Test', 'shipping-desk' ); ?>
-            </label><br />
-            <label>
-                <input type="radio" name="shipping_desk_shippo_mode" value="live" <?php checked( 'live', $mode ); ?> />
-                <?php esc_html_e( 'Production', 'shipping-desk' ); ?>
-            </label>
-            <p class="description">
-                <?php esc_html_e( 'Test buys test labels with no money spent; Production spends real money. Both keys are kept, so switching back and forth does not lose either.', 'shipping-desk' ); ?>
-            </p>
-        </fieldset>
-        <?php
-    }
-
-    public function render_shippo_keys_field() {
-        $test_key = (string) get_option( 'shipping_desk_shippo_test_api_key', '' );
-        $live_key = (string) get_option( 'shipping_desk_shippo_live_api_key', '' );
-        ?>
-        <p>
-            <label for="shipping_desk_shippo_test_api_key"><strong><?php esc_html_e( 'Test API key', 'shipping-desk' ); ?></strong></label><br />
-            <input type="password" id="shipping_desk_shippo_test_api_key" name="shipping_desk_shippo_test_api_key"
-                   value="<?php echo esc_attr( $test_key ); ?>" <?php echo $this->api_key_attributes(); // phpcs:ignore WordPress.Security.EscapeOutput -- static attribute string ?> />
-        </p>
-        <p>
-            <label for="shipping_desk_shippo_live_api_key"><strong><?php esc_html_e( 'Production API key', 'shipping-desk' ); ?></strong></label><br />
-            <input type="password" id="shipping_desk_shippo_live_api_key" name="shipping_desk_shippo_live_api_key"
-                   value="<?php echo esc_attr( $live_key ); ?>" <?php echo $this->api_key_attributes(); // phpcs:ignore WordPress.Security.EscapeOutput -- static attribute string ?> />
-        </p>
-        <?php
-        $warning = $this->shippo_key_warning( $test_key, $live_key );
-        if ( '' !== $warning ) {
-            printf( '<div class="notice notice-warning inline"><p>%s</p></div>', esc_html( $warning ) );
-        }
-    }
-
-    /**
-     * Check the stored Shippo keys against the slot they sit in.
-     *
-     * Pasting the live key into the test field is an easy way to spend real
-     * money, so the prefix is verified rather than trusted.
-     *
-     * @param string $test_key Stored test key.
-     * @param string $live_key Stored production key.
-     * @return string Warning message, or '' when everything looks right.
-     */
-    protected function shippo_key_warning( $test_key, $live_key ) {
-        $test_key = trim( (string) $test_key );
-        $live_key = trim( (string) $live_key );
-
-        if ( '' !== $test_key && 0 !== strpos( $test_key, 'shippo_test_' ) ) {
-            return __( 'The Test API key does not start with "shippo_test_". Check which key was pasted.', 'shipping-desk' );
-        }
-
-        if ( '' !== $live_key && 0 !== strpos( $live_key, 'shippo_live_' ) ) {
-            return __( 'The Production API key does not start with "shippo_live_". Check which key was pasted.', 'shipping-desk' );
-        }
-
-        if ( 'shippo' === $this->provider() && '' === $this->shippo_api_key() ) {
-            return 'live' === $this->shippo_mode()
-                ? __( 'Shippo is the active provider but no Production API key is set, so rate and label requests will fail.', 'shipping-desk' )
-                : __( 'Shippo is the active provider but no Test API key is set, so rate and label requests will fail.', 'shipping-desk' );
-        }
-
-        return '';
-    }
 
     /* -- PrintNode Settings -- */
 
@@ -1206,8 +485,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.6.0' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.6.0', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.6.1' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.6.1', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -1258,7 +537,7 @@ class Shipping_Desk_Plugin {
      * @param string $fallback Value to use when it is not a known provider.
      * @return string
      */
-    protected function normalize_provider( $provider, $fallback = 'veeqo' ) {
+    public function normalize_provider( $provider, $fallback = 'veeqo' ) {
         $provider = (string) $provider;
         return in_array( $provider, [ 'veeqo', 'shippo', 'easypost' ], true ) ? $provider : $fallback;
     }
@@ -1321,7 +600,7 @@ class Shipping_Desk_Plugin {
      * @param string $provider Provider slug.
      * @return string 'test', 'live' or ''.
      */
-    protected function provider_mode( $provider ) {
+    public function provider_mode( $provider ) {
         if ( 'shippo' === $provider ) {
             return $this->shippo_mode();
         }
@@ -1339,7 +618,7 @@ class Shipping_Desk_Plugin {
      * @param string|null $mode     Key mode; null uses the provider's active mode.
      * @return Shipping_Desk_Provider_Interface
      */
-    protected function api( $provider = null, $mode = null ) {
+    public function api( $provider = null, $mode = null ) {
         $provider = null === $provider ? $this->provider() : $this->normalize_provider( $provider );
 
         if ( 'shippo' === $provider && class_exists( 'Shipping_Desk_Shippo_Client' ) ) {
@@ -1355,7 +634,7 @@ class Shipping_Desk_Plugin {
         return new Shipping_Desk_Veeqo_Client();
     }
 
-    protected function require_cap() {
+    public function require_cap() {
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
             wp_send_json_error( [ 'message' => __( 'Permission denied.', 'shipping-desk' ) ], 403 );
             exit;
@@ -1404,7 +683,7 @@ class Shipping_Desk_Plugin {
             }
 
             update_option( 'shipping_desk_' . $target . '_mode', $mode );
-            $this->clear_cached_quotes();
+            $this->quote_store()->clear_cached_quotes();
 
             wp_send_json_success( [
                 'provider' => $target,
@@ -1423,7 +702,7 @@ class Shipping_Desk_Plugin {
         }
 
         update_option( 'shipping_desk_provider', $target );
-        $this->clear_cached_quotes();
+        $this->quote_store()->clear_cached_quotes();
 
         wp_send_json_success( [
             'provider' => $target,
@@ -1509,7 +788,7 @@ class Shipping_Desk_Plugin {
      * the switch without a trip to Settings. The test/live chip sits next to Shippo
      * because that is the part that decides whether money is spent.
      */
-    protected function render_provider_switch() {
+    public function render_provider_switch() {
         $provider = $this->provider();
         $mode     = $this->provider_mode( $provider );
         ?>
@@ -1550,850 +829,7 @@ class Shipping_Desk_Plugin {
         <?php
     }
 
-    public function render_orders_page() {
-        if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            wp_die( esc_html__( 'Permission denied.', 'shipping-desk' ) );
-        }
-        $view     = isset( $_GET['view'] ) && $_GET['view'] === 'completed' ? 'completed' : 'processing';
-        $statuses = $view === 'completed' ? [ 'wc-completed' ] : [ 'wc-processing' ];
-        $page     = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1;
-        $per_page = 20;
-        $query_args = [
-            'status'   => $statuses,
-            'type'     => 'shop_order',
-            'limit'    => $per_page,
-            'paged'    => $page,
-            'orderby'  => 'date',
-            'order'    => 'DESC',
-            'paginate' => true,
-        ];
-        $results      = wc_get_orders( $query_args );
-        $total_orders = (int) $results->total;
-        $total_pages  = max( 1, (int) $results->max_num_pages );
 
-        if ( $page > $total_pages ) {
-            $page                 = $total_pages;
-            $query_args['paged']  = $page;
-            $results              = wc_get_orders( $query_args );
-        }
-        // Tab counts. The active view's total is already known, so only the
-        // other status needs a query — limit 1 row, since only the total matters.
-        $other_status = ( 'completed' === $view ) ? 'wc-processing' : 'wc-completed';
-        $other_result = wc_get_orders( [
-            'status'   => [ $other_status ],
-            'type'     => 'shop_order',
-            'limit'    => 1,
-            'paginate' => true,
-        ] );
-        $other_total = (int) $other_result->total;
-
-        $processing_total = ( 'processing' === $view ) ? $total_orders : $other_total;
-        $completed_total  = ( 'completed' === $view ) ? $total_orders : $other_total;
-
-        $orders = $results->orders;
-        $boxes  = get_option( 'shipping_desk_boxes', [] );
-        if ( ! is_array( $boxes ) ) {
-            $boxes = [];
-        }
-        // Sort only the dropdown copy; keep the saved Box Settings order unchanged.
-        usort( $boxes, function ( $a, $b ) {
-            $name_a = trim( (string) ( $a['name'] ?? '' ) );
-            $name_b = trim( (string) ( $b['name'] ?? '' ) );
-            if ( $name_a === '' && $name_b !== '' ) {
-                return 1;
-            }
-            if ( $name_a !== '' && $name_b === '' ) {
-                return -1;
-            }
-            $name_compare = strnatcasecmp( $name_a, $name_b );
-            if ( $name_compare !== 0 ) {
-                return $name_compare;
-            }
-            return (float) ( $a['width'] ?? 0 ) <=> (float) ( $b['width'] ?? 0 );
-        } );
-        ?>
-        <div class="wrap shipping-desk-wrap">
-            <div class="shipping-desk-header">
-                <h1><?php esc_html_e( 'Shipping Desk', 'shipping-desk' ); ?></h1>
-                <?php
-                /*
-                 * Two rows on purpose: the title gets the width of the page to itself, and
-                 * the two working things sit under it - where labels come from on the left,
-                 * what they have cost on the right. In one row the 22px total competed with
-                 * the title and won, because the title inherited core's 23px/400.
-                 */
-                ?>
-                <div class="shipping-desk-controls">
-                    <?php $this->render_provider_switch(); ?>
-                    <span class="shipping-desk-provider-msg" role="status" aria-live="polite"></span>
-                    <?php $this->render_daily_spend(); ?>
-                </div>
-            </div>
-            <?php if ( in_array( $this->provider(), [ 'shippo', 'easypost' ], true ) && 'test' === $this->provider_mode( $this->provider() ) ) : ?>
-                <div class="notice notice-warning inline">
-                    <p>
-                        <?php
-                        printf(
-                            /* translators: %s: provider name, e.g. EasyPost */
-                            esc_html__( '%s is in TEST mode: rates and labels come from your test account and no money is spent. Switch to Production under Settings when you are ready to buy real labels.', 'shipping-desk' ),
-                            esc_html( 'easypost' === $this->provider() ? 'EasyPost' : 'Shippo' )
-                        );
-                        ?>
-                    </p>
-                </div>
-            <?php endif; ?>
-            <?php $missing_from = $this->from_address_problems(); ?>
-            <?php if ( ! empty( $missing_from ) ) : ?>
-                <div class="notice notice-warning inline">
-                    <p>
-                        <?php
-                        printf(
-                            wp_kses_post(
-                                /* translators: 1: missing from-address fields, 2: settings link */
-                                __( 'The shipment origin has no %1$s. Carriers expect a phone number, and USPS refuses a label without a phone and email, so some label purchases will fail until it is set in <a href="%2$s">Settings → From Address</a>.', 'shipping-desk' )
-                            ),
-                            esc_html( implode( ' / ', $missing_from ) ),
-                            esc_url( admin_url( 'admin.php?page=shipping-desk-settings' ) )
-                        );
-                        ?>
-                    </p>
-                </div>
-            <?php endif; ?>
-            <nav class="shipping-desk-tabs">
-                <a href="<?php echo esc_url( admin_url( 'admin.php?page=shipping-desk&view=processing' ) ); ?>" class="shipping-desk-tab <?php echo $view === 'processing' ? 'active' : ''; ?>"><?php esc_html_e( 'Processing', 'shipping-desk' ); ?> <span class="shipping-desk-tab-count">(<?php echo esc_html( number_format_i18n( $processing_total ) ); ?>)</span></a>
-                <a href="<?php echo esc_url( admin_url( 'admin.php?page=shipping-desk&view=completed' ) ); ?>" class="shipping-desk-tab <?php echo $view === 'completed' ? 'active' : ''; ?>"><?php esc_html_e( 'Completed', 'shipping-desk' ); ?> <span class="shipping-desk-tab-count">(<?php echo esc_html( number_format_i18n( $completed_total ) ); ?>)</span></a>
-            </nav>
-            <?php if ( ! empty( $orders ) ) : ?>
-                <?php $this->render_bulk_actions( $view ); ?>
-            <?php endif; ?>
-            <?php if ( $view === 'processing' ) : ?>
-                <?php $this->render_processing_table( $orders, $boxes ); ?>
-            <?php else : ?>
-                <?php $this->render_completed_table( $orders ); ?>
-            <?php endif; ?>
-            <?php $this->render_pagination( $page, $total_pages, $total_orders, $view ); ?>
-        </div>
-        <?php
-    }
-
-    protected function render_bulk_actions( $view ) {
-        $select_id = 'shipping-desk-bulk-action-' . $view;
-        ?>
-        <div class="shipping-desk-bulk-actions" data-bulk-nonce="<?php echo esc_attr( wp_create_nonce( 'shipping_desk_bulk_buy' ) ); ?>">
-            <label for="<?php echo esc_attr( $select_id ); ?>" class="screen-reader-text"><?php esc_html_e( 'Bulk Actions', 'shipping-desk' ); ?></label>
-            <select id="<?php echo esc_attr( $select_id ); ?>" class="shipping-desk-bulk-action-select">
-                <option value=""><?php esc_html_e( 'Bulk Actions', 'shipping-desk' ); ?></option>
-                <?php if ( $view === 'processing' ) : ?>
-                    <option value="bulk-get-rates"><?php esc_html_e( 'Bulk Get Rates', 'shipping-desk' ); ?></option>
-                    <option value="bulk-buy-print"><?php esc_html_e( 'Bulk Buy + Print', 'shipping-desk' ); ?></option>
-                    <option value="bulk-buy-label"><?php esc_html_e( 'Bulk Buy Label', 'shipping-desk' ); ?></option>
-                <?php endif; ?>
-                <option value="bulk-print"><?php esc_html_e( 'Bulk Print', 'shipping-desk' ); ?></option>
-            </select>
-            <button type="button" class="shipping-desk-bulk-apply"><?php esc_html_e( 'Apply', 'shipping-desk' ); ?></button>
-            <span class="shipping-desk-bulk-status" role="status" aria-live="polite"></span>
-        </div>
-        <?php
-    }
-
-    protected function render_pagination( $current_page, $total_pages, $total_orders, $view ) {
-        if ( $total_pages <= 1 ) {
-            return;
-        }
-
-        $base_url   = admin_url( 'admin.php?page=shipping-desk&view=' . $view );
-        $page_links = paginate_links( [
-            'base'      => str_replace( 999999999, '%#%', add_query_arg( 'paged', 999999999, $base_url ) ),
-            'format'    => '',
-            'current'   => $current_page,
-            'total'     => $total_pages,
-            'prev_text' => __( '&laquo; Previous', 'shipping-desk' ),
-            'next_text' => __( 'Next &raquo;', 'shipping-desk' ),
-            'end_size'  => 1,
-            'mid_size'  => 2,
-            'add_args'  => false,
-            'type'      => 'array',
-        ] );
-
-        if ( empty( $page_links ) || ! is_array( $page_links ) ) {
-            return;
-        }
-        ?>
-        <div class="tablenav bottom shipping-desk-pagination">
-            <div class="tablenav-pages">
-                <span class="displaying-num"><?php echo esc_html( sprintf( _n( '%s order', '%s orders', $total_orders, 'shipping-desk' ), number_format_i18n( $total_orders ) ) ); ?></span>
-                <?php foreach ( $page_links as $page_link ) : ?>
-                    <?php echo wp_kses_post( $page_link ); ?>
-                <?php endforeach; ?>
-                <span class="shipping-desk-page-summary"><?php echo esc_html( sprintf( __( 'Page %1$s of %2$s', 'shipping-desk' ), number_format_i18n( $current_page ), number_format_i18n( $total_pages ) ) ); ?></span>
-                <form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>" class="shipping-desk-page-form">
-                    <input type="hidden" name="page" value="shipping-desk" />
-                    <input type="hidden" name="view" value="<?php echo esc_attr( $view ); ?>" />
-                    <label class="screen-reader-text" for="shipping-desk-page-jump"><?php esc_html_e( 'Page number', 'shipping-desk' ); ?></label>
-                    <input id="shipping-desk-page-jump" type="number" name="paged" class="shipping-desk-page-jump" min="1" max="<?php echo esc_attr( $total_pages ); ?>" value="<?php echo esc_attr( $current_page ); ?>" required />
-                    <button type="submit" class="shipping-desk-page-go"><?php esc_html_e( 'Go', 'shipping-desk' ); ?></button>
-                </form>
-            </div>
-        </div>
-        <?php
-    }
-
-    protected function render_processing_table( $orders, $boxes ) {
-        ?>
-        <table class="widefat fixed striped shipping-desk-table">
-            <thead><tr>
-                <th class="shipping-desk-select-column"><input type="checkbox" class="shipping-desk-select-all" aria-label="<?php esc_attr_e( 'Select all orders on this page', 'shipping-desk' ); ?>" /></th>
-                <th class="shipping-desk-order-customer"><?php esc_html_e( 'Order / Customer', 'shipping-desk' ); ?></th>
-                <th class="shipping-desk-order-totals"><?php esc_html_e( 'Total Spent', 'shipping-desk' ); ?></th>
-                <th class="shipping-desk-method"><?php esc_html_e( 'Shipping Method', 'shipping-desk' ); ?></th>
-                <th class="shipping-desk-box-column"><?php esc_html_e( 'Box / Weight (oz)', 'shipping-desk' ); ?></th>
-                <th class="shipping-desk-services-column"><?php esc_html_e( 'Services', 'shipping-desk' ); ?></th>
-                <th class="shipping-desk-rates"><?php esc_html_e( 'Rates', 'shipping-desk' ); ?></th>
-                <th><?php esc_html_e( 'Actions', 'shipping-desk' ); ?></th>
-            </tr></thead>
-            <tbody>
-            <?php if ( empty( $orders ) ) : ?>
-                <tr><td colspan="8"><?php esc_html_e( 'No processing orders found.', 'shipping-desk' ); ?></td></tr>
-            <?php else : foreach ( $orders as $order ) :
-                $this->render_order_row( $order, $boxes );
-            endforeach; endif; ?>
-            </tbody>
-        </table>
-        <?php
-    }
-
-    /**
-     * Render one purchasable order row (rate shopping, services, insurance).
-     *
-     * Shared by the Processing table and the Completed tab's Reship expansion so
-     * both stay in step. Markup is intentionally identical in either context.
-     *
-     * @param WC_Order $order Order to render.
-     * @param array    $boxes Box presets for the dropdown.
-     */
-    protected function render_order_row( $order, $boxes ) {
-        $order_id      = $order->get_id();
-        $items_weight  = Shipping_Desk_Helpers::get_order_items_weight_oz( $order );
-        $method        = Shipping_Desk_Helpers::get_order_shipping_method_label( $order );
-        $order_nonce   = wp_create_nonce( 'shipping_desk_order_' . $order_id );
-        $customer      = method_exists( $order, 'get_formatted_billing_full_name' ) ? $order->get_formatted_billing_full_name() : trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );
-        $currency      = $order->get_currency();
-        $shipping_paid = max( 0, (float) $order->get_shipping_total() );
-
-        // Services that are priced into the rate. Shippo and EasyPost both price
-        // signature confirmation at quote time (EasyPost through shipment
-        // options), so both get the dropdown; Veeqo prices VAS after the quotes.
-        $provider          = $this->provider();
-        $quotes_signature  = in_array( $provider, [ 'shippo', 'easypost' ], true );
-        $insurance_title   = 'easypost' === $provider
-            ? __( 'Declared value for EasyPost insurance. EasyPost charges 1% of this with a $1.00 minimum (maximum $5,000), prices it at purchase, and adds it to the recorded label cost rather than to the quotes.', 'shipping-desk' )
-            : __( 'Declared value for insurance. Set before getting rates.', 'shipping-desk' );
-
-        // Quotes stored by the last Get Rates, when they are still usable, so a reload
-        // or another machine shows the same prices without paying for them again.
-        $quote_record = $this->fresh_quote_record( $order_id );
-        $quote_data   = '';
-        if ( ! empty( $quote_record ) ) {
-            $quote_data = wp_json_encode( [
-                'rates'              => isset( $quote_record['rates'] ) ? $quote_record['rates'] : [],
-                'matched_rate_id'    => isset( $quote_record['matched_rate_id'] ) ? $quote_record['matched_rate_id'] : null,
-                'address_validation' => isset( $quote_record['address_validation'] ) ? $quote_record['address_validation'] : null,
-                'inputs'             => isset( $quote_record['inputs'] ) ? $quote_record['inputs'] : [],
-                'created_at'         => isset( $quote_record['created_at'] ) ? (int) $quote_record['created_at'] : 0,
-            ] );
-        }
-        ?>
-                <tr data-order-id="<?php echo esc_attr( $order_id ); ?>" data-nonce="<?php echo esc_attr( $order_nonce ); ?>" data-provider="<?php echo esc_attr( $provider ); ?>" data-items-weight="<?php echo esc_attr( number_format( $items_weight, 2, '.', '' ) ); ?>"<?php if ( '' !== $quote_data ) : ?> data-quotes="<?php echo esc_attr( $quote_data ); ?>"<?php endif; ?>>
-                    <td class="shipping-desk-select-column"><input type="checkbox" class="shipping-desk-order-select" name="shipping_desk_order_ids[]" value="<?php echo esc_attr( $order_id ); ?>" aria-label="<?php echo esc_attr( sprintf( __( 'Select order #%s', 'shipping-desk' ), $order->get_order_number() ) ); ?>" /></td>
-                    <td class="shipping-desk-order-customer">
-                        <a href="<?php echo esc_url( $order->get_edit_order_url() ); ?>" target="_blank" rel="noopener noreferrer" class="shipping-desk-order-link">
-                            <strong>#<?php echo esc_html( $order->get_order_number() ); ?></strong> <strong><?php echo esc_html( $customer ); ?></strong>
-                        </a>
-                        <div class="shipping-desk-address">
-                            <?php echo esc_html( trim( $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() ) ); ?><br />
-                            <?php echo esc_html( $order->get_shipping_address_1() ); ?><br />
-                            <?php if ( $order->get_shipping_address_2() ) : ?>
-                                <?php echo esc_html( $order->get_shipping_address_2() ); ?><br />
-                            <?php endif; ?>
-                            <?php echo esc_html( $order->get_shipping_city() ); ?>, <?php echo esc_html( $order->get_shipping_state() ); ?> <?php echo esc_html( $order->get_shipping_postcode() ); ?>
-                        </div>
-                    </td>
-                    <td class="shipping-desk-order-totals">
-                        <div class="shipping-desk-order-total"><strong><?php echo wp_kses_post( wc_price( $order->get_total(), [ 'currency' => $currency ] ) ); ?></strong></div>
-                        <div class="shipping-desk-shipping-paid"><?php esc_html_e( 'Shipping:', 'shipping-desk' ); ?> <?php echo wp_kses_post( wc_price( $shipping_paid, [ 'currency' => $currency ] ) ); ?></div>
-                    </td>
-                    <td class="shipping-desk-method"><?php echo esc_html( $method ); ?></td>
-                    <td class="shipping-desk-box-column">
-                        <label class="shipping-desk-service-name" for="shipping-desk-box-<?php echo esc_attr( $order_id ); ?>"><?php esc_html_e( 'Box', 'shipping-desk' ); ?></label>
-                        <select class="shipping-desk-box-select" id="shipping-desk-box-<?php echo esc_attr( $order_id ); ?>">
-                            <option value=""><?php esc_html_e( 'Select box...', 'shipping-desk' ); ?></option>
-                            <?php foreach ( $boxes as $idx => $box ) :
-                                printf( '<option value="%1$s" data-length="%2$s" data-width="%3$s" data-height="%4$s" data-weight="%5$s">%6$s</option>',
-                                    esc_attr( $idx ), esc_attr( $box['length'] ?? 0 ), esc_attr( $box['width'] ?? 0 ), esc_attr( $box['height'] ?? 0 ), esc_attr( $box['weight'] ?? 0 ),
-                                    esc_html( $box['name'] ?? ( 'Box ' . ( $idx + 1 ) ) ) );
-                            endforeach; ?>
-                        </select>
-                        <div class="shipping-desk-box-weight-row">
-                            <label class="shipping-desk-weight-label" for="shipping-desk-weight-<?php echo esc_attr( $order_id ); ?>"><?php esc_html_e( 'Weight', 'shipping-desk' ); ?></label>
-                            <input type="number" step="0.01" min="0" id="shipping-desk-weight-<?php echo esc_attr( $order_id ); ?>" class="shipping-desk-total-weight" value="<?php echo esc_attr( number_format( $items_weight, 2, '.', '' ) ); ?>" title="<?php esc_attr_e( 'Calculated from items and box weight; edit to override', 'shipping-desk' ); ?>" />
-                        </div>
-                    </td>
-                    <td class="shipping-desk-services-column">
-                        <?php if ( $quotes_signature ) : ?>
-                            <?php
-                            // Shippo and EasyPost have no post-rate services, so the
-                            // Veeqo VAS container would only ever hold placeholder
-                            // text. The signature choice takes its place: same
-                            // label-above, full-width select as Veeqo's confirmation
-                            // dropdown. EasyPost's enums are mapped inside the client.
-                            ?>
-                            <div class="shipping-desk-service-group">
-                                <label class="shipping-desk-service-name" for="shipping-desk-signature-<?php echo esc_attr( $order_id ); ?>"><?php esc_html_e( 'Signature', 'shipping-desk' ); ?></label>
-                                <select id="shipping-desk-signature-<?php echo esc_attr( $order_id ); ?>" class="shipping-desk-signature-confirmation" title="<?php esc_attr_e( 'Signature confirmation is priced into the quote, so it is chosen before getting rates.', 'shipping-desk' ); ?>">
-                                    <option value=""><?php esc_html_e( 'None', 'shipping-desk' ); ?></option>
-                                    <option value="STANDARD"><?php esc_html_e( 'Signature required', 'shipping-desk' ); ?></option>
-                                    <option value="ADULT"><?php esc_html_e( 'Adult signature', 'shipping-desk' ); ?></option>
-                                </select>
-                            </div>
-                        <?php else : ?>
-                            <div class="shipping-desk-services"><em><?php esc_html_e( 'Get rates first', 'shipping-desk' ); ?></em></div>
-                        <?php endif; ?>
-                        <div class="shipping-desk-service-amount-row">
-                            <label class="shipping-desk-weight-label" for="shipping-desk-liability-<?php echo esc_attr( $order_id ); ?>"><?php esc_html_e( 'Insurance', 'shipping-desk' ); ?></label>
-                            <input type="number" step="0.01" min="0" id="shipping-desk-liability-<?php echo esc_attr( $order_id ); ?>" class="shipping-desk-liability-amount" value="" placeholder="<?php esc_attr_e( 'None', 'shipping-desk' ); ?>" title="<?php echo esc_attr( $insurance_title ); ?>" />
-                    <?php // States the premium, or that there is none, before any quote is fetched. ?>
-                    <span class="shipping-desk-liability-estimate" aria-live="polite"></span>
-                        </div>
-                    </td>
-                    <td class="shipping-desk-rates">
-                        <div class="shipping-desk-rates-container"><em><?php esc_html_e( 'Rates not loaded. Select a box and choose Get Rates.', 'shipping-desk' ); ?></em></div>
-                    </td>
-                    <td>
-                        <button type="button" class="shipping-desk-get-rates"><?php esc_html_e( 'Get Rates', 'shipping-desk' ); ?></button>
-                        <button type="button" class="shipping-desk-buy-label" disabled><?php esc_html_e( 'Buy Label', 'shipping-desk' ); ?></button>
-                    </td>
-                </tr>
-        <?php
-    }
-
-
-    protected function render_completed_table( $orders ) {
-        $m = Shipping_Desk_Helpers::meta_keys();
-        ?>
-        <table class="widefat fixed striped shipping-desk-table">
-            <thead><tr>
-                <th class="shipping-desk-select-column"><input type="checkbox" class="shipping-desk-select-all" aria-label="<?php esc_attr_e( 'Select all orders on this page', 'shipping-desk' ); ?>" /></th>
-                <th><?php esc_html_e( 'Order', 'shipping-desk' ); ?></th>
-                <th><?php esc_html_e( 'Customer', 'shipping-desk' ); ?></th>
-                <th><?php esc_html_e( 'Carrier', 'shipping-desk' ); ?></th>
-                <th><?php esc_html_e( 'Tracking', 'shipping-desk' ); ?></th>
-                <th><?php esc_html_e( 'Box', 'shipping-desk' ); ?></th>
-                <th><?php esc_html_e( 'Weight Used (oz)', 'shipping-desk' ); ?></th>
-                <th><?php esc_html_e( 'Label ID', 'shipping-desk' ); ?></th>
-                <th><?php esc_html_e( 'Actions', 'shipping-desk' ); ?></th>
-            </tr></thead>
-            <tbody>
-            <?php if ( empty( $orders ) ) : ?>
-                <tr><td colspan="9"><?php esc_html_e( 'No completed orders found.', 'shipping-desk' ); ?></td></tr>
-            <?php else : foreach ( $orders as $order ) :
-                $order_id       = $order->get_id();
-                $customer       = method_exists( $order, 'get_formatted_billing_full_name' ) ? $order->get_formatted_billing_full_name() : trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );
-                $carrier        = $order->get_meta( $m['carrier'] );
-                $tracking       = $order->get_meta( $m['tracking'] );
-                $label_id       = $order->get_meta( $m['label_id'] );
-                $refunded       = (bool) $order->get_meta( $m['refunded'] );
-                $final_w        = $order->get_meta( $m['final_weight'] );
-                $box_l          = $order->get_meta( $m['box_l'] );
-                $box_w          = $order->get_meta( $m['box_w'] );
-                $box_h          = $order->get_meta( $m['box_h'] );
-                $has_label      = ! empty( $label_id );
-                $box_compact    = ( $box_l && $box_w && $box_h ) ? sprintf( '%s x %s x %s in', $box_l, $box_w, $box_h ) : ' - ';
-                $order_nonce    = wp_create_nonce( 'shipping_desk_order_' . $order_id );
-                $items_weight   = Shipping_Desk_Helpers::get_order_items_weight_oz( $order );
-                $tracking_display = ' - ';
-                $carrier_display  = $carrier ?: ' - ';
-                if ( $tracking ) {
-                    $url             = Shipping_Desk_Helpers::tracking_url( $carrier, $tracking );
-                    $carrier_display  = esc_html( $carrier ?: __( 'Carrier', 'shipping-desk' ) );
-                    $tracking_display = sprintf( '<a href="%s" target="_blank">%s</a>', esc_url( $url ), esc_html( $tracking ) );
-                }
-                $has_shipping_meta = $has_label
-                    || ! empty( $order->get_meta( $m['tracking'] ) )
-                    || ! empty( $order->get_meta( $m['remote_id'] ) );
-            ?>
-                <tr data-order-id="<?php echo esc_attr( $order_id ); ?>" data-nonce="<?php echo esc_attr( $order_nonce ); ?>"
-                    data-items-weight="<?php echo esc_attr( number_format( $items_weight, 2, '.', '' ) ); ?>"
-                    data-has-label="<?php echo $has_label ? '1' : '0'; ?>" data-label-refunded="<?php echo $refunded ? '1' : '0'; ?>">
-                    <td class="shipping-desk-select-column"><input type="checkbox" class="shipping-desk-order-select" name="shipping_desk_order_ids[]" value="<?php echo esc_attr( $order_id ); ?>" aria-label="<?php echo esc_attr( sprintf( __( 'Select order #%s', 'shipping-desk' ), $order->get_order_number() ) ); ?>" /></td>
-                    <td><a href="<?php echo esc_url( get_edit_post_link( $order_id ) ); ?>" target="_blank" rel="noopener">#<?php echo esc_html( $order->get_order_number() ); ?></a></td>
-                    <td><?php echo esc_html( $customer ); ?></td>
-                    <td><?php echo $carrier_display; ?></td>
-                    <td><?php echo $tracking_display; ?></td>
-                    <td><?php echo esc_html( $box_compact ); ?></td>
-                    <td><?php echo esc_html( $final_w ); ?></td>
-                    <td><?php echo esc_html( $label_id ?: ' - ' ); ?></td>
-                    <td>
-                        <?php if ( $has_label && ! $refunded ) : ?>
-                            <button type="button" class="shipping-desk-print-label"><?php esc_html_e( 'Print', 'shipping-desk' ); ?></button>
-                            <button type="button" class="shipping-desk-refund-label"><?php esc_html_e( 'Refund', 'shipping-desk' ); ?></button>
-                        <?php endif; ?>
-                        <button type="button" class="shipping-desk-reset-shipping"><?php esc_html_e( 'Reset Shipping', 'shipping-desk' ); ?></button>
-                        <?php if ( ! $has_shipping_meta ) : ?>
-                            <button type="button" class="shipping-desk-reship"><?php esc_html_e( 'Reship', 'shipping-desk' ); ?></button>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-            <?php endforeach; endif; ?>
-            </tbody>
-        </table>
-        <?php
-    }
-
-
-    /**
-     * The order that owns a provider id, if we have one.
-     *
-     * Both keys are checked: some providers record the parent shipment and others the
-     * label itself. Returns 0 when nothing matches - which is exactly the case the
-     * manual provider and mode selects exist for.
-     *
-     * @param string $shipment_id Id from the form.
-     * @return int
-     */
-    protected function find_order_for_shipment( $shipment_id ) {
-        if ( '' === (string) $shipment_id || ! function_exists( 'wc_get_orders' ) ) {
-            return 0;
-        }
-
-        $m = Shipping_Desk_Helpers::meta_keys();
-
-        foreach ( [ $m['remote_id'], $m['label_id'] ] as $key ) {
-            $orders = wc_get_orders( [
-                'limit'      => 1,
-                'type'       => 'shop_order',
-                'meta_key'   => $key,
-                'meta_value' => $shipment_id,
-            ] );
-
-            if ( empty( $orders ) ) {
-                continue;
-            }
-
-            $order = reset( $orders );
-
-            if ( $order ) {
-                return (int) $order->get_id();
-            }
-        }
-
-        return 0;
-    }
-
-    /**
-     * Which provider and mode to ask for one lookup.
-     *
-     * Order of preference: what the operator chose for this lookup, then what the order
-     * recorded when its label was bought, then the provider setting. The mode travels
-     * with the provider it was recorded with - a test label is not on the live account,
-     * and that mismatch reads as "id not found" every time.
-     *
-     * Nothing here writes the provider setting: switching provider for a lookup must
-     * never change which provider buys the next label.
-     *
-     * @param string $wanted_provider 'auto' or a provider slug.
-     * @param string $wanted_mode     'auto', 'test' or 'live'.
-     * @param int    $order_id        Order owning the id, or 0.
-     * @return array [ provider, mode, source ] - source is order, chosen or setting.
-     */
-    protected function resolve_lookup_target( $wanted_provider, $wanted_mode, $order_id = 0 ) {
-        $valid = [ 'veeqo', 'shippo', 'easypost' ];
-
-        $recorded_provider = '';
-        $recorded_mode     = '';
-
-        if ( $order_id > 0 && function_exists( 'wc_get_order' ) ) {
-            $order = wc_get_order( (int) $order_id );
-
-            if ( $order ) {
-                $m                 = Shipping_Desk_Helpers::meta_keys();
-                $recorded_provider = $this->normalize_provider( (string) $order->get_meta( $m['provider'] ), '' );
-                $recorded_mode     = strtolower( (string) $order->get_meta( $m['provider_mode'] ) );
-            }
-        }
-
-        if ( in_array( $wanted_provider, $valid, true ) ) {
-            $provider = $wanted_provider;
-            $source   = 'chosen';
-        } elseif ( in_array( $recorded_provider, $valid, true ) ) {
-            $provider = $recorded_provider;
-            $source   = 'order';
-        } else {
-            $provider = $this->provider();
-            $source   = 'setting';
-        }
-
-        // Veeqo has no key modes at all.
-        if ( 'veeqo' === $provider ) {
-            return [ $provider, '', $source ];
-        }
-
-        if ( in_array( $wanted_mode, [ 'test', 'live' ], true ) ) {
-            return [ $provider, $wanted_mode, $source ];
-        }
-
-        if ( 'order' === $source && in_array( $recorded_mode, [ 'test', 'live' ], true ) ) {
-            return [ $provider, $recorded_mode, $source ];
-        }
-
-        return [ $provider, $this->provider_mode( $provider ), $source ];
-    }
-
-    /**
-     * Ask a provider for one shipment, the way that provider wants to be asked.
-     *
-     * Shippo is queried by transaction id first - the id in the order note - and falls
-     * back to the shipment id its dashboard shows. EasyPost and Veeqo only know
-     * shipments. Failures come back as WP_Error for the page to explain.
-     *
-     * @param string $provider    veeqo, shippo or easypost.
-     * @param string $mode        test or live; '' for Veeqo.
-     * @param string $shipment_id Id pasted by the operator.
-     * @return array [ array|WP_Error, 'shipment'|'transaction' ]
-     */
-    protected function lookup_shipment( $provider, $mode, $shipment_id ) {
-        $client = $this->api( $provider, 'veeqo' === $provider ? null : $mode );
-
-        if ( 'shippo' !== $provider || ! method_exists( $client, 'get_transaction' ) ) {
-            return [ $client->get_shipment( $shipment_id ), 'shipment' ];
-        }
-
-        $result = $client->get_transaction( $shipment_id );
-
-        if ( ! is_wp_error( $result ) || 'shippo_not_found' !== $result->get_error_code() ) {
-            return [ $result, 'transaction' ];
-        }
-
-        // A shipment id can still be pasted: it is what the Shippo dashboard shows.
-        $as_shipment = $client->get_shipment( $shipment_id );
-
-        return [ $as_shipment, is_wp_error( $as_shipment ) ? 'transaction' : 'shipment' ];
-    }
-
-    public function render_lookup_page() {
-        if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            wp_die( esc_html__( 'Permission denied.', 'shipping-desk' ) );
-        }
-        $shipment_id      = '';
-        $result           = null;
-        $error            = '';
-        $lookup_kind      = 'shipment';
-        $matched_order_id = 0;
-
-        // What the operator asked for, for this lookup only. Deliberately separate from
-        // the label provider setting: choosing a provider here must never change which
-        // provider buys the next label (that gesture is shipping_desk_switch_provider()).
-        //
-        // Both start on Auto and are not remembered between visits - no user meta, no
-        // option. A one-off Shippo lookup must not become the silent default for the next
-        // one, and Auto is the answer that is right until an id says otherwise. The page
-        // says so in as many words above the chips.
-        $wanted_provider = 'auto';
-        $wanted_mode     = 'auto';
-
-        $provider      = $this->provider();
-        $mode          = $this->provider_mode( $provider );
-        $lookup_source = 'setting';
-
-        if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['shipping_desk_lookup_nonce'] ) ) {
-            if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['shipping_desk_lookup_nonce'] ) ), 'shipping_desk_lookup' ) ) {
-                $error = __( 'Invalid nonce.', 'shipping-desk' );
-            } else {
-                $shipment_id     = sanitize_text_field( wp_unslash( $_POST['shipment_id'] ?? '' ) );
-                $wanted_provider = sanitize_key( wp_unslash( $_POST['lookup_provider'] ?? 'auto' ) );
-                $wanted_mode     = sanitize_key( wp_unslash( $_POST['lookup_mode'] ?? 'auto' ) );
-
-                if ( $shipment_id === '' ) {
-                    $error = __( 'Please enter a shipment ID.', 'shipping-desk' );
-                } else {
-                    // The order first: it records which provider and mode bought this
-                    // label, which is the only trustworthy answer for an id that is ours.
-                    $matched_order_id = $this->find_order_for_shipment( $shipment_id );
-
-                    list( $provider, $mode, $lookup_source ) = $this->resolve_lookup_target( $wanted_provider, $wanted_mode, $matched_order_id );
-
-                    // A key for the chosen mode, or a plain reason instead of "not found"
-                    // for an id that simply lives on the other account.
-                    $mode_key = '';
-                    if ( 'shippo' === $provider ) {
-                        $mode_key = (string) $this->shippo_api_key( $mode );
-                    } elseif ( 'easypost' === $provider ) {
-                        $mode_key = (string) $this->easypost_api_key( $mode );
-                    }
-
-                    if ( 'veeqo' !== $provider && '' === $mode_key ) {
-                        $error = sprintf(
-                            /* translators: 1: provider name, 2: key mode */
-                            __( 'No %1$s %2$s key is configured, so this id cannot be looked up there. Choose the provider and mode the label was bought with.', 'shipping-desk' ),
-                            'shippo' === $provider ? 'Shippo' : 'EasyPost',
-                            'live' === $mode ? __( 'production', 'shipping-desk' ) : __( 'test', 'shipping-desk' )
-                        );
-                    } else {
-                        list( $result, $lookup_kind ) = $this->lookup_shipment( $provider, $mode, $shipment_id );
-
-                        if ( is_wp_error( $result ) ) {
-                            $error = $result->get_error_message();
-
-                            if ( 'shippo' === $provider && 'shippo_not_found' === $result->get_error_code() ) {
-                                $error = sprintf(
-                                    /* translators: 1: provider name, 2: key mode */
-                                    __( 'No transaction or shipment with that id on %1$s (%2$s).', 'shipping-desk' ),
-                                    'Shippo',
-                                    'live' === $mode ? __( 'production', 'shipping-desk' ) : __( 'test', 'shipping-desk' )
-                                );
-                            }
-
-                            $result = null;
-                        }
-                    }
-                }
-            }
-        }
-
-        // The line above the form.
-        //
-        // Before a lookup it can only say what is going to happen, and on Auto that is not a
-        // provider yet: Auto means "ask the order, then the setting". Reading the setting
-        // aloud before an id arrives presented a default as a fact.
-        $mode_text = function ( $key ) {
-            return 'live' === $key ? __( 'production', 'shipping-desk' ) : __( 'test', 'shipping-desk' );
-        };
-        $provider_text = function ( $key ) {
-            return 'easypost' === $key ? 'EasyPost' : ( 'shippo' === $key ? 'Shippo' : 'Veeqo' );
-        };
-
-        $default_provider = $this->provider();
-        $default_name     = $provider_text( $default_provider );
-        $default_mode_key = $this->provider_mode( $default_provider );
-        $default_mode     = '' === $default_mode_key ? '' : $mode_text( $default_mode_key );
-
-        if ( 'order' === $lookup_source && $matched_order_id > 0 ) {
-            /* translators: %d: order id */
-            $source_text = sprintf( __( 'recorded on order #%d.', 'shipping-desk' ), (int) $matched_order_id );
-        } elseif ( 'chosen' === $lookup_source ) {
-            $source_text = __( 'chosen for this lookup.', 'shipping-desk' );
-        } else {
-            $source_text = __( 'from the provider setting.', 'shipping-desk' );
-        }
-
-        if ( '' !== $shipment_id && is_array( $result ) ) {
-            $target_line = '' === $mode
-                ? sprintf( __( 'Looked up on %1$s — %2$s', 'shipping-desk' ), $provider_text( $provider ), $source_text )
-                : sprintf( __( 'Looked up on %1$s (%2$s) — %3$s', 'shipping-desk' ), $provider_text( $provider ), $mode_text( $mode ), $source_text );
-        } elseif ( '' !== $shipment_id ) {
-            $target_line = '' === $mode
-                ? sprintf( __( 'Tried %1$s — %2$s', 'shipping-desk' ), $provider_text( $provider ), $source_text )
-                : sprintf( __( 'Tried %1$s (%2$s) — %3$s', 'shipping-desk' ), $provider_text( $provider ), $mode_text( $mode ), $source_text );
-        } elseif ( 'auto' === $wanted_provider ) {
-            $target_line = sprintf(
-                /* translators: %s: the label setting, e.g. EasyPost, test */
-                __( 'Will look up on Auto — the provider and mode recorded on the order, else the label setting (%s).', 'shipping-desk' ),
-                '' === $default_mode ? $default_name : sprintf( '%1$s, %2$s', $default_name, $default_mode )
-            );
-        } else {
-            $chosen_mode = in_array( $wanted_mode, [ 'test', 'live' ], true ) ? $wanted_mode : $this->provider_mode( $wanted_provider );
-            $target_line = '' === $chosen_mode
-                ? sprintf( __( 'Will look up on %s.', 'shipping-desk' ), $provider_text( $wanted_provider ) )
-                : sprintf(
-                    /* translators: 1: provider name, 2: key mode */
-                    __( 'Will look up on %1$s (%2$s).', 'shipping-desk' ),
-                    $provider_text( $wanted_provider ),
-                    $mode_text( $chosen_mode )
-                );
-        }
-        ?>
-        <div class="wrap shipping-desk-wrap">
-            <h1><?php esc_html_e( 'Shipment Lookup', 'shipping-desk' ); ?></h1>
-            <p>
-                <?php
-                if ( 'auto' === $wanted_provider ) {
-                    esc_html_e( 'Paste the shipment or transaction id from the order note. On Auto the provider and mode come from the order that owns that id, and from the label setting when no order matches.', 'shipping-desk' );
-                } elseif ( 'shippo' === $wanted_provider ) {
-                    esc_html_e( 'Enter the Shippo transaction id from the order note. A shipment id also works if you have one.', 'shipping-desk' );
-                } elseif ( 'easypost' === $wanted_provider ) {
-                    esc_html_e( 'Enter the EasyPost shipment id from the order note.', 'shipping-desk' );
-                } else {
-                    esc_html_e( 'Enter the Veeqo remote shipment id recorded on the order.', 'shipping-desk' );
-                }
-                ?>
-            </p>
-            <p>
-                <strong id="lookup-target-line"><?php echo esc_html( $target_line ); ?></strong>
-            </p>
-            <form method="post">
-                <?php wp_nonce_field( 'shipping_desk_lookup', 'shipping_desk_lookup_nonce' ); ?>
-                <table class="form-table">
-                    <tr>
-                        <th scope="row"><label for="shipment_id"><?php esc_html_e( 'Shipment ID', 'shipping-desk' ); ?></label></th>
-                        <td><input type="text" id="shipment_id" name="shipment_id" value="<?php echo esc_attr( $shipment_id ); ?>" class="regular-text" /></td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><?php esc_html_e( 'Look up on', 'shipping-desk' ); ?></th>
-                        <td>
-                            <?php
-                            // Veeqo has one account and no test mode, so there is nothing for the mode
-                            // chip to cycle: while it is selected the chip is pinned to Live and used
-                            // as a disabled button, rather than offering two modes it does not have.
-                            // The field still carries live, because that is what the lookup will do.
-                            $mode_locked       = 'veeqo' === $wanted_provider;
-                            $mode_locked_title = __( 'Veeqo has one account and no test mode, so it always runs live. Choose another provider to pick a mode.', 'shipping-desk' );
-                            ?>
-                            <input type="hidden" id="lookup_provider" name="lookup_provider" value="<?php echo esc_attr( $wanted_provider ); ?>" />
-                            <input type="hidden" id="lookup_mode" name="lookup_mode" value="<?php echo esc_attr( $mode_locked ? 'live' : $wanted_mode ); ?>" />
-                            <?php
-                            $mode_labels = [
-                                'auto' => __( 'Auto', 'shipping-desk' ),
-                                'test' => __( 'Test', 'shipping-desk' ),
-                                'live' => __( 'Live', 'shipping-desk' ),
-                            ];
-                            $mode_titles = [
-                                'auto' => __( 'Auto: the mode the label was bought in. Click for Test.', 'shipping-desk' ),
-                                'test' => __( 'Test: labels cost nothing. Click for Live.', 'shipping-desk' ),
-                                'live' => __( 'Live: real labels. Click to go back to Auto.', 'shipping-desk' ),
-                            ];
-                            ?>
-                            <div class="shipping-desk-provider-switch"
-                                 id="shipping-desk-lookup-track"
-                                 role="group"
-                                 data-default-provider="<?php echo esc_attr( $default_name ); ?>"
-                                 data-default-mode="<?php echo esc_attr( $default_mode ); ?>"
-                                 data-mode-test="<?php echo esc_attr( $mode_text( 'test' ) ); ?>"
-                                 data-mode-live="<?php echo esc_attr( $mode_text( 'live' ) ); ?>"
-                                 aria-label="<?php esc_attr_e( 'Where to look the shipment up', 'shipping-desk' ); ?>">
-                                <?php foreach ( [ 'auto' => __( 'Auto', 'shipping-desk' ), 'easypost' => 'EasyPost', 'shippo' => 'Shippo', 'veeqo' => 'Veeqo' ] as $slug => $label ) : ?>
-                                    <button type="button"
-                                            class="shipping-desk-provider-btn shipping-desk-lookup-chip<?php echo $wanted_provider === $slug ? ' is-active' : ''; ?>"
-                                            data-target="lookup_provider"
-                                            data-value="<?php echo esc_attr( $slug ); ?>"
-                                            aria-pressed="<?php echo $wanted_provider === $slug ? 'true' : 'false'; ?>"><?php echo esc_html( $label ); ?></button>
-                                <?php endforeach; ?>
-                                <button type="button"
-                                        class="shipping-desk-mode-chip is-<?php echo esc_attr( $mode_locked ? 'live' : $wanted_mode ); ?> shipping-desk-lookup-mode"
-                                        data-mode="<?php echo esc_attr( $mode_locked ? 'live' : $wanted_mode ); ?>"
-                                        data-labels="<?php echo esc_attr( (string) wp_json_encode( $mode_labels ) ); ?>"
-                                        data-titles="<?php echo esc_attr( (string) wp_json_encode( $mode_titles ) ); ?>"
-                                        data-locked-title="<?php echo esc_attr( $mode_locked_title ); ?>"
-                                        <?php if ( $mode_locked ) : ?>disabled="disabled"<?php endif; ?>
-                                        title="<?php echo esc_attr( $mode_locked ? $mode_locked_title : $mode_titles[ $wanted_mode ] ); ?>"
-                                        aria-label="<?php echo esc_attr( $mode_locked ? $mode_locked_title : $mode_titles[ $wanted_mode ] ); ?>"><?php echo esc_html( $mode_labels[ $mode_locked ? 'live' : $wanted_mode ] ); ?></button>
-                            </div>
-                            <p class="description">
-                                <?php esc_html_e( 'Auto uses the provider and mode recorded on the order, then the label setting. The mode chip cycles Auto, Test and Live. Veeqo has one account, so its chip pins to Live and cannot be cycled.', 'shipping-desk' ); ?>
-                                <strong><?php esc_html_e( 'This page starts on Auto every time: the choice is not remembered between visits.', 'shipping-desk' ); ?></strong>
-                                <?php esc_html_e( 'None of this changes which provider buys the next label.', 'shipping-desk' ); ?>
-                            </p>
-                        </td>
-                    </tr>
-                </table>
-                <?php submit_button( __( 'Look up', 'shipping-desk' ) ); ?>
-            </form>
-
-            <?php if ( $error ) : ?>
-                <div class="notice notice-error"><p><?php echo esc_html( $error ); ?></p></div>
-            <?php endif; ?>
-
-            <?php if ( is_array( $result ) ) :
-                $lookup_order_id     = $matched_order_id;
-                $lookup_action_nonce = wp_create_nonce( 'shipping_desk_lookup' );
-                $cancelled_at        = (string) ( $result['cancelled_at'] ?? '' );
-
-                // Refund state comes from the provider's own status where it has one.
-                // Veeqo reports cancellation through `cancelled`; Shippo reports a
-                // transaction status. EasyPost reports the shipment's own status and
-                // the refund separately, so its refund_status is folded into the same
-                // vocabulary here. A refund that is pending with the carrier must
-                // not offer the button again.
-                $label_status = strtoupper( (string) ( isset( $result['status'] ) ? $result['status'] : '' ) );
-
-                if ( 'easypost' === $provider ) {
-                    $refund_status = strtolower( (string) ( isset( $result['refund_status'] ) ? $result['refund_status'] : '' ) );
-                    if ( 'refunded' === $refund_status ) {
-                        $label_status = 'REFUNDED';
-                    } elseif ( 'submitted' === $refund_status ) {
-                        $label_status = 'REFUNDPENDING';
-                    } else {
-                        // Any other state is a live label as far as the UI is concerned.
-                        $label_status = 'SUCCESS';
-                    }
-                }
-
-                $is_refunded  = 'REFUNDED' === $label_status || ! empty( $result['cancelled'] );
-                $is_pending   = 'REFUNDPENDING' === $label_status;
-                $can_refund   = '' === $label_status
-                    ? ! $is_refunded
-                    : ( 'SUCCESS' === $label_status );
-            ?>
-                <h2>
-                    <?php
-                    echo esc_html(
-                        'transaction' === $lookup_kind
-                            ? __( 'Transaction details', 'shipping-desk' )
-                            : __( 'Shipment details', 'shipping-desk' )
-                    );
-                    ?>
-                </h2>
-                <?php if ( 'transaction' === $lookup_kind ) : ?>
-                    <p class="description"><?php esc_html_e( 'Matched a transaction id. The parent shipment id is listed below if you need it.', 'shipping-desk' ); ?></p>
-                <?php elseif ( 'shippo' === $provider ) : ?>
-                    <p class="description"><?php esc_html_e( 'Matched a shipment id rather than a transaction id.', 'shipping-desk' ); ?></p>
-                <?php endif; ?>
-                <table class="widefat fixed striped">
-                    <tbody>
-                        <tr data-order-id="<?php echo esc_attr( $lookup_order_id ); ?>" data-nonce="<?php echo esc_attr( $lookup_action_nonce ); ?>" data-remote-id="<?php echo esc_attr( $shipment_id ); ?>" data-label-refunded="<?php echo ( $is_refunded || $is_pending ) ? '1' : '0'; ?>">
-                            <th style="width:220px;"><?php esc_html_e( 'Label Actions', 'shipping-desk' ); ?></th>
-                            <td>
-                                <button type="button" class="shipping-desk-print-label"><?php esc_html_e( 'Print', 'shipping-desk' ); ?></button>
-                                <?php if ( $can_refund ) : ?>
-                                    <button type="button" class="shipping-desk-refund-label"><?php esc_html_e( 'Refund', 'shipping-desk' ); ?></button>
-                                <?php elseif ( $is_pending ) : ?>
-                                    <span class="shipping-desk-label-refunded"><?php esc_html_e( 'Refund pending with the carrier.', 'shipping-desk' ); ?></span>
-                                <?php elseif ( $is_refunded ) : ?>
-                                    <span class="shipping-desk-label-refunded"><?php echo esc_html( 'REFUNDED' === $label_status ? __( 'Label refunded.', 'shipping-desk' ) : __( 'Label cancelled.', 'shipping-desk' ) ); ?></span>
-                                <?php else : ?>
-                                    <span class="shipping-desk-label-refunded">
-                                        <?php
-                                        printf(
-                                            /* translators: %s: provider status, e.g. WAITING */
-                                            esc_html__( 'No refund available (status: %s).', 'shipping-desk' ),
-                                            esc_html( $label_status )
-                                        );
-                                        ?>
-                                    </span>
-                                <?php endif; ?>
-                                <?php if ( $cancelled_at ) : ?>
-                                    <small><?php echo esc_html( sprintf( __( 'Cancelled at: %s', 'shipping-desk' ), $cancelled_at ) ); ?></small>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                    <?php foreach ( $result as $key => $value ) :
-                        if ( is_array( $value ) ) {
-                            $display = '<pre>' . esc_html( wp_json_encode( $value, JSON_PRETTY_PRINT ) ) . '</pre>';
-                        } else {
-                            $display = esc_html( (string) $value );
-                        }
-                    ?>
-                        <tr>
-                            <th style="width:220px;"><?php echo esc_html( $key ); ?></th>
-                            <td><?php echo $display; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <h3><?php esc_html_e( 'Raw response', 'shipping-desk' ); ?></h3>
-                <pre><?php echo esc_html( wp_json_encode( $result, JSON_PRETTY_PRINT ) ); ?></pre>
-            <?php endif; ?>
-        </div>
-        <?php
-    }
 
     public function render_box_settings_page() {
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
@@ -2540,7 +976,7 @@ class Shipping_Desk_Plugin {
                 </tr>
             </table>
 
-            <?php $this->render_import_notices(); ?>
+            <?php $this->settings_transfer()->render_import_notices(); ?>
 
             <hr />
 
@@ -2641,37 +1077,6 @@ class Shipping_Desk_Plugin {
         <?php
     }
 
-    /**
-     * Show the result of an import, or a notice that legacy settings were
-     * carried over from the pre-refactor plugin.
-     */
-    protected function render_import_notices() {
-        $result = isset( $_GET['shipping_desk_import'] ) ? sanitize_key( wp_unslash( $_GET['shipping_desk_import'] ) ) : '';
-
-        if ( 'ok' === $result ) {
-            $imported = get_transient( 'shipping_desk_import_notice' );
-            delete_transient( 'shipping_desk_import_notice' );
-            $count = is_array( $imported ) ? count( $imported ) : 0;
-            printf(
-                '<div class="notice notice-success is-dismissible"><p>%s</p></div>',
-                esc_html( sprintf( _n( 'Settings imported (%d item).', 'Settings imported (%d items).', $count, 'shipping-desk' ), $count ) )
-            );
-        } elseif ( 'invalid' === $result ) {
-            echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'That file is not a valid settings export.', 'shipping-desk' ) . '</p></div>';
-        } elseif ( 'nofile' === $result ) {
-            echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'No file was uploaded.', 'shipping-desk' ) . '</p></div>';
-        }
-
-        $migrated = get_transient( 'shipping_desk_migration_notice' );
-        if ( $migrated ) {
-            delete_transient( 'shipping_desk_migration_notice' );
-            printf(
-                '<div class="notice notice-info is-dismissible"><p>%s</p></div>',
-                esc_html__( 'Settings from the previous plugin version were detected and carried over automatically. Please review them below.', 'shipping-desk' )
-            );
-        }
-    }
-
 
     public function shipping_desk_get_rates() {
         $this->require_cap();
@@ -2755,7 +1160,7 @@ class Shipping_Desk_Plugin {
             // not ship internationally anyway. Anything else is reported below,
             // never sent to a paid endpoint and never guessed at.
             if ( ! empty( $to_address ) && Shipping_Desk_Helpers::is_supported_destination( $country ) ) {
-                $address_validation = $this->validate_recipient_address( $order, $to_address, $validator_client );
+                $address_validation = $this->quote_store()->validate_recipient_address( $order, $to_address, $validator_client );
                 $address_validation = $this->describe_validation( $address_validation, $validator_name );
                 $needs_choice       = $this->validation_needs_decision( $address_validation );
 
@@ -2793,10 +1198,10 @@ class Shipping_Desk_Plugin {
                 } elseif ( $needs_choice ) {
                     // Persist the pending decision too, so a reload or another browser
                     // still shows the panel (and the row keeps its flag in a bulk run).
-                    $this->store_quote_record( $order_id, [
+                    $this->quote_store()->store_quote_record( $order_id, [
                         'fingerprint'        => Shipping_Desk_Helpers::rate_inputs_fingerprint( $payload, $provider, $this->provider_mode( $provider ) ),
                         'created_at'         => time(),
-                        'dispatch_day'       => $this->current_dispatch_day( $provider ),
+                        'dispatch_day'       => $this->quote_store()->current_dispatch_day( $provider ),
                         'rates'              => [],
                         'matched_rate_id'    => null,
                         'remote_id'          => null,
@@ -2887,11 +1292,11 @@ class Shipping_Desk_Plugin {
             }
         }
 
-        $this->store_quote_record( $order_id, [
+        $this->quote_store()->store_quote_record( $order_id, [
             'fingerprint'         => Shipping_Desk_Helpers::rate_inputs_fingerprint( $payload, $provider, $this->provider_mode( $provider ) ),
             'created_at'          => time(),
             'provider_expires_at' => $provider_expiry,
-            'dispatch_day'        => $this->current_dispatch_day( $provider ),
+            'dispatch_day'        => $this->quote_store()->current_dispatch_day( $provider ),
             'rates'               => $available,
             'matched_rate_id'     => $matched_rate_id,
             'remote_id'           => $remote_id,
@@ -2915,79 +1320,6 @@ class Shipping_Desk_Plugin {
             'remote_id'       => $remote_id,
             'address_validation' => $address_validation,
         ] );
-    }
-
-    /**
-     * Validate a recipient address, reusing a recent answer.
-     *
-     * The result is cached per order and address: Get Rates is clicked again after
-     * every box, signature and insurance change, and validation is billed per call.
-     * An outage is deliberately not cached — a validator that was down for one
-     * click should not leave the address unchecked for twelve hours.
-     *
-     * @param WC_Order $order   Order being quoted.
-     * @param array    $address Recipient address from the payload.
-     * @param object   $client  Provider client implementing the validator contract.
-     * @return array Normalised result plus the original address.
-     */
-    protected function validate_recipient_address( WC_Order $order, array $address, $client ) {
-        $m    = Shipping_Desk_Helpers::meta_keys();
-        $hash = md5( implode( '|', [
-            strtolower( trim( (string) ( isset( $address['line1'] ) ? $address['line1'] : '' ) ) ),
-            strtolower( trim( (string) ( isset( $address['line2'] ) ? $address['line2'] : '' ) ) ),
-            strtolower( trim( (string) ( isset( $address['town'] ) ? $address['town'] : '' ) ) ),
-            strtolower( trim( (string) ( isset( $address['county'] ) ? $address['county'] : '' ) ) ),
-            strtolower( trim( (string) ( isset( $address['postcode'] ) ? $address['postcode'] : '' ) ) ),
-        ] ) );
-        $key = 'shipping_desk_addr_' . (int) $order->get_id() . '_' . $hash;
-
-        // Already verified as clean at this exact address: a valid address never
-        // gains a ZIP+4, so the "no +4" trigger would otherwise keep paying for the
-        // same answer every day the order sits unshipped. Only clean verdicts are
-        // remembered — a correction the operator declined should be able to appear
-        // again rather than being suppressed for good.
-        $verdict = $order->get_meta( $m['address_checked'] );
-        if ( is_array( $verdict )
-            && isset( $verdict['hash'], $verdict['status'] )
-            && $verdict['hash'] === $hash
-            && 'valid' === $verdict['status'] ) {
-            return [
-                'status'       => 'valid',
-                'is_valid'     => true,
-                'recommended'  => [],
-                'changed'      => [],
-                'reasons'      => [],
-                'address_type' => isset( $verdict['address_type'] ) ? (string) $verdict['address_type'] : '',
-                'confidence'   => [],
-                'error'        => '',
-                'original'     => $address,
-                'remembered'   => true,
-            ];
-        }
-
-        $cached = get_transient( $key );
-        if ( is_array( $cached ) && isset( $cached['status'] ) ) {
-            return $cached;
-        }
-
-        $result             = $client->validate_address( $address );
-        $result['original'] = $address;
-
-        if ( 'unavailable' !== ( isset( $result['status'] ) ? $result['status'] : '' ) ) {
-            set_transient( $key, $result, self::ADDRESS_VALIDATION_TTL );
-        }
-
-        // Clean verdict: remember it against this address so the next quote is free.
-        if ( 'valid' === ( isset( $result['status'] ) ? $result['status'] : '' ) ) {
-            $order->update_meta_data( $m['address_checked'], [
-                'hash'         => $hash,
-                'status'       => 'valid',
-                'address_type' => isset( $result['address_type'] ) ? (string) $result['address_type'] : '',
-            ] );
-            $order->save();
-        }
-
-        return $result;
     }
 
     /**
@@ -3190,317 +1522,6 @@ class Shipping_Desk_Plugin {
     }
 
     /**
-     * Transient key holding the last set of quotes for an order.
-     *
-     * @param int $order_id Order ID.
-     * @return string
-     */
-    protected function quote_record_key( $order_id ) {
-        return 'shipping_desk_quotes_' . (int) $order_id;
-    }
-
-    /**
-     * The stored quotes for an order, or [] when there are none.
-     *
-     * @param int $order_id Order ID.
-     * @return array
-     */
-    protected function get_quote_record( $order_id ) {
-        $record = get_transient( $this->quote_record_key( $order_id ) );
-        return is_array( $record ) ? $record : [];
-    }
-
-    /**
-     * The stored quotes, but only while they are still usable.
-     *
-     * @param int         $order_id Order ID.
-     * @param string|null $provider Provider to judge the dispatch day by.
-     * @return array Empty when missing, expired or priced for another dispatch day.
-     */
-    protected function fresh_quote_record( $order_id, $provider = null ) {
-        $record = $this->get_quote_record( $order_id );
-        if ( empty( $record ) ) {
-            return [];
-        }
-
-        $provider = null === $provider ? $this->provider() : (string) $provider;
-
-        // Switching provider or label mode must retire every stored quote: the rates and
-        // the shipment id in them belong to the account that priced them.
-        if ( ! Shipping_Desk_Helpers::quote_record_matches_provider( $record, $provider, $this->provider_mode( $provider ) ) ) {
-            return [];
-        }
-
-        return Shipping_Desk_Helpers::quote_record_is_fresh( $record, $this->current_dispatch_day( $provider ) )
-            ? $record
-            : [];
-    }
-
-    /**
-     * Drop the stored quotes for an order.
-     *
-     * @param int $order_id Order ID.
-     * @return void
-     */
-    protected function delete_quote_record( $order_id ) {
-        delete_transient( $this->quote_record_key( $order_id ) );
-    }
-
-    /**
-     * The dispatch day a quote taken right now would carry.
-     *
-     * Shippo bakes the date into the shipment at quote time and USPS prints it;
-     * EasyPost carries it as `options.label_date`. Either way a quote priced for
-     * one dispatch day must not be bought on another. Veeqo has no equivalent, so
-     * it answers '' and only the carrier expiry and the cap apply.
-     *
-     * @param string|null $provider Provider to ask.
-     * @return string `Y-m-d`, or ''.
-     */
-    protected function current_dispatch_day( $provider = null ) {
-        $provider = null === $provider ? $this->provider() : $provider;
-        if ( ! in_array( $provider, [ 'shippo', 'easypost' ], true ) ) {
-            return '';
-        }
-
-        $client = $this->api( $provider );
-        return method_exists( $client, 'dispatch_day' ) ? (string) $client->dispatch_day() : '';
-    }
-
-    /**
-     * Persist a set of quotes so a reload, another browser or an order arriving
-     * mid-batch does not throw the work away.
-     *
-     * Stored as an expiring transient rather than order meta: it is a cache with a
-     * lifetime measured in hours, not a fact about the order.
-     *
-     * @param int   $order_id Order ID.
-     * @param array $record   Record; `provider_expires_at` is folded into `expires_at`.
-     * @return void
-     */
-    protected function store_quote_record( $order_id, array $record ) {
-        $now = time();
-
-        // Stamped with the account that priced it, so a provider or mode change retires
-        // the record instead of offering its rates under someone else's name.
-        $record['provider'] = $this->provider();
-        $record['mode']     = $this->provider_mode( $record['provider'] );
-
-        $record['expires_at'] = Shipping_Desk_Helpers::quote_record_expiry(
-            $now,
-            isset( $record['provider_expires_at'] ) ? $record['provider_expires_at'] : null,
-            self::QUOTE_RECORD_CAP_HOURS
-        );
-        unset( $record['provider_expires_at'] );
-
-        $ttl = max( 60, (int) $record['expires_at'] - $now );
-        set_transient( $this->quote_record_key( $order_id ), $record, $ttl );
-    }
-
-    /**
-     * BrikPanel's shipping-cost meta key, or '' when that plugin is not installed.
-     *
-     * Read from their constant rather than hardcoded: no configuration here, and no
-     * chance of writing a key that nothing reads.
-     *
-     * @return string
-     */
-    protected function brikpanel_cost_meta() {
-        return defined( 'BRIKPANEL_SHIPPING_COST_META' ) ? (string) BRIKPANEL_SHIPPING_COST_META : '';
-    }
-
-    /**
-     * Record what the label cost, so BrikPanel can use it for profit.
-     *
-     * Optional by design: with no BrikPanel installed nothing is attempted, written
-     * or called. The value is overwritten on every purchase — the carrier's figure is
-     * the actual cost, and a reship legitimately costs something new — and a test
-     * label writes nothing, because a test label costs nothing.
-     *
-     * @param WC_Order $order    Order being shipped.
-     * @param string   $provider Provider that sold the label.
-     * @param string   $mode     Key mode: 'test' or 'live' ('' for Veeqo).
-     * @param array    $shipment Bought shipment.
-     * @return void
-     */
-    /**
-     * Hand a bought label's tracking to whoever owns tracking on this site, and record the
-     * provider reference in a private note.
-     *
-     * The tracking number deliberately does not appear in that note: AST PRO's EasyPost
-     * integration imports carrier + tracking it finds in notes, so repeating it there would
-     * add a second item on top of the one we just inserted. The reference id is the part
-     * worth keeping for refunds and support.
-     *
-     * @param WC_Order $order        Order.
-     * @param string   $provider     shippo|easypost|veeqo.
-     * @param string   $tracking     Tracking number.
-     * @param string   $carrier_id   Carrier as the provider reports it.
-     * @param string   $tracking_url Carrier tracking URL.
-     * @param string   $label_id     Provider label/transaction id.
-     * @param string   $remote_id    Remote shipment id.
-     * @param string   $insured      Declared value, if any.
-     * @param string   $insured_fee  Premium, if any.
-     * @return void
-     */
-    protected function record_label_tracking( WC_Order $order, $provider, $tracking, $carrier_id, $tracking_url, $label_id, $remote_id, $insured = '', $insured_fee = '' ) {
-        $reference_label = 'shippo' === $provider
-            ? __( 'Shippo Transaction ID:', 'shipping-desk' )
-            : ( 'easypost' === $provider
-                ? __( 'EasyPost Shipment ID:', 'shipping-desk' )
-                : __( 'Veeqo Remote Shipment ID:', 'shipping-desk' ) );
-
-        $reference_value = in_array( $provider, [ 'shippo', 'easypost' ], true ) ? $label_id : $remote_id;
-
-        // A carrier with no known URL leaves tracking_url() returning the number itself;
-        // treat anything that is not a URL as "no link" rather than printing a broken one.
-        if ( ! preg_match( '#^https?://#i', (string) $tracking_url ) ) {
-            $tracking_url = '';
-        }
-
-        // The private note goes in before the hand-off so the timeline reads in the order
-        // things happened: label bought, tracking added, status changed, email sent.
-        $extra = [];
-        if ( '' !== (string) $insured ) {
-            $cover = sprintf(
-                /* translators: %s: insured value, formatted with currency. */
-                __( 'Insured for %s', 'shipping-desk' ),
-                wc_price( (float) $insured, [ 'currency' => $order->get_currency() ] )
-            );
-            if ( '' !== (string) $insured_fee ) {
-                $cover .= ' ' . sprintf(
-                    /* translators: %s: insurance premium, formatted with currency. */
-                    __( '(premium %s)', 'shipping-desk' ),
-                    wc_price( (float) $insured_fee, [ 'currency' => $order->get_currency() ] )
-                );
-            }
-            $extra[] = $cover . '.';
-        }
-
-        $order->add_order_note(
-            Shipping_Desk_Tracking_Relay::private_note(
-                Shipping_Desk_Tracking_Relay::provider_label( $provider ),
-                $reference_label,
-                $reference_value,
-                $extra
-            )
-        );
-
-        Shipping_Desk_Tracking_Relay::record(
-            $order,
-            [
-                'number'  => $tracking,
-                'carrier' => $carrier_id,
-                'url'     => $tracking_url,
-            ]
-        );
-    }
-
-    /**
-     * Take a refunded label's tracking number back out of the tracking plugin.
-     *
-     * Both AST and Shipment Tracking append items, and the customer's email lists
-     * every item on the order — so a voided number has to go, or the replacement
-     * ships with the dead number displayed beside it.
-     *
-     * The note names the plugin and never the number: AST PRO's integrations parse
-     * order notes for carrier + tracking and would import it straight back.
-     *
-     * @param WC_Order $order  Order.
-     * @param string   $number Tracking number of the refunded label.
-     * @return void
-     */
-    protected function remove_dead_tracking( WC_Order $order, $number ) {
-        $report = Shipping_Desk_Tracking_Relay::forget( $order, (string) $number );
-
-        if ( $report['removed'] < 1 ) {
-            return;
-        }
-
-        $order->add_order_note(
-            sprintf(
-                /* translators: %s: tracking plugin name, e.g. Advanced Shipment Tracking. */
-                __( 'Shipping Desk: removed the refunded tracking number from %s.', 'shipping-desk' ),
-                $report['label']
-            )
-        );
-    }
-
-    protected function record_shipping_cost( WC_Order $order, $provider, $mode, array $shipment ) {
-        $key = $this->brikpanel_cost_meta();
-        if ( '' === $key ) {
-            return;
-        }
-        if ( function_exists( 'brikpanel_order_shipping_cost_active' ) && ! brikpanel_order_shipping_cost_active() ) {
-            return;
-        }
-        if ( 'test' === $mode ) {
-            return;
-        }
-        if ( ! function_exists( 'wc_format_decimal' ) ) {
-            return;
-        }
-
-        $cost = Shipping_Desk_Helpers::label_cost( $provider, $shipment );
-        if ( empty( $cost ) ) {
-            return;
-        }
-
-        $decimals  = function_exists( 'wc_get_price_decimals' ) ? wc_get_price_decimals() : 2;
-        $formatted = wc_format_decimal( $cost['amount'], $decimals );
-        $before    = (string) $order->get_meta( $key );
-        $m         = Shipping_Desk_Helpers::meta_keys();
-
-        $order->update_meta_data( $key, $formatted );
-        $order->update_meta_data( $m['cost_paid'], [
-            'amount'   => $formatted,
-            'currency' => $cost['currency'],
-            'provider' => $provider,
-            'at'       => time(),
-        ] );
-        $order->save();
-
-        // BrikPanel caches its dashboard payload against order EVENTS, and a label
-        // purchase is not one, so without this the new cost would not show until the
-        // transient expired. Only on a real change, exactly as their own save does.
-        if ( $before !== $formatted && function_exists( 'brikpanel_bust_data_caches' ) ) {
-            brikpanel_bust_data_caches();
-        }
-    }
-
-    /**
-     * Remove the recorded cost after a refund.
-     *
-     * BrikPanel reads an empty value as "use what was charged", which is the right
-     * answer once the carrier has given the money back.
-     *
-     * @param WC_Order $order Order whose label was refunded.
-     * @return void
-     */
-    protected function clear_shipping_cost( WC_Order $order ) {
-        $key = $this->brikpanel_cost_meta();
-        if ( '' === $key ) {
-            return;
-        }
-
-        $m        = Shipping_Desk_Helpers::meta_keys();
-        $recorded = $order->get_meta( $m['cost_paid'] );
-        $had_cost = '' !== (string) $order->get_meta( $key );
-
-        if ( ! $had_cost && ! is_array( $recorded ) ) {
-            return;
-        }
-
-        $order->delete_meta_data( $key );
-        $order->delete_meta_data( $m['cost_paid'] );
-        $order->save();
-
-        if ( function_exists( 'brikpanel_bust_data_caches' ) ) {
-            brikpanel_bust_data_caches();
-        }
-    }
-
-    /**
      * Put the chosen address into the rate payload.
      *
      * The payload is what the provider turns into a shipment, and the label is bought on
@@ -3633,1123 +1654,105 @@ class Shipping_Desk_Plugin {
         );
     }
 
-    /**
-     * Rate object supplied by the client: either an array or a JSON string.
-     *
-     * The rate is where the carrier, service and price live — a Shippo
-     * transaction only returns a rate ID — and it is sent as JSON because nested
-     * POST arrays are rejected by some WAF rules before PHP runs.
-     *
-     * @param mixed $value Raw request value.
-     * @return array
-     */
-    protected function parse_rate_input( $value ) {
-        if ( is_string( $value ) ) {
-            $decoded = json_decode( $value, true );
-            return is_array( $decoded ) ? $decoded : [];
-        }
-        return is_array( $value ) ? $value : [];
-    }
-
-    /**
-     * Turn a fatal error into a JSON response.
-     *
-     * A label purchase can outlive the PHP execution limit. Without this the
-     * browser only sees a failed request and reports "please try again", while a
-     * label may already exist in Shippo — the one case where retrying can
-     * double-charge. At least now the operator gets a statement of what happened.
-     */
-    protected function guard_fatal_errors() {
-        static $registered = false;
-        if ( $registered ) {
-            return;
-        }
-        $registered = true;
-
-        register_shutdown_function( function () {
-            $error = error_get_last();
-            if ( ! is_array( $error ) ) {
-                return;
-            }
-            $fatal = [ E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR ];
-            if ( ! in_array( (int) $error['type'], $fatal, true ) || headers_sent() ) {
-                return;
-            }
-
-            if ( ! empty( $this->committed_purchase ) ) {
-                // The label already exists, so this is not a failed purchase: something
-                // that runs after it broke. Saying "error" here would send the operator
-                // to re-buy a label they own.
-                wp_send_json_success(
-                    array_merge(
-                        $this->committed_purchase,
-                        [
-                            'warning' => sprintf(
-                                /* translators: 1: PHP error message, 2: file name, 3: line number */
-                                __( 'The label was bought and its tracking number recorded, but a PHP error interrupted what followed: %1$s (%2$s:%3$d). Check the order - a customer email may not have been sent.', 'shipping-desk' ),
-                                $error['message'],
-                                basename( (string) $error['file'] ),
-                                (int) $error['line']
-                            ),
-                        ]
-                    )
-                );
-                return;
-            }
-            wp_send_json_error(
-                [
-                    'message' => sprintf(
-                        /* translators: 1: PHP error message, 2: file name, 3: line number */
-                        __( 'The request was interrupted by a PHP error: %1$s (%2$s:%3$d). Check the Shippo dashboard before buying again.', 'shipping-desk' ),
-                        $error['message'],
-                        basename( (string) $error['file'] ),
-                        (int) $error['line']
-                    ),
-                ],
-                500
-            );
-        } );
-    }
-
-    /**
-     * Give a purchase request room to finish.
-     *
-     * A Shippo transaction can take 30s+ and the reconciliation that follows a
-     * timeout needs longer still; with the default 30s limit PHP would kill the
-     * request mid-purchase, which is exactly when a retry is dangerous.
-     */
-    protected function extend_time_limit() {
-        @set_time_limit( 180 );
-    }
-
-    public function shipping_desk_buy_label() {
-        $this->require_cap();
-        $this->extend_time_limit();
-        $this->guard_fatal_errors();
-
-        $order_id     = isset( $_POST['order_id'] ) ? intval( $_POST['order_id'] ) : 0;
-        $rate_id      = isset( $_POST['rate_id'] ) ? sanitize_text_field( wp_unslash( $_POST['rate_id'] ) ) : '';
-        $remote_id    = isset( $_POST['remote_id'] ) ? sanitize_text_field( wp_unslash( $_POST['remote_id'] ) ) : '';
-        $rate         = isset( $_POST['rate'] ) ? $this->parse_rate_input( wp_unslash( $_POST['rate'] ) ) : [];
-        $vas_input    = ( isset( $_POST['vas'] ) && is_array( $_POST['vas'] ) ) ? wp_unslash( $_POST['vas'] ) : [];
-
-        // What the operator asked to insure, kept so the bought shipment can be checked
-        // against it. EasyPost accepts the value whether or not the carrier applies it.
-        $requested_insurance = isset( $vas_input['liability_amount'] ) ? (float) $vas_input['liability_amount'] : 0.0;
-        $total_weight = isset( $_POST['total_weight'] ) ? floatval( $_POST['total_weight'] ) : 0.0;
-        $box          = ( isset( $_POST['box'] ) && is_array( $_POST['box'] ) ) ? $_POST['box'] : [];
-
-        $order = wc_get_order( $order_id );
-        if ( ! $order ) {
-            wp_send_json_error( [ 'message' => __( 'Order not found.', 'shipping-desk' ) ], 404 );
-        }
-        if ( empty( $rate_id ) ) {
-            wp_send_json_error( [ 'message' => __( 'Rate ID missing.', 'shipping-desk' ) ], 400 );
-        }
-
-        $m = Shipping_Desk_Helpers::meta_keys();
-        if ( $order->get_meta( $m['remote_id'] ) ) {
-            wp_send_json_error( [ 'message' => __( 'Label already purchased.', 'shipping-desk' ) ] );
-        }
-
-        // Resolve once: the marker written below must name the provider that
-        // actually bought the label, not whatever the setting says later.
-        $provider = $this->provider();
-        $mode     = $this->provider_mode( $provider );
-
-        // A stored quote may only be bought while it is still valid. An expired carrier
-        // quote, or one priced for a dispatch day that has since moved on, would fail
-        // at the carrier or print the wrong date — ask for fresh rates instead.
-        $quote_record = $this->get_quote_record( $order_id );
-        if ( ! empty( $quote_record ) ) {
-            if ( ! Shipping_Desk_Helpers::quote_record_matches_provider( $quote_record, $provider, $mode ) ) {
-                // Priced by the provider or label mode that has since been switched away
-                // from: its rate ids and shipment id cannot be bought by this account.
-                $this->delete_quote_record( $order_id );
-                wp_send_json_error( [
-                    'message' => __( 'These rates were priced by a different provider or label mode. Get rates again before buying.', 'shipping-desk' ),
-                ], 409 );
-            }
-
-            if ( ! Shipping_Desk_Helpers::quote_record_is_fresh( $quote_record, $this->current_dispatch_day( $provider ) ) ) {
-                $this->delete_quote_record( $order_id );
-                wp_send_json_error( [
-                    'message' => __( 'These rates have expired: the dispatch day has moved on or the carrier quote timed out. Get rates again before buying.', 'shipping-desk' ),
-                ], 409 );
-            }
-
-            $known_rate = false;
-            foreach ( (array) ( isset( $quote_record['rates'] ) ? $quote_record['rates'] : [] ) as $stored_rate ) {
-                if ( isset( $stored_rate['rate_id'] ) && (string) $stored_rate['rate_id'] === (string) $rate_id ) {
-                    $known_rate = true;
-                    break;
-                }
-            }
-            if ( ! $known_rate ) {
-                $this->delete_quote_record( $order_id );
-                wp_send_json_error( [
-                    'message' => __( 'That rate is no longer part of the stored quotes. Get rates again before buying.', 'shipping-desk' ),
-                ], 409 );
-            }
-        }
-
-        $result = $this->api( $provider, $mode )->book_shipment( $remote_id, $rate_id, $rate, $order_id, $vas_input );
-        if ( is_wp_error( $result ) ) {
-            wp_send_json_error( [ 'message' => $result->get_error_message() ], 500 );
-        }
-
-        $successful = $result['successful'] ?? [];
-        if ( empty( $successful ) || ! is_array( $successful ) ) {
-            wp_send_json_error( [ 'message' => __( 'The shipping provider did not return a successful shipment.', 'shipping-desk' ) ], 500 );
-        }
-
-        $first_key = array_key_first( $successful );
-        $shipment  = $successful[ $first_key ];
-        $label_id  = $first_key;
-        $label_url = $shipment['labels'][0]['url'] ?? '';
-        $label_url = Shipping_Desk_Helpers::absolute_url( $label_url );
-        $tracking  = $shipment['tracking_number'] ?? '';
-        $carrier_id = $shipment['carrier_id'] ?? '';
-
-        // Persist meta via CRUD (HPOS-safe).
-        $order->update_meta_data( $m['shipment_id'], $shipment['id'] ?? '' );
-        $order->update_meta_data( $m['remote_id'], $remote_id );
-        $order->update_meta_data( $m['label_id'], $label_id );
-        // The URL the buy response carried. Print asks the provider for a fresh one first -
-        // Veeqo and Shippo sign theirs with an expiry - but this is what saves a print when
-        // EasyPost has not finished building the file yet.
-        if ( '' !== $label_url ) {
-            $order->update_meta_data( $m['label_url'], $label_url );
-        }
-        $order->update_meta_data( $m['tracking'], $tracking );
-        $order->update_meta_data( $m['provider'], $provider );
-        $order->update_meta_data( $m['provider_mode'], $mode );
-        $order->update_meta_data( $m['final_weight'], $total_weight > 0 ? $total_weight : null );
-        $order->update_meta_data( $m['box_l'], isset( $box['length'] ) ? floatval( $box['length'] ) : 0 );
-        $order->update_meta_data( $m['box_w'], isset( $box['width'] ) ? floatval( $box['width'] ) : 0 );
-        $order->update_meta_data( $m['box_h'], isset( $box['height'] ) ? floatval( $box['height'] ) : 0 );
-        $order->update_meta_data( $m['box_weight'], isset( $box['weight'] ) ? floatval( $box['weight'] ) : 0 );
-        if ( ! empty( $carrier_id ) ) {
-            $order->update_meta_data( $m['carrier'], $carrier_id );
-        }
-
-        // Insurance actually attached to this label. EasyPost reports the declared
-        // value on the shipment and the premium as a fee; storing both is what makes
-        // "was this order covered, and what did it cost?" answerable afterwards.
-        $insured     = isset( $shipment['insurance'] ) ? trim( (string) $shipment['insurance'] ) : '';
-        $insured_fee = isset( $shipment['insurance_fee'] ) ? trim( (string) $shipment['insurance_fee'] ) : '';
-        if ( '' !== $insured ) {
-            $order->update_meta_data( $m['insurance'], $insured );
-        }
-        if ( '' !== $insured_fee ) {
-            $order->update_meta_data( $m['insurance_fee'], $insured_fee );
-        }
-
-        // "Actually insured" is a question only the bought shipment can answer: EasyPost
-        // takes the declared value whether or not the carrier applies cover. Compare the
-        // two and say so, in the notes and to the operator, rather than leaving a parcel
-        // believed covered until it goes missing.
-        //
-        // EasyPost only: it reports the cover on the shipment, so a missing value there
-        // means it really is missing. Shippo prices XCover into the rate and Veeqo quotes
-        // it after the quotes, so neither returns a comparable field here.
-        $insurance_warning = '';
-        if ( 'easypost' === $provider ) {
-            if ( Shipping_Desk_Helpers::insurance_shortfall( $requested_insurance, $insured ) ) {
-                $insurance_warning = $this->insurance_shortfall_note( $order, $requested_insurance, $insured );
-            } elseif ( Shipping_Desk_Helpers::insurance_premium_missing( $insured, $insured_fee, '' !== $label_url ) ) {
-                // A declared value with no premium behind it: the shipment carries the
-                // value, EasyPost reports no charge for it. Sometimes that is a cover
-                // bought without a fee, sometimes a value recorded with no label — the
-                // operator can tell which in one glance at the dashboard.
-                $insurance_warning = $this->insurance_unpriced_note( $order, $insured );
-            }
-
-            if ( '' !== $insurance_warning ) {
-                $order->add_order_note( $insurance_warning );
-            }
-        }
-
-        // No address correction is applied here: an accepted suggestion was written
-        // onto the order when it was accepted, so the label was quoted and bought
-        // from the same address the order now carries.
-        $order->save();
-
-        // From here the label exists. Anything that runs on completion and fatals - a
-        // notification hook, a third-party email template - must not be reported as a
-        // failed purchase.
-        $this->committed_purchase = [
-            'label_id'      => $label_id,
-            'label_url'     => $label_url,
-            'tracking'      => $tracking,
-            'insurance'     => $insured,
-            'insurance_fee' => $insured_fee,
-        ];
-
-        // Whether the order was already Completed *before* this purchase. The relay call
-        // below completes it when the setting allows, so asking afterwards would classify
-        // every normal purchase as a reship.
-        $was_completed = $order->has_status( 'completed' );
-
-        // Tracking goes to whichever plugin owns tracking on this site — AST first, then
-        // Shipment Tracking — or to the customer by note when neither is installed.
-        if ( $tracking ) {
-            $this->record_label_tracking(
-                $order,
-                $provider,
-                $tracking,
-                $carrier_id,
-                Shipping_Desk_Helpers::tracking_url( $carrier_id, $tracking ),
-                $label_id,
-                $remote_id,
-                $insured,
-                $insured_fee
-            );
-        }
-
-        // The quotes are now spent: they must not be reused for a reship or shown
-        // next to a row that already has a label.
-        $this->delete_quote_record( $order_id );
-
-        // What the carrier actually charged, for BrikPanel's profit figures. No-op
-        // when BrikPanel is absent or the label came from the test account.
-        $this->record_shipping_cost( $order, $provider, $mode, $shipment );
-
-        // The day's running total behind the header badge. Deliberately separate from
-        // record_shipping_cost(), which is a no-op without BrikPanel.
-        Shipping_Desk_Helpers::record_daily_spend( $provider, $shipment, $mode );
-
-        // Reshipping a completed order does not change its status, so the normal
-        // status-change notification never fires. Re-trigger the WooCommerce
-        // "Completed order" email so the customer receives the new tracking
-        // number.
-        //
-        // The original tracking is deliberately kept: a reship means two parcels
-        // really went out and both belong on the order. If the first label was
-        // refunded first, its number has already been removed by then.
-        //
-        // OFF by default: a tracking plugin may email the customer when it sees the new
-        // tracking, and two emails is worse than one. That is not a guarantee - a
-        // reship never changes the order's status, and Advanced Shipment Tracking sent
-        // nothing on a reshipped completed order when tested, even though the tracking
-        // reached its widget through ast_insert_tracking_number() - so the setting
-        // exists to be switched on when nothing else notifies the customer.
-        $reship_notified = false;
-        if ( $was_completed && get_option( 'shipping_desk_reship_send_completed_email', 0 ) ) {
-            do_action( 'woocommerce_order_status_completed_notification', $order_id, $order );
-            $reship_notified = true;
-            $order->add_order_note( __( 'Shipping Desk: reshipped completed order; customer "Completed order" email re-triggered.', 'shipping-desk' ) );
-        } elseif ( $was_completed ) {
-            $order->add_order_note( __( 'Shipping Desk: reshipped completed order. No customer email was sent, because "Completed email on reship" is off in Settings; add a customer note here to tell them about the new tracking.', 'shipping-desk' ) );
-        }
-
-        wp_send_json_success( [
-            'label_id'  => $label_id,
-            'label_url' => $label_url,
-            'tracking'  => $tracking,
-            // So the confirmation can name the cover rather than leaving the operator
-            // to infer it from a total that is larger than the quote.
-            'insurance'     => $insured,
-            'insurance_fee' => $insured_fee,
-            // Set only when cover was asked for and the bought label does not carry it.
-            'insurance_warning' => $insurance_warning,
-            'reship_notified' => $reship_notified,
-        ] );
-    }
-
-
-    /**
-     * The note written when a label's cover did not match what was asked for.
-     *
-     * Shared by single and bulk purchases so the wording cannot drift, and so both can
-     * be grepped for afterwards.
-     *
-     * @param WC_Order $order     Order.
-     * @param float    $requested Declared value sent with the buy call.
-     * @param string   $applied   Declared value reported on the bought shipment.
-     * @return string
-     */
-    protected function insurance_shortfall_note( WC_Order $order, $requested, $applied ) {
-        $symbol = function_exists( 'get_woocommerce_currency_symbol' ) ? get_woocommerce_currency_symbol( $order->get_currency() ) : '';
-
-        return sprintf(
-            /* translators: 1: amount requested, 2: amount the provider reports as insured */
-            __( 'Shipping Desk: insurance for %1$s was requested, but EasyPost reports this label insured for %2$s. It is not covered as ordered - check before shipping.', 'shipping-desk' ),
-            $symbol . number_format( (float) $requested, 2, '.', '' ),
-            '' !== (string) $applied
-                ? $symbol . number_format( (float) $applied, 2, '.', '' )
-                : __( 'nothing', 'shipping-desk' )
-        );
-    }
-
-    /**
-     * The note written when cover is recorded but no premium was reported.
-     *
-     * @param WC_Order $order   Order.
-     * @param string   $insured Declared value reported on the shipment.
-     * @return string
-     */
-    protected function insurance_unpriced_note( WC_Order $order, $insured ) {
-        $symbol = function_exists( 'get_woocommerce_currency_symbol' ) ? get_woocommerce_currency_symbol( $order->get_currency() ) : '';
-
-        return sprintf(
-            /* translators: %s: the declared value the label reports */
-            __( 'Shipping Desk: this label records insurance for %s, but EasyPost reported no premium for it. Confirm the cover in the EasyPost dashboard before shipping.', 'shipping-desk' ),
-            $symbol . number_format( (float) $insured, 2, '.', '' )
-        );
-    }
-
-    /**
-     * The printable URL for an order's label.
-     *
-     * A fresh URL is asked for first: it is authoritative, and Veeqo and Shippo sign theirs
-     * with an expiry, so a stored one can go stale. EasyPost is the exception in the wrong
-     * direction - it can take a few seconds to finish building the PDF after a successful
-     * buy - so when the provider says it has no label, the URL recorded at purchase is used
-     * instead. A label that was bought can be printed without waiting for the second try.
-     *
-     * Any other error (auth, network) is passed through untouched: falling back would hide
-     * a broken key behind a label that only looks fine.
-     *
-     * @param array $target Client, reference and order from get_shipment_action_context().
-     * @return string|WP_Error
-     */
-    protected function printable_label_url( array $target ) {
-        $url = $target['client']->get_label_url( $target['reference'] );
-
-        if ( ! is_wp_error( $url ) && '' !== trim( (string) $url ) ) {
-            return $url;
-        }
-
-        if ( is_wp_error( $url ) && ! in_array( $url->get_error_code(), [ 'easypost_label_missing', 'easypost_not_found', 'shippo_no_label' ], true ) ) {
-            return $url;
-        }
-
-        if ( ! empty( $target['order'] ) ) {
-            $m     = Shipping_Desk_Helpers::meta_keys();
-            $saved = trim( (string) $target['order']->get_meta( $m['label_url'] ) );
-            if ( '' !== $saved ) {
-                return $saved;
-            }
-        }
-
-        return $url;
-    }
-
-    protected function get_shipment_action_context() {
-        // $_REQUEST, not $_POST: the browser print endpoint is opened as a URL in a new
-        // tab, so its parameters arrive as GET. Both paths still verify a nonce.
-        $order_id  = isset( $_REQUEST['order_id'] ) ? intval( $_REQUEST['order_id'] ) : 0;
-        $remote_id = isset( $_REQUEST['remote_id'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['remote_id'] ) ) : '';
-        $nonce     = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
-        $order     = null;
-        $m         = Shipping_Desk_Helpers::meta_keys();
-
-        if ( $remote_id !== '' ) {
-            if ( ! wp_verify_nonce( $nonce, 'shipping_desk_lookup' ) ) {
-                wp_send_json_error( [ 'message' => __( 'Invalid nonce.', 'shipping-desk' ) ], 400 );
-            }
-            if ( $order_id ) {
-                $order = wc_get_order( $order_id );
-            }
-        } else {
-            if ( ! wp_verify_nonce( $nonce, 'shipping_desk_order_' . $order_id ) ) {
-                wp_send_json_error( [ 'message' => __( 'Invalid nonce.', 'shipping-desk' ) ], 400 );
-            }
-            $order = wc_get_order( $order_id );
-            if ( ! $order ) {
-                wp_send_json_error( [ 'message' => __( 'Order not found.', 'shipping-desk' ) ], 404 );
-            }
-            $remote_id = $order->get_meta( $m['remote_id'] );
-            if ( empty( $remote_id ) ) {
-                wp_send_json_error( [ 'message' => __( 'Remote shipment ID missing.', 'shipping-desk' ) ], 400 );
-            }
-        }
-
-        // Which provider owns this label. Orders shipped before the provider
-        // setting existed carry no marker and are Veeqo's by definition.
-        $provider = $this->normalize_provider( $order ? $order->get_meta( $m['provider'] ) : '', 'veeqo' );
-        $mode     = '';
-
-        if ( in_array( $provider, [ 'shippo', 'easypost' ], true ) ) {
-            $mode = $order ? (string) $order->get_meta( $m['provider_mode'] ) : '';
-            if ( ! in_array( $mode, [ 'test', 'live' ], true ) ) {
-                // Marker incomplete (partial write): fall back to the active mode
-                // rather than guessing production.
-                $mode = $this->provider_mode( $provider );
-            }
-        }
-
-        // Veeqo addresses a label by its remote shipment id; Shippo by the
-        // transaction id and EasyPost by the shipment, both stored as the label id.
-        $reference = in_array( $provider, [ 'shippo', 'easypost' ], true ) && $order
-            ? (string) $order->get_meta( $m['label_id'] )
-            : (string) $remote_id;
-
-        return [
-            'order'           => $order,
-            'remote_id'       => $remote_id,
-            'provider'        => $provider,
-            'provider_mode'   => $mode,
-            'label_reference' => $reference,
-        ];
-    }
-
-    /**
-     * Client that owns a stored label, plus the identifier that client needs.
-     *
-     * Routing by the stored marker is what keeps old labels actionable: a Veeqo
-     * label bought last month must still be refunded through Veeqo after the
-     * setting has been switched to Shippo.
-     *
-     * @param array $context Result of get_shipment_action_context().
-     * @return array|WP_Error ['client' => provider client, 'reference' => label id].
-     */
-    protected function label_client( array $context ) {
-        $provider = $context['provider'];
-        $mode     = $context['provider_mode'];
-
-        if ( 'shippo' === $provider && '' === $this->shippo_api_key( $mode ) ) {
-            return new WP_Error(
-                'shippo_key_missing',
-                'live' === $mode
-                    ? __( 'This label was bought with Shippo in Production mode, but no Production API key is set.', 'shipping-desk' )
-                    : __( 'This label was bought with Shippo in Test mode, but no Test API key is set.', 'shipping-desk' )
-            );
-        }
-
-        if ( 'easypost' === $provider && '' === $this->easypost_api_key( $mode ) ) {
-            return new WP_Error(
-                'easypost_key_missing',
-                'live' === $mode
-                    ? __( 'This label was bought with EasyPost in Production mode, but no Production API key is set.', 'shipping-desk' )
-                    : __( 'This label was bought with EasyPost in Test mode, but no Test API key is set.', 'shipping-desk' )
-            );
-        }
-
-        if ( '' === (string) $context['label_reference'] ) {
-            return new WP_Error( 'label_reference_missing', __( 'This order has no stored label id.', 'shipping-desk' ) );
-        }
-
-        return [
-            'client'    => $this->api( $provider, $mode ),
-            'reference' => (string) $context['label_reference'],
-        ];
-    }
 
     /** -- Bulk Buy Label (single Veeqo request for multiple shipments) -- */
 
-    public function shipping_desk_bulk_buy() {
-        $this->require_cap();
-        $this->extend_time_limit();
-        $this->guard_fatal_errors();
-        $nonce = isset( $_POST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ) : '';
-        $nonce_valid = $nonce && (
-            wp_verify_nonce( $nonce, 'shipping_desk_bulk_buy' ) ||
-            wp_verify_nonce( $nonce, 'shipping_desk_order_0' )
-        );
-        // Also accept any per-order nonce supplied with the payload (the same
-        // action used by single-order purchases).
-        if ( ! $nonce_valid ) {
-            $nonce_entries = [];
-            if ( isset( $_POST['orders_json'] ) ) {
-                $decoded_nonce = json_decode( wp_unslash( $_POST['orders_json'] ), true );
-                if ( is_array( $decoded_nonce ) ) {
-                    $nonce_entries = $decoded_nonce;
-                }
-            } elseif ( isset( $_POST['orders'] ) && is_array( $_POST['orders'] ) ) {
-                $nonce_entries = wp_unslash( $_POST['orders'] );
-            }
-            foreach ( $nonce_entries as $entry ) {
-                if ( ! is_array( $entry ) || empty( $entry['order_id'] ) ) {
-                    continue;
-                }
-                if ( $nonce && wp_verify_nonce( $nonce, 'shipping_desk_order_' . intval( $entry['order_id'] ) ) ) {
-                    $nonce_valid = true;
-                    break;
-                }
-            }
+    /**
+     * Lazy instantiation of the settings registration and field renderers.
+     *
+     * Public: the pages render its fields, and the backup / restore handler asks it for
+     * the sanitisers.
+     *
+     * @return Shipping_Desk_Settings
+     */
+    public function settings() {
+        if ( ! isset( $this->_settings ) ) {
+            require_once $this->path . 'includes/class-settings.php';
+            $this->_settings = new Shipping_Desk_Settings( $this );
         }
-        if ( ! $nonce_valid ) {
-            wp_send_json_error( [
-                'message'  => __( 'Invalid nonce.', 'shipping-desk' ),
-                'source'   => 'shipping_desk_bulk_buy',
-                'received' => $nonce ? 'present' : 'missing',
-                'length'   => strlen( (string) $nonce ),
-            ], 400 );
-        }
-
-        $orders_input = [];
-        if ( isset( $_POST['orders_json'] ) ) {
-            $decoded = json_decode( wp_unslash( $_POST['orders_json'] ), true );
-            if ( is_array( $decoded ) ) {
-                $orders_input = $decoded;
-            }
-        }
-        if ( empty( $orders_input ) && isset( $_POST['orders'] ) && is_array( $_POST['orders'] ) ) {
-            $orders_input = wp_unslash( $_POST['orders'] );
-        }
-        if ( empty( $orders_input ) ) {
-            wp_send_json_error( [ 'message' => __( 'No shipments to book.', 'shipping-desk' ) ], 400 );
-        }
-
-        $m               = Shipping_Desk_Helpers::meta_keys();
-        $shipments       = [];
-        $order_meta      = [];
-        $skipped         = [];
-
-        foreach ( $orders_input as $entry ) {
-            if ( ! is_array( $entry ) ) {
-                continue;
-            }
-            $order_id     = isset( $entry['order_id'] ) ? intval( $entry['order_id'] ) : 0;
-            $rate_id      = isset( $entry['rate_id'] ) ? sanitize_text_field( $entry['rate_id'] ) : '';
-            $remote_id    = isset( $entry['remote_id'] ) ? sanitize_text_field( $entry['remote_id'] ) : '';
-            $total_weight = isset( $entry['total_weight'] ) ? floatval( $entry['total_weight'] ) : 0.0;
-            $box          = isset( $entry['box'] ) && is_array( $entry['box'] ) ? $entry['box'] : [];
-            $rate         = isset( $entry['rate'] ) ? $this->parse_rate_input( $entry['rate'] ) : [];
-
-            $order = wc_get_order( $order_id );
-            if ( ! $order ) {
-                $skipped[ $order_id ] = __( 'Order not found.', 'shipping-desk' );
-                continue;
-            }
-            if ( $order->get_meta( $m['remote_id'] ) ) {
-                $skipped[ $order_id ] = __( 'Label already purchased.', 'shipping-desk' );
-                continue;
-            }
-            if ( empty( $rate_id ) || empty( $remote_id ) ) {
-                $skipped[ $order_id ] = __( 'Rate or shipment ID missing.', 'shipping-desk' );
-                continue;
-            }
-
-            $vas_fields = [];
-            if ( ! empty( $entry['vas'] ) && is_array( $entry['vas'] ) ) {
-                foreach ( $entry['vas'] as $vas_key => $vas_val ) {
-                    if ( ! is_string( $vas_key ) || $vas_key === '' ) {
-                        continue;
-                    }
-                    $vas_fields[ sanitize_text_field( $vas_key ) ] = is_scalar( $vas_val )
-                        ? sanitize_text_field( (string) $vas_val )
-                        : '';
-                }
-            }
-
-            $ship = [
-                'remote_shipment_id' => $remote_id,
-                'rate_id'            => $rate_id,
-                // The rate carries the carrier, service and price: a Shippo
-                // transaction returns only a rate ID, so without this the order
-                // note cannot name the carrier (and AST cannot complete the order).
-                'rate'               => $rate,
-                'order_id'           => (string) $order_id,
-                'custom_messages'    => [ (string) $order_id ],
-            ];
-            foreach ( $vas_fields as $key => $val ) {
-                $ship[ $key ] = $val;
-            }
-
-            $shipments[ $order_id ] = $ship;
-            $order_meta[ $order_id ] = [
-                'box'          => $box,
-                'total_weight' => $total_weight,
-            ];
-        }
-
-        // TO BE CONTINUED  -  response handling
-
-        $purchased = 0;
-        $failed    = 0;
-        $errors    = [];
-        // One line per order whose label came back without the cover that was asked for.
-        $insurance_warnings = [];
-
-        if ( ! empty( $shipments ) ) {
-            // One request, one provider: stamp the same marker on every order it
-            // buys for, so print and refund can find the right client later.
-            $provider = $this->provider();
-            $mode     = $this->provider_mode( $provider );
-
-            $result = $this->api( $provider, $mode )->book_shipments( $shipments );
-            if ( is_wp_error( $result ) ) {
-                wp_send_json_error( [ 'message' => $result->get_error_message() ], 500 );
-            }
-
-            $successful = $result['successful'] ?? [];
-            foreach ( $successful as $label_id => $shipment ) {
-                $order_id = (int) ( $shipment['customer_reference'] ?? 0 );
-                if ( ! $order_id || ! isset( $shipments[ $order_id ] ) ) {
-                    continue;
-                }
-                $order = wc_get_order( $order_id );
-                if ( ! $order ) {
-                    continue;
-                }
-                $order_data = $order_meta[ $order_id ];
-
-                $tracking   = $shipment['tracking_number'] ?? '';
-                $carrier_id = $shipment['carrier_id'] ?? '';
-
-                // Cover on a bulk-bought label, read exactly as a single purchase reads it:
-                // without this the order stays silent about whether it was insured.
-                $insured     = isset( $shipment['insurance'] ) ? trim( (string) $shipment['insurance'] ) : '';
-                $insured_fee = isset( $shipment['insurance_fee'] ) ? trim( (string) $shipment['insurance_fee'] ) : '';
-
-                $order->update_meta_data( $m['shipment_id'], $shipment['id'] ?? '' );
-                $order->update_meta_data( $m['remote_id'],   $shipments[ $order_id ]['remote_shipment_id'] );
-                $order->update_meta_data( $m['label_id'],    $label_id );
-                $order->update_meta_data( $m['tracking'],    $tracking );
-                $order->update_meta_data( $m['provider'],      $provider );
-                $order->update_meta_data( $m['provider_mode'], $mode );
-                $order->update_meta_data( $m['final_weight'], $order_data['total_weight'] > 0 ? $order_data['total_weight'] : null );
-                $box = $order_data['box'];
-                $order->update_meta_data( $m['box_l'],       isset( $box['length'] ) ? floatval( $box['length'] ) : 0 );
-                $order->update_meta_data( $m['box_w'],       isset( $box['width'] )  ? floatval( $box['width'] )  : 0 );
-                $order->update_meta_data( $m['box_h'],       isset( $box['height'] ) ? floatval( $box['height'] ) : 0 );
-                $order->update_meta_data( $m['box_weight'],  isset( $box['weight'] ) ? floatval( $box['weight'] ) : 0 );
-                if ( ! empty( $carrier_id ) ) {
-                    $order->update_meta_data( $m['carrier'], $carrier_id );
-                }
-
-                if ( '' !== $insured ) {
-                    $order->update_meta_data( $m['insurance'], $insured );
-                }
-                if ( '' !== $insured_fee ) {
-                    $order->update_meta_data( $m['insurance_fee'], $insured_fee );
-                }
-
-                // Same question as a single purchase: does the bought label carry the
-                // cover that was asked for? The requested value travels with the entry.
-                $requested_bulk = isset( $shipments[ $order_id ]['liability_amount'] ) ? (float) $shipments[ $order_id ]['liability_amount'] : 0.0;
-                if ( 'easypost' === $provider ) {
-                    if ( Shipping_Desk_Helpers::insurance_shortfall( $requested_bulk, $insured ) ) {
-                        $warning = $this->insurance_shortfall_note( $order, $requested_bulk, $insured );
-                    } elseif ( Shipping_Desk_Helpers::insurance_premium_missing( $insured, $insured_fee, ! empty( $shipment['label_url'] ) ) ) {
-                        $warning = $this->insurance_unpriced_note( $order, $insured );
-                    }
-
-                    if ( isset( $warning ) && '' !== $warning ) {
-                        $order->add_order_note( $warning );
-                        $insurance_warnings[] = 'Order #' . $order_id . ': ' . $warning;
-                    }
-                    unset( $warning );
-                }
-
-                // As in a single purchase: the address was corrected when the
-                // operator accepted it, so only the label meta is written here.
-                $order->save();
-
-                $this->record_label_tracking(
-                    $order,
-                    $provider,
-                    $tracking,
-                    $carrier_id,
-                    Shipping_Desk_Helpers::tracking_url( $carrier_id, $tracking ),
-                    $label_id,
-                    $shipments[ $order_id ]['remote_shipment_id'],
-                    $insured,
-                    $insured_fee
-                );
-                $this->delete_quote_record( $order_id );
-                $this->record_shipping_cost( $order, $provider, $mode, $shipment );
-                Shipping_Desk_Helpers::record_daily_spend( $provider, $shipment, $mode );
-                $purchased++;
-                unset( $skipped[ $order_id ] );
-            }
-
-            $failed_shipments = $result['failed'] ?? [];
-            foreach ( $failed_shipments as $failed_remote_id => $failed_data ) {
-                $order_id = (int) ( $failed_data['customer_reference'] ?? 0 );
-                if ( $order_id && isset( $shipments[ $order_id ] ) ) {
-                    $failed++;
-                    $error_msg = isset( $failed_data['error_messages'] ) && is_array( $failed_data['error_messages'] )
-                        ? implode( '; ', $failed_data['error_messages'] )
-                        : __( 'Label purchase failed.', 'shipping-desk' );
-                    $errors[]             = $error_msg;
-                    $skipped[ $order_id ] = $error_msg;
-                }
-            }
-        }
-
-        wp_send_json_success( [
-            'purchased'  => $purchased,
-            'failed'     => $failed + count( $skipped ),
-            'errors'     => array_merge( $errors, array_values( $skipped ) ),
-            'insurance_warnings' => $insurance_warnings,
-            'order_ids'   => array_merge(
-                array_keys( $shipments ),
-                array_keys( $skipped )
-            ),
-        ] );
-    }
-
-    public function shipping_desk_print_label() {
-        $this->require_cap();
-        $context = $this->get_shipment_action_context();
-        $target  = $this->label_client( $context );
-        if ( is_wp_error( $target ) ) {
-            wp_send_json_error( [ 'message' => $target->get_error_message() ], 400 );
-        }
-
-        // Always request a fresh URL: Veeqo label URLs carry expiring tokens and
-        // Shippo label URLs are signed with their own expiry.
-        $label_url = $this->printable_label_url( $target );
-        if ( is_wp_error( $label_url ) ) {
-            // Say when waiting is the right answer, so the browser can retry itself rather
-            // than asking the operator to click Print again.
-            wp_send_json_error(
-                [
-                    'message'   => $label_url->get_error_message(),
-                    'retryable' => in_array( $label_url->get_error_code(), [ 'easypost_label_missing', 'easypost_not_found', 'shippo_no_label' ], true ),
-                ],
-                500
-            );
-        }
-        $label_url = Shipping_Desk_Helpers::absolute_url( $label_url );
-        if ( empty( $label_url ) ) {
-            wp_send_json_error( [ 'message' => __( 'The shipping provider did not return a label URL.', 'shipping-desk' ) ], 500 );
-        }
-
-        // If PrintNode mode is enabled, send the job to the server printer.
-        $force_printnode = ! empty( $_POST['print_node'] );
-        if ( $force_printnode || 'printnode' === get_option( 'shipping_desk_print_mode', 'browser' ) ) {
-            $printer_id = (int) get_option( 'shipping_desk_printnode_printer_id', 0 );
-            if ( ! $printer_id ) {
-                wp_send_json_error( [ 'message' => __( 'PrintNode printer not selected.', 'shipping-desk' ) ], 400 );
-            }
-            $title  = isset( $_POST['title'] ) ? sanitize_text_field( wp_unslash( $_POST['title'] ) ) : 'Shipping Label';
-
-            // A client that can hand back label bytes gets used directly: EasyPost's UPS
-            // labels arrive on a 4x7 page that is a 4x6 label plus a blank inch, and a
-            // 4x6 printer "fits" the taller page and shrinks the whole label. The client
-            // crops the page box, and PrintNode accepts the bytes as base64 — which also
-            // removes its need to fetch the carrier's storage URL itself.
-            $printable = null;
-            if ( method_exists( $target['client'], 'get_printable_label_pdf' ) ) {
-                $printable = $target['client']->get_printable_label_pdf( $target['reference'] );
-            }
-
-            if ( is_array( $printable ) && ! empty( $printable['bytes'] ) ) {
-                $result = $this->printnode()->send_print_job(
-                    $printer_id,
-                    $title,
-                    'pdf_base64',
-                    base64_encode( $printable['bytes'] ),
-                    'Shipping Desk'
-                );
-            } else {
-                // Fall back to a URL: either a client that cannot produce bytes, or a
-                // download that failed. Printing must not break because our fetch did.
-                if ( method_exists( $target['client'], 'get_label_pdf_url' ) ) {
-                    $pdf_url = $target['client']->get_label_pdf_url( $target['reference'] );
-                    if ( is_wp_error( $pdf_url ) ) {
-                        wp_send_json_error( [ 'message' => $pdf_url->get_error_message() ], 500 );
-                    }
-                    $label_url = Shipping_Desk_Helpers::absolute_url( $pdf_url );
-                }
-
-                $result = $this->printnode()->send_print_job( $printer_id, $title, 'pdf_uri', $label_url, 'Shipping Desk' );
-            }
-            if ( is_wp_error( $result ) ) {
-                wp_send_json_error( [ 'message' => $result->get_error_message() ], 500 );
-            }
-            wp_send_json_success( [
-                'print_job_id' => $result['id'] ?? 0,
-                'message'      => __( 'Label sent to PrintNode.', 'shipping-desk' ),
-            ] );
-        }
-
-        // Browser mode: return the *printable* file rather than the carrier's own. UPS
-        // labels are 4x7 and FedEx labels are a US letter page, so a 4x6 printer fits
-        // either and prints the label small; the endpoint serves the same 4x6 bytes
-        // PrintNode gets. A provider that cannot produce bytes keeps its own URL.
-        $print_url = '';
-        if ( method_exists( $target['client'], 'get_printable_label_pdf' ) ) {
-            $incoming     = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
-            $is_lookup    = '' !== (string) $context['remote_id'] && wp_verify_nonce( $incoming, 'shipping_desk_lookup' );
-            $context_id   = (int) ( $context['order'] ? $context['order']->get_id() : 0 );
-            $print_args   = [ 'action' => 'shipping_desk_print_pdf' ];
-
-            if ( $is_lookup ) {
-                $print_args['remote_id'] = $context['remote_id'];
-                $print_args['order_id']  = $context_id;
-                $print_args['_wpnonce']  = wp_create_nonce( 'shipping_desk_lookup' );
-            } elseif ( $context_id ) {
-                $print_args['order_id'] = $context_id;
-                $print_args['_wpnonce'] = wp_create_nonce( 'shipping_desk_order_' . $context_id );
-            }
-
-            if ( isset( $print_args['_wpnonce'] ) ) {
-                $print_url = add_query_arg( $print_args, admin_url( 'admin-ajax.php' ) );
-            }
-        }
-
-        wp_send_json_success( [
-            'label_url' => $label_url,
-            'print_url' => $print_url,
-        ] );
+        return $this->_settings;
     }
 
     /**
-     * Stream the label as a 4x6 PDF for browser printing.
+     * Lazy instantiation of the Shipment Lookup page.
      *
-     * Opened in a new tab, so this is a GET with a nonce rather than an AJAX POST. It
-     * returns the same bytes PrintNode receives — the carrier's label on a 4x6 page
-     * box — because the carriers' own files are the wrong page size for a 4x6 printer:
-     * UPS returns 4x7 and FedEx returns a US letter page with the label drawn inside.
-     * With the page box at 4x6, "actual size" fills the stock and even the default
-     * "fit to page" lands at 100%, since the page and the paper are the same size.
-     *
-     * A provider that cannot produce bytes (Shippo's file is already 4x6) is simply
-     * redirected to, so printing never breaks over this.
-     *
-     * @return void
+     * @return Shipping_Desk_Lookup_Page
      */
-    public function shipping_desk_print_pdf() {
-        if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            wp_die( esc_html__( 'Permission denied.', 'shipping-desk' ), '', [ 'response' => 403 ] );
+    public function lookup_page() {
+        if ( ! isset( $this->_lookup_page ) ) {
+            require_once $this->path . 'includes/class-lookup-page.php';
+            $this->_lookup_page = new Shipping_Desk_Lookup_Page( $this );
         }
-
-        $context = $this->get_shipment_action_context();
-        $target  = $this->label_client( $context );
-        if ( is_wp_error( $target ) ) {
-            wp_die( esc_html( $target->get_error_message() ), '', [ 'response' => 400 ] );
-        }
-
-        $bytes = '';
-        if ( method_exists( $target['client'], 'get_printable_label_pdf' ) ) {
-            $printable = $target['client']->get_printable_label_pdf( $target['reference'] );
-            if ( is_array( $printable ) && ! empty( $printable['bytes'] ) ) {
-                $bytes = (string) $printable['bytes'];
-            }
-        }
-
-        if ( '' === $bytes ) {
-            // No bytes: either the provider's file is already the right size, or the
-            // download failed. Either way, hand the browser the carrier's own URL
-            // instead of showing an error where a label was expected.
-            $label_url = $this->printable_label_url( $target );
-            if ( is_wp_error( $label_url ) || '' === trim( (string) $label_url ) ) {
-                wp_die(
-                    esc_html__( 'The shipping provider did not return a label.', 'shipping-desk' ),
-                    '',
-                    [ 'response' => 502 ]
-                );
-            }
-
-            wp_redirect( esc_url_raw( $label_url ) );
-            exit;
-        }
-
-        $context_id = (int) ( $context['order'] ? $context['order']->get_id() : 0 );
-        $filename   = $context_id ? 'label-' . $context_id . '.pdf' : 'label.pdf';
-
-        nocache_headers();
-        header( 'Content-Type: application/pdf' );
-        header( 'Content-Disposition: inline; filename="' . $filename . '"' );
-        header( 'Content-Length: ' . strlen( $bytes ) );
-        echo $bytes; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- binary PDF
-        exit;
-    }
-
-    public function shipping_desk_refund_label() {
-        $this->require_cap();
-        $context = $this->get_shipment_action_context();
-        $order   = $context['order'];
-        $target  = $this->label_client( $context );
-        if ( is_wp_error( $target ) ) {
-            wp_send_json_error( [ 'message' => $target->get_error_message() ], 400 );
-        }
-
-        $result = $target['client']->refund_shipment( $target['reference'] );
-        if ( is_wp_error( $result ) ) {
-            // Shippo knows something the order does not — typically a refund started
-            // in their dashboard. Record it so the button stops offering a refund
-            // that cannot happen.
-            if ( $order ) {
-                $m     = Shipping_Desk_Helpers::meta_keys();
-                $codes = [ 'shippo_already_refunded', 'shippo_refund_pending', 'easypost_already_refunded', 'easypost_refund_pending' ];
-                if ( in_array( $result->get_error_code(), $codes, true ) ) {
-                    $order->update_meta_data( $m['refunded'], 1 );
-                    $order->save();
-                    // The provider says the label is already void, so the number is dead
-                    // here too — otherwise it would sit beside the replacement's.
-                    $this->remove_dead_tracking( $order, (string) $order->get_meta( $m['tracking'] ) );
-                }
-            }
-            wp_send_json_error( [ 'message' => $result->get_error_message() ], 500 );
-        }
-
-        if ( $order ) {
-            $m = Shipping_Desk_Helpers::meta_keys();
-            $order->update_meta_data( $m['refunded'], 1 );
-            $order->save();
-            // The carrier has given the money back, so the recorded cost goes too:
-            // an empty value tells BrikPanel to fall back to what was charged.
-            $this->clear_shipping_cost( $order );
-            $order->add_order_note(
-                'shippo' === $context['provider']
-                    ? __( 'Shippo label refund requested.', 'shipping-desk' )
-                    : ( 'easypost' === $context['provider']
-                        ? __( 'EasyPost label refund requested.', 'shipping-desk' )
-                        : __( 'Veeqo shipping label refunded/cancelled.', 'shipping-desk' ) )
-            );
-            // The label is void, so its number comes off the order as well: left there it
-            // would sit beside the replacement's number in the next shipment email. After
-            // the refund note, so the timeline reads refund, then removal.
-            $this->remove_dead_tracking( $order, (string) $order->get_meta( $m['tracking'] ) );
-        }
-
-        wp_send_json_success( [ 'refunded' => true ] );
-    }
-
-    public function shipping_desk_reset_shipping() {
-        $this->require_cap();
-        $order_id = isset( $_POST['order_id'] ) ? intval( $_POST['order_id'] ) : 0;
-        $nonce    = isset( $_POST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ) : '';
-        if ( ! wp_verify_nonce( $nonce, 'shipping_desk_order_' . $order_id ) ) {
-            wp_send_json_error( [ 'message' => __( 'Invalid nonce.', 'shipping-desk' ) ], 400 );
-        }
-        $order    = wc_get_order( $order_id );
-        if ( ! $order ) {
-            wp_send_json_error( [ 'message' => __( 'Order not found.', 'shipping-desk' ) ], 404 );
-        }
-        // Read the dead label's number before the meta goes: after the reset there is
-        // nothing left to match a tracking item against.
-        $m        = Shipping_Desk_Helpers::meta_keys();
-        $tracking = (string) $order->get_meta( $m['tracking'] );
-        $refunded = (bool) $order->get_meta( $m['refunded'] );
-        Shipping_Desk_Helpers::clear_shipping_meta( $order );
-        // Reset means start over, so the cached address check goes too. Without
-        // this a re-test of the same address is answered from a twelve-hour-old
-        // transient and never reaches Shippo.
-        $this->clear_address_validation_cache( $order_id );
-        $this->delete_quote_record( $order_id );
-        $order->add_order_note( __( 'Shipping Desk: shipping state reset  -  a new label can now be purchased.', 'shipping-desk' ) );
-        // A reset on a live label leaves its tracking alone: that parcel may still be
-        // moving. Only a refunded label's number is dead enough to remove, and by then
-        // the refund has normally taken it already — forget() then finds nothing.
-        if ( $refunded && '' !== $tracking ) {
-            $this->remove_dead_tracking( $order, $tracking );
-        }
-        wp_send_json_success( [ 'reset' => true ] );
+        return $this->_lookup_page;
     }
 
     /**
-     * Drop every stored quote, and the address verdicts behind them.
+     * Lazy instantiation of the orders screen.
      *
-     * Called when the provider or its label mode changes. Rates are quoted by one
-     * account and carry that account's shipment id, so none of them can be bought by
-     * the provider just selected — and a row that still shows them looks current.
-     * Deleting a cache is cheap; a stale rate that looks buyable is not.
-     *
-     * Direct SQL by prefix, as for the address cache: there is no core API for wildcard
-     * transient deletion, and the names are this plugin's own.
-     *
-     * @return void
+     * @return Shipping_Desk_Orders_Screen
      */
-    protected function clear_cached_quotes() {
-        global $wpdb;
-
-        foreach ( [ '_transient_', '_transient_timeout_' ] as $prefix ) {
-            foreach ( [ 'shipping_desk_quotes_', 'shipping_desk_addr_' ] as $name ) {
-                $wpdb->query(
-                    $wpdb->prepare(
-                        "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
-                        $wpdb->esc_like( $prefix . $name ) . '%'
-                    )
-                );
-            }
+    public function orders_screen() {
+        if ( ! isset( $this->_orders_screen ) ) {
+            require_once $this->path . 'includes/class-orders-screen.php';
+            $this->_orders_screen = new Shipping_Desk_Orders_Screen( $this );
         }
+        return $this->_orders_screen;
     }
 
     /**
-     * Drop the cached address validation results for one order.
+     * Lazy instantiation of the label actions (print, refund, reset).
      *
-     * The transient name is `shipping_desk_addr_<order>_<address hash>`, so the
-     * order's entries are removed by prefix. Direct SQL is the only way to do that
-     * — there is no core API for wildcard transient deletion — and it is scoped to
-     * this plugin's option names only.
-     *
-     * @param int $order_id Order ID.
-     * @return void
+     * @return Shipping_Desk_Label_Actions
      */
-    protected function clear_address_validation_cache( $order_id ) {
-        global $wpdb;
-
-        $order_id = (int) $order_id;
-        if ( $order_id <= 0 ) {
-            return;
+    public function label_actions() {
+        if ( ! isset( $this->_label_actions ) ) {
+            require_once $this->path . 'includes/class-label-actions.php';
+            $this->_label_actions = new Shipping_Desk_Label_Actions( $this );
         }
-
-        foreach ( [ '_transient_', '_transient_timeout_' ] as $prefix ) {
-            $like = $prefix . 'shipping_desk_addr_' . $order_id . '_%';
-            $wpdb->query(
-                $wpdb->prepare(
-                    "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
-                    $wpdb->esc_like( $like )
-                )
-            );
-        }
+        return $this->_label_actions;
     }
 
     /**
-     * Return the purchasable row markup for an order.
+     * Lazy instantiation of the label purchase handler.
      *
-     * Used by the Completed tab so a reset order can be shipped again in place,
-     * without changing its status.
+     * Public: refund and reset, still in the plugin, ask it to clear tracking and cost.
+     *
+     * @return Shipping_Desk_Labels
      */
-    public function shipping_desk_render_purchase_row() {
-        $this->require_cap();
-        $order_id = isset( $_POST['order_id'] ) ? intval( $_POST['order_id'] ) : 0;
-        $nonce    = isset( $_POST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ) : '';
-        if ( ! wp_verify_nonce( $nonce, 'shipping_desk_order_' . $order_id ) ) {
-            wp_send_json_error( [ 'message' => __( 'Invalid nonce.', 'shipping-desk' ) ], 400 );
+    public function labels() {
+        if ( ! isset( $this->_labels ) ) {
+            require_once $this->path . 'includes/class-labels.php';
+            $this->_labels = new Shipping_Desk_Labels( $this );
         }
-        $order = wc_get_order( $order_id );
-        if ( ! $order ) {
-            wp_send_json_error( [ 'message' => __( 'Order not found.', 'shipping-desk' ) ], 404 );
+        return $this->_labels;
+    }
+
+    /**
+     * Lazy instantiation of the quote store.
+     *
+     * Public: the purchase code asks it for the stored quotes.
+     *
+     * @return Shipping_Desk_Quote_Store
+     */
+    public function quote_store() {
+        if ( ! isset( $this->_quote_store ) ) {
+            require_once $this->path . 'includes/class-quote-store.php';
+            $this->_quote_store = new Shipping_Desk_Quote_Store( $this );
         }
+        return $this->_quote_store;
+    }
 
-        $boxes = get_option( 'shipping_desk_boxes', [] );
-        if ( ! is_array( $boxes ) ) {
-            $boxes = [];
+    /**
+     * Lazy instantiation of the settings backup / restore handler.
+     *
+     * @return Shipping_Desk_Settings_Transfer
+     */
+    protected function settings_transfer() {
+        if ( ! isset( $this->_settings_transfer ) ) {
+            require_once $this->path . 'includes/class-settings-transfer.php';
+            $this->_settings_transfer = new Shipping_Desk_Settings_Transfer( $this );
         }
-        usort( $boxes, function ( $a, $b ) {
-            $name_a = trim( (string) ( $a['name'] ?? '' ) );
-            $name_b = trim( (string) ( $b['name'] ?? '' ) );
-            if ( $name_a === '' && $name_b !== '' ) {
-                return 1;
-            }
-            if ( $name_a !== '' && $name_b === '' ) {
-                return -1;
-            }
-            $name_compare = strnatcasecmp( $name_a, $name_b );
-            if ( $name_compare !== 0 ) {
-                return $name_compare;
-            }
-            return (float) ( $a['width'] ?? 0 ) <=> (float) ( $b['width'] ?? 0 );
-        } );
-
-        ob_start();
-        $this->render_order_row( $order, $boxes );
-        $html = trim( (string) ob_get_clean() );
-
-        // render_order_row() emits a complete <tr>. The detail row is placed in
-        // its own <td colspan>, so strip the outer row wrapper and keep only the
-        // inner cells; the data-* attributes are re-attached to a wrapper.
-        $attrs = '';
-        if ( preg_match( '/^<tr([^>]*)>/', $html, $matches ) ) {
-            $attrs = trim( $matches[1] );
-            $html  = preg_replace( '/^<tr[^>]*>/', '', $html, 1 );
-            $html  = preg_replace( '/<\/tr>\s*$/', '', $html, 1 );
-        }
-
-        wp_send_json_success( [
-            'html'   => trim( $html ),
-            'attrs'  => $attrs,
-            'is_new' => true,
-        ] );
+        return $this->_settings_transfer;
     }
 
     /**
@@ -4757,7 +1760,7 @@ class Shipping_Desk_Plugin {
      *
      * @return Shipping_Desk_PrintNode_Client
      */
-    protected function printnode() {
+    public function printnode() {
         if ( ! isset( $this->_printnode_client ) ) {
             require_once $this->path . 'includes/class-printnode-client.php';
             $this->_printnode_client = new Shipping_Desk_PrintNode_Client();
@@ -4805,48 +1808,6 @@ class Shipping_Desk_Plugin {
         $html = ob_get_clean();
 
         wp_send_json_success( [ 'html' => $html ] );
-    }
-
-    public function shipping_desk_printnode_print_label() {
-        $this->require_cap();
-        $context = $this->get_shipment_action_context();
-        $target  = $this->label_client( $context );
-        if ( is_wp_error( $target ) ) {
-            wp_send_json_error( [ 'message' => $target->get_error_message() ], 400 );
-        }
-
-        $label_url = $this->printable_label_url( $target );
-        if ( is_wp_error( $label_url ) ) {
-            // Say when waiting is the right answer, so the browser can retry itself rather
-            // than asking the operator to click Print again.
-            wp_send_json_error(
-                [
-                    'message'   => $label_url->get_error_message(),
-                    'retryable' => in_array( $label_url->get_error_code(), [ 'easypost_label_missing', 'easypost_not_found', 'shippo_no_label' ], true ),
-                ],
-                500
-            );
-        }
-        $label_url = Shipping_Desk_Helpers::absolute_url( $label_url );
-        if ( empty( $label_url ) ) {
-            wp_send_json_error( [ 'message' => __( 'The shipping provider did not return a label URL.', 'shipping-desk' ) ], 500 );
-        }
-
-        $printer_id = (int) get_option( 'shipping_desk_printnode_printer_id', 0 );
-        if ( ! $printer_id ) {
-            wp_send_json_error( [ 'message' => __( 'PrintNode printer not selected.', 'shipping-desk' ) ], 400 );
-        }
-
-        $title  = isset( $_POST['title'] ) ? sanitize_text_field( wp_unslash( $_POST['title'] ) ) : 'Shipping Label';
-        $result = $this->printnode()->send_print_job( $printer_id, $title, 'pdf_uri', $label_url, 'Shipping Desk' );
-        if ( is_wp_error( $result ) ) {
-            wp_send_json_error( [ 'message' => $result->get_error_message() ], 500 );
-        }
-
-        wp_send_json_success( [
-            'print_job_id' => $result['id'] ?? 0,
-            'message'      => __( 'Label sent to PrintNode.', 'shipping-desk' ),
-        ] );
     }
 
 }

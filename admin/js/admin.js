@@ -1861,10 +1861,10 @@
             if (!$actions.find('.shipping-desk-label-refunded').length) {
                 $actions.prepend($('<span>', {
                     'class': 'shipping-desk-label-refunded',
-                    text: 'Label refunded.'
+                    text: 'Label refunded. To buy a replacement, click Reset Shipping, then Reship.'
                 }));
             }
-            alert('Label refunded.');
+            alert('Label refunded. To buy a replacement, click Reset Shipping, then Reship.');
         }).fail(function (xhr) {
             alert(ajaxErrorMessage(xhr, 'Error refunding label.'));
         });
