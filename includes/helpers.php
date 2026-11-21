@@ -1113,6 +1113,21 @@ class Shipping_Desk_Helpers {
         ];
     }
 
+    /**
+     * Nonce action the Lookup page's label buttons are bound to.
+     *
+     * One action per shipment id, so a nonce minted for one id cannot be used
+     * for another. The Lookup page's search form keeps its own account-wide
+     * nonce; this is only for the Print, Refund and print-PDF requests made for
+     * a shipment the page has drawn.
+     *
+     * @param string $remote_id Shipment id the nonce is bound to.
+     * @return string
+     */
+    public static function lookup_nonce_action( $remote_id ) {
+        return 'shipping_desk_lookup_' . (string) $remote_id;
+    }
+
     public static function clear_shipping_meta( WC_Order $order ) {
         foreach ( self::meta_keys() as $key ) {
             $order->delete_meta_data( $key );

@@ -75,11 +75,15 @@ class Shipping_Desk_Label_Actions {
         $m         = Shipping_Desk_Helpers::meta_keys();
 
         if ( $remote_id !== '' ) {
-            if ( ! wp_verify_nonce( $nonce, 'shipping_desk_lookup' ) ) {
+            if ( ! wp_verify_nonce( $nonce, Shipping_Desk_Helpers::lookup_nonce_action( $remote_id ) ) ) {
                 wp_send_json_error( [ 'message' => __( 'Invalid nonce.', 'shipping-desk' ) ], 400 );
             }
-            if ( $order_id ) {
-                $order = wc_get_order( $order_id );
+            $order = $order_id ? wc_get_order( $order_id ) : null;
+            if ( ! $order && ! apply_filters( 'shipping_desk_lookup_allow_foreign_shipment', false, $remote_id, $order_id ) ) {
+                wp_send_json_error(
+                    [ 'message' => __( 'That shipment is not an order in this store, so label actions are not available here.', 'shipping-desk' ) ],
+                    403
+                );
             }
         } else {
             if ( ! wp_verify_nonce( $nonce, 'shipping_desk_order_' . $order_id ) ) {
@@ -249,14 +253,14 @@ class Shipping_Desk_Label_Actions {
         $print_url = '';
         if ( method_exists( $target['client'], 'get_printable_label_pdf' ) ) {
             $incoming     = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
-            $is_lookup    = '' !== (string) $context['remote_id'] && wp_verify_nonce( $incoming, 'shipping_desk_lookup' );
+            $is_lookup    = '' !== (string) $context['remote_id'] && wp_verify_nonce( $incoming, Shipping_Desk_Helpers::lookup_nonce_action( $context['remote_id'] ) );
             $context_id   = (int) ( $context['order'] ? $context['order']->get_id() : 0 );
             $print_args   = [ 'action' => 'shipping_desk_print_pdf' ];
 
             if ( $is_lookup ) {
                 $print_args['remote_id'] = $context['remote_id'];
                 $print_args['order_id']  = $context_id;
-                $print_args['_wpnonce']  = wp_create_nonce( 'shipping_desk_lookup' );
+                $print_args['_wpnonce']  = wp_create_nonce( Shipping_Desk_Helpers::lookup_nonce_action( $context['remote_id'] ) );
             } elseif ( $context_id ) {
                 $print_args['order_id'] = $context_id;
                 $print_args['_wpnonce'] = wp_create_nonce( 'shipping_desk_order_' . $context_id );
@@ -271,6 +275,47 @@ class Shipping_Desk_Label_Actions {
             'label_url' => $label_url,
             'print_url' => $print_url,
         ] );
+    }
+
+    /**
+     * Whether a provider-supplied label URL is safe to redirect the browser to.
+     *
+     * HTTPS is required. A store can additionally restrict the hosts with the
+     * `shipping_desk_label_redirect_hosts` filter; an empty list (the default) allows any
+     * https host, which is what the carriers' own file stores use.
+     *
+     * @param string $url Provider-supplied label URL.
+     * @return true|WP_Error True when the redirect may proceed.
+     */
+    protected function label_redirect_is_allowed( $url ) {
+        $scheme = strtolower( (string) wp_parse_url( $url, PHP_URL_SCHEME ) );
+        if ( 'https' !== $scheme ) {
+            return new WP_Error(
+                'shipping_desk_insecure_label_url',
+                __( 'The provider returned a label link that is not https, so it was not opened.', 'shipping-desk' )
+            );
+        }
+
+        $allowed = (array) apply_filters( 'shipping_desk_label_redirect_hosts', [] );
+        if ( empty( $allowed ) ) {
+            return true;
+        }
+
+        $host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+        foreach ( $allowed as $candidate ) {
+            $candidate = strtolower( ltrim( trim( (string) $candidate ), '.' ) );
+            if ( '' === $candidate ) {
+                continue;
+            }
+            if ( $host === $candidate || '.' . $candidate === substr( $host, -1 * ( strlen( $candidate ) + 1 ) ) ) {
+                return true;
+            }
+        }
+
+        return new WP_Error(
+            'shipping_desk_disallowed_label_host',
+            __( 'The provider returned a label on a host this store does not allow, so it was not opened.', 'shipping-desk' )
+        );
     }
 
     /**
@@ -318,6 +363,13 @@ class Shipping_Desk_Label_Actions {
                     '',
                     [ 'response' => 502 ]
                 );
+            }
+
+            // This redirect target comes from the provider, so it is vetted before use:
+            // https only, and a host the store allows (any https host by default).
+            $redirect_ok = $this->label_redirect_is_allowed( (string) $label_url );
+            if ( is_wp_error( $redirect_ok ) ) {
+                wp_die( esc_html( $redirect_ok->get_error_message() ), '', [ 'response' => 502 ] );
             }
 
             wp_redirect( esc_url_raw( $label_url ) );
@@ -387,16 +439,8 @@ class Shipping_Desk_Label_Actions {
     }
 
     public function shipping_desk_reset_shipping() {
-        $this->plugin->require_cap();
         $order_id = isset( $_POST['order_id'] ) ? intval( $_POST['order_id'] ) : 0;
-        $nonce    = isset( $_POST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ) : '';
-        if ( ! wp_verify_nonce( $nonce, 'shipping_desk_order_' . $order_id ) ) {
-            wp_send_json_error( [ 'message' => __( 'Invalid nonce.', 'shipping-desk' ) ], 400 );
-        }
-        $order    = wc_get_order( $order_id );
-        if ( ! $order ) {
-            wp_send_json_error( [ 'message' => __( 'Order not found.', 'shipping-desk' ) ], 404 );
-        }
+        $order    = $this->plugin->authorized_order( $order_id, 'shipping_desk_order_' . $order_id );
         // Read the dead label's number before the meta goes: after the reset there is
         // nothing left to match a tracking item against.
         $m        = Shipping_Desk_Helpers::meta_keys();

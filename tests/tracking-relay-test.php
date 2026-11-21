@@ -72,13 +72,23 @@ function add_filter( $tag, $callback, $priority = 10, $args = 1 ) {
 	return true;
 }
 
+/* -- Option stand-in: the complete-on-purchase setting ---------------------- */
+
+$GLOBALS['relay_options'] = [];
+
+function get_option( $key, $default = '' ) {
+	return array_key_exists( $key, $GLOBALS['relay_options'] ) ? $GLOBALS['relay_options'][ $key ] : $default;
+}
+
 /* -- WooCommerce and tracking plugin stand-ins ------------------------------ */
 
 /**
  * Just enough of an order for the relay: an id and order meta.
  */
 class WC_Order {
-	public $meta = [];
+	public $meta   = [];
+	public $status = 'processing';
+	public $notes  = [];
 	protected $id;
 
 	public function __construct( $id = 0 ) {
@@ -91,6 +101,20 @@ class WC_Order {
 
 	public function get_meta( $key ) {
 		return isset( $this->meta[ $key ] ) ? $this->meta[ $key ] : '';
+	}
+
+	public function has_status( $status ) {
+		return $this->status === $status;
+	}
+
+	public function update_status( $new_status, $note = '', $manual = false ) {
+		$this->status = $new_status;
+		return $new_status;
+	}
+
+	public function add_order_note( $note, $customer_note = 0 ) {
+		$this->notes[] = $note;
+		return count( $this->notes );
 	}
 }
 
@@ -306,6 +330,51 @@ $report                     = Shipping_Desk_Tracking_Relay::forget( $order, '1Z9
 relay_same( 0, $report['removed'], 'AST: a delete that does not take effect is reported as nothing removed' );
 relay_same( 1, count( $GLOBALS['ast_items'] ), 'AST: and the order is left as it was' );
 $GLOBALS['ast_delete_noop'] = false;
+
+/* -- Completing the order after a purchase ---------------------------------- */
+
+echo "\n[completing the order]\n";
+
+$GLOBALS['relay_options'] = [];
+
+// A fresh number on a Processing order: the number is recorded and the order completed.
+$order                   = new WC_Order( 601 );
+$GLOBALS['ast_items']    = [];
+$GLOBALS['ast_inserted'] = [];
+relay_same( 'ast', Shipping_Desk_Tracking_Relay::record( $order, [ 'number' => '9400', 'carrier' => 'USPS' ] ), 'AST takes the number' );
+relay_same( 1, count( $GLOBALS['ast_inserted'] ), 'and writes it once' );
+relay_same( 'completed', $order->status, 'the order is completed' );
+
+// The number is already on the order (the strand case): no duplicate, but still completed.
+$order                   = new WC_Order( 602 );
+$GLOBALS['ast_items']    = [ [ 'tracking_id' => 'ast-x', 'tracking_number' => '9400' ] ];
+$GLOBALS['ast_inserted'] = [];
+relay_same( 'ast', Shipping_Desk_Tracking_Relay::record( $order, [ 'number' => '9400', 'carrier' => 'USPS' ] ), 'an already-present number is not added again' );
+relay_same( 0, count( $GLOBALS['ast_inserted'] ), 'and no second item is written' );
+relay_same( 'completed', $order->status, 'but the order is completed: a bought label never stays in Processing' );
+
+// No number at all: nothing to record, but the order is still completed.
+$order                   = new WC_Order( 603 );
+$GLOBALS['ast_inserted'] = [];
+relay_same( '', Shipping_Desk_Tracking_Relay::record( $order, [ 'number' => '' ] ), 'an empty number records nothing' );
+relay_same( 0, count( $GLOBALS['ast_inserted'] ), 'and writes no tracking item' );
+relay_same( 'completed', $order->status, 'yet the order is completed' );
+
+// The setting off: the number is still recorded, the order is left where it is.
+$GLOBALS['relay_options'][ Shipping_Desk_Tracking_Relay::OPTION_COMPLETE ] = 0;
+$order                   = new WC_Order( 604 );
+$GLOBALS['ast_items']    = [];
+$GLOBALS['ast_inserted'] = [];
+relay_same( 'ast', Shipping_Desk_Tracking_Relay::record( $order, [ 'number' => '9401', 'carrier' => 'USPS' ] ), 'with the setting off the number is still recorded' );
+relay_same( 'processing', $order->status, 'but the order is not completed' );
+
+// An order already completed is not completed twice.
+$GLOBALS['relay_options'] = [];
+$order                    = new WC_Order( 605 );
+$order->status            = 'completed';
+$GLOBALS['ast_items']     = [];
+relay_same( 'ast', Shipping_Desk_Tracking_Relay::record( $order, [ 'number' => '9402', 'carrier' => 'USPS' ] ), 'a reship on a completed order still records the number' );
+relay_same( 'completed', $order->status, 'and it stays completed' );
 
 echo "\n";
 printf( "Checks: %d, failures: %d\n", $GLOBALS['relay_checks'], $GLOBALS['relay_failures'] );

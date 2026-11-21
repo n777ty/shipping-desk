@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.6.2
+Stable tag: 1.6.3
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,17 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.6.3 =
+* Security: exporting your settings no longer includes the API keys unless you click "Download JSON including API keys", so a file you keep or share is safe by default.
+* Security: your API keys are no longer loaded on every page of the site.
+* Security: the checkout address suggestion now has a store-wide hourly limit on top of the per-session and per-IP limits, so a burst of anonymous checkouts cannot run up an unlimited bill.
+* Security: printing or refunding from Shipment Lookup is limited to shipments that belong to one of your orders; a label bought in the provider dashboard is handled there, or re-enabled with a filter.
+* Fixed: a bought label always moves the order to Completed. A label returned with no tracking number, or one whose tracking number was already on the order, used to leave the order in Processing with its Refund/Reset out of reach; a Processing order that already carries a label now offers Print/Refund/Reset too.
+* Fixed: the print-in-browser link only opens an https label address.
+* Fixed: an imported settings file is checked before it is read, and an import larger than 256 KB is refused.
+* Fixed: uninstalling with "Remove data on uninstall" also clears the plugin's caches.
+* Fixed: the "WooCommerce is not active" notice names Shipping Desk, not the old name.
 
 = 1.6.2 =
 * Fixed: the changelog shown while WordPress offers an update ("View version details") was built from the readme of the version already installed, so it could never describe the version being offered - 1.6.1 was offered with no 1.6.1 entry. The release's own notes are now shown first, with the earlier history below them.

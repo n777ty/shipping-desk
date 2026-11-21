@@ -369,7 +369,7 @@ class Shipping_Desk_Lookup_Page {
 
             <?php if ( is_array( $result ) ) :
                 $lookup_order_id     = $matched_order_id;
-                $lookup_action_nonce = wp_create_nonce( 'shipping_desk_lookup' );
+                $lookup_action_nonce = wp_create_nonce( Shipping_Desk_Helpers::lookup_nonce_action( $shipment_id ) );
                 $cancelled_at        = (string) ( $result['cancelled_at'] ?? '' );
 
                 // Refund state comes from the provider's own status where it has one.
@@ -413,7 +413,7 @@ class Shipping_Desk_Lookup_Page {
                     <p class="description"><?php esc_html_e( 'Matched a shipment id rather than a transaction id.', 'shipping-desk' ); ?></p>
                 <?php endif; ?>
                 <table class="widefat fixed striped">
-                    <tbody>
+                    <tbody><?php if ( $lookup_order_id ) : ?>
                         <tr data-order-id="<?php echo esc_attr( $lookup_order_id ); ?>" data-nonce="<?php echo esc_attr( $lookup_action_nonce ); ?>" data-remote-id="<?php echo esc_attr( $shipment_id ); ?>" data-label-refunded="<?php echo ( $is_refunded || $is_pending ) ? '1' : '0'; ?>">
                             <th style="width:220px;"><?php esc_html_e( 'Label Actions', 'shipping-desk' ); ?></th>
                             <td>
@@ -439,7 +439,8 @@ class Shipping_Desk_Lookup_Page {
                                     <small><?php echo esc_html( sprintf( __( 'Cancelled at: %s', 'shipping-desk' ), $cancelled_at ) ); ?></small>
                                 <?php endif; ?>
                             </td>
-                        </tr>
+                        </tr><?php else : ?>
+                        <tr><td colspan="2"><p class="description"><?php esc_html_e( 'That shipment is not an order in this store, so label actions are not available here.', 'shipping-desk' ); ?></p></td></tr><?php endif; ?>
                     <?php foreach ( $result as $key => $value ) :
                         if ( is_array( $value ) ) {
                             $display = '<pre>' . esc_html( wp_json_encode( $value, JSON_PRETTY_PRINT ) ) . '</pre>';

@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-21T04:18:22+00:00\n"
+"POT-Creation-Date: 2026-11-21T18:34:16+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: shipping-desk\n"
@@ -93,6 +93,10 @@ msgstr ""
 
 #: includes/class-plugin.php:2126
 msgid "Advanced Shipment Tracking is installed: tracking numbers are written to its shipment tracking fields, which feed its emails and the customer account page."
+msgstr ""
+
+#: includes/class-orders-screen.php:360
+msgid "A label is already purchased for this order. Refund it, or reset the shipping state before buying another."
 msgstr ""
 
 #: includes/class-plugin.php:809
@@ -302,6 +306,10 @@ msgstr ""
 msgid "Download JSON"
 msgstr ""
 
+#: includes/class-plugin.php:993
+msgid "Download JSON including API keys"
+msgstr ""
+
 #: includes/class-plugin.php:695
 msgid "EasyPost"
 msgstr ""
@@ -444,6 +452,10 @@ msgstr ""
 
 #: includes/class-plugin.php:1944
 msgid "Export all plugin settings (API keys, box sizes, origin address and print mode) to a JSON file. Import restores them after a reinstall or on another site."
+msgstr ""
+
+#: includes/class-plugin.php:980
+msgid "Export the plugin settings (box sizes, origin address, print mode) to a JSON file, and import them after a reinstall or on another site. API keys are left out unless you ask for them."
 msgstr ""
 
 #: includes/class-plugin.php:163
@@ -976,6 +988,10 @@ msgstr ""
 msgid "Remove data on uninstall"
 msgstr ""
 
+#: shipping-desk.php:51
+msgid "requires WooCommerce to be active."
+msgstr ""
+
 #: includes/class-plugin.php:1618
 msgid "Reset Shipping"
 msgstr ""
@@ -1047,6 +1063,10 @@ msgid "Settings imported (%d item)."
 msgid_plural "Settings imported (%d items)."
 msgstr[0] ""
 msgstr[1] ""
+
+#: includes/class-plugin.php:990
+msgid "Settings only, no API keys: safe to keep or hand to someone else."
+msgstr ""
 
 #: includes/class-plugin.php:1786
 msgid "Shipment details"
@@ -1338,6 +1358,11 @@ msgstr ""
 msgid "That rate is no longer part of the stored quotes. Get rates again before buying."
 msgstr ""
 
+#: includes/class-label-actions.php:84
+#: includes/class-lookup-page.php:443
+msgid "That shipment is not an order in this store, so label actions are not available here."
+msgstr ""
+
 #: includes/class-plugin.php:788
 msgid "The active label provider only"
 msgstr ""
@@ -1380,6 +1405,14 @@ msgstr ""
 
 #: includes/class-plugin.php:763
 msgid "The Production API key does not start with \"shippo_live_\". Check which key was pasted."
+msgstr ""
+
+#: includes/class-label-actions.php:295
+msgid "The provider returned a label link that is not https, so it was not opened."
+msgstr ""
+
+#: includes/class-label-actions.php:317
+msgid "The provider returned a label on a host this store does not allow, so it was not opened."
 msgstr ""
 
 #: includes/class-shippo-client.php:1461
@@ -1437,6 +1470,10 @@ msgstr ""
 
 #: includes/class-easypost-client.php:556
 msgid "This EasyPost label has already been refunded."
+msgstr ""
+
+#: includes/class-orders-screen.php:361
+msgid "This label has been refunded. Reset Shipping to buy a replacement."
 msgstr ""
 
 #: includes/class-plugin.php:3037
@@ -1545,6 +1582,10 @@ msgstr ""
 
 #: includes/class-plugin.php:698
 msgid "Used for new rate requests and new purchases. Switching back is one radio button; labels already bought keep the provider that sold them."
+msgstr ""
+
+#: includes/class-plugin.php:996
+msgid "Use this to move the store to another site. The file then contains live API keys: store it somewhere safe and delete it when you are done."
 msgstr ""
 
 #: includes/class-plugin.php:687

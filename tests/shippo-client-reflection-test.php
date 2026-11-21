@@ -546,6 +546,29 @@ gate_check( ! is_wp_error( $retried ), 'retries a throttled request instead of f
 gate_same( 2, count( $GLOBALS['gate_requests'] ), 'HTTP 429 triggers one backoff retry' );
 gate_same( [ 1 ], $throttled->pauses, 'waits for the Retry-After delay before retrying' );
 
+// A transient 5xx on a read is retried on the same budget and backoff as a 429.
+gate_reset_http();
+$GLOBALS['gate_responses'][] = gate_canned( 503, [ 'detail' => 'Service Unavailable' ] );
+$GLOBALS['gate_responses'][] = gate_transaction();
+$server_error                = gate_client();
+$recovered                   = $server_error->get_transaction( 'transaction0000000000000000000001' );
+gate_check( ! is_wp_error( $recovered ), 'retries a read that failed with a server error' );
+gate_same( 2, count( $GLOBALS['gate_requests'] ), 'HTTP 503 triggers one retry on a GET' );
+gate_same( [ 1 ], $server_error->pauses, 'the retry waits the same backoff delay a 429 does' );
+
+gate_reset_http();
+$GLOBALS['gate_responses'][] = gate_canned( 503, [ 'detail' => 'Service Unavailable' ] );
+$GLOBALS['gate_responses'][] = gate_canned( 503, [ 'detail' => 'Service Unavailable' ] );
+$GLOBALS['gate_responses'][] = gate_canned( 503, [ 'detail' => 'Service Unavailable' ] );
+$never_up                    = gate_client()->get_transaction( 'transaction0000000000000000000001' );
+gate_check( is_wp_error( $never_up ), 'a server error that never clears stays an error' );
+gate_same(
+    'shippo_server_error',
+    is_wp_error( $never_up ) ? $never_up->get_error_code() : '',
+    'reports the server error once the read budget is spent'
+);
+gate_same( 3, count( $GLOBALS['gate_requests'] ), 'a GET gets three attempts in total' );
+
 gate_reset_http();
 $GLOBALS['gate_responses'][] = gate_canned( 422, [ 'detail' => 'Invalid address' ] );
 $invalid                     = gate_client()->get_rates( gate_rate_payload() );
@@ -659,6 +682,18 @@ gate_same( 'shippo_label_error', is_wp_error( $rejected ) ? $rejected->get_error
 gate_same( 'Address invalid', is_wp_error( $rejected ) ? $rejected->get_error_message() : '', 'surfaces the carrier message' );
 $rejected_data = is_wp_error( $rejected ) ? $rejected->get_error_data() : [];
 gate_check( ! empty( $rejected_data['retry_safe'] ), 'allows a retry when the transaction ended in ERROR' );
+
+// A 5xx on the spending POST is never repeated: the label may already be bought.
+gate_reset_http();
+$GLOBALS['gate_responses'][] = gate_canned( 503, [ 'detail' => 'Service Unavailable' ] );
+$unavailable_buy             = gate_client()->book_shipment(
+    'shipment0123456789abcdef01234567',
+    'rate0000000000000000000000000001',
+    gate_bookable_rate(),
+    1234
+);
+gate_check( is_wp_error( $unavailable_buy ), 'a server error on a purchase is reported, not hidden' );
+gate_same( 1, count( $GLOBALS['gate_requests'] ), 'a spending POST is never retried on a server error' );
 
 /* -- Timeout is not failure ----------------------------------------------- */
 
@@ -1298,6 +1333,35 @@ $GLOBALS['gate_responses'][] = gate_canned( 200, [ 'analysis' => [ 'validation_r
 $retried_validation          = gate_client()->validate_address( gate_validation_address() );
 gate_same( 2, count( $GLOBALS['gate_requests'] ), 'retries a throttled validation call' );
 gate_same( 'valid', $retried_validation['status'], 'uses the retried answer' );
+
+/* -- Retry rule (structural) ---------------------------------------------- */
+
+gate_section( 'retry rule' );
+
+// The rule lives in one helper and is method-aware, so a later edit cannot
+// quietly start repeating a spending POST.
+$shippo_source = str_replace(
+    "\r\n",
+    "\n",
+    (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-shippo-client.php' )
+);
+
+gate_check(
+    false !== strpos( $shippo_source, 'function should_retry( $method, $code )' ),
+    'the retry decision is stated in one should_retry() helper'
+);
+gate_check(
+    false !== strpos( $shippo_source, "\$this->should_retry( \$method, \$code )" ),
+    'request() decides through that helper, passing the method'
+);
+gate_check(
+    false !== strpos( $shippo_source, "'GET' === strtoupper( (string) \$method )" ),
+    'the helper only retries a server error for GET, never for POST'
+);
+gate_check(
+    false !== strpos( $shippo_source, '$code >= 500' ),
+    'the 5xx threshold is >= 500'
+);
 
 /* -- Result --------------------------------------------------------------- */
 

@@ -29,6 +29,7 @@ $GLOBALS['la_failures'] = 0;
 $GLOBALS['la_nonces']   = array();
 $GLOBALS['la_orders']   = array();
 $GLOBALS['la_actions']  = array();
+$GLOBALS['la_filters']  = array();
 
 function la_check( $condition, $label, $detail = '' ) {
 	$GLOBALS['la_checks']++;
@@ -62,6 +63,7 @@ function __( $text, $domain = '' ) { return $text; }
 function add_action( $hook, $callback ) { $GLOBALS['la_actions'][] = $hook; }
 function wp_verify_nonce( $nonce, $action ) { return isset( $GLOBALS['la_nonces'][ $action ] ) && $GLOBALS['la_nonces'][ $action ] === $nonce; }
 function wc_get_order( $id ) { return isset( $GLOBALS['la_orders'][ $id ] ) ? $GLOBALS['la_orders'][ $id ] : false; }
+function apply_filters( $tag, $value ) { return isset( $GLOBALS['la_filters'][ $tag ] ) ? $GLOBALS['la_filters'][ $tag ] : $value; }
 function is_wp_error( $v ) { return $v instanceof WP_Error; }
 
 class WP_Error {
@@ -128,6 +130,18 @@ class Shipping_Desk_Plugin {
 	public function easypost_api_key( $mode ) { return isset( $this->keys['easypost'][ $mode ] ) ? $this->keys['easypost'][ $mode ] : ''; }
 	public function api( $p = null, $mode = null ) { $this->api_calls[] = array( $p, $mode ); return $this->client; }
 	public function require_cap() {}
+	public function authorized_order( $order_id, $nonce_action ) {
+		$this->require_cap();
+		$nonce = isset( $_POST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ) : '';
+		if ( ! wp_verify_nonce( $nonce, $nonce_action ) ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid nonce.', 'shipping-desk' ) ), 403 );
+		}
+		$order = wc_get_order( $order_id );
+		if ( ! $order ) {
+			wp_send_json_error( array( 'message' => __( 'Order not found.', 'shipping-desk' ) ), 404 );
+		}
+		return $order;
+	}
 	public function labels() { return $this->labels; }
 	public function quote_store() { return $this->quotes; }
 }
@@ -150,6 +164,7 @@ function la_call( $object, $method, array $args = array() ) {
 function la_reset( array $request = array() ) {
 	$GLOBALS['la_nonces'] = array();
 	$GLOBALS['la_orders'] = array();
+	$GLOBALS['la_filters'] = array();
 	$_REQUEST             = $request;
 	$plugin               = new Shipping_Desk_Plugin();
 	return array( $plugin, new Shipping_Desk_Label_Actions( $plugin ) );
@@ -206,6 +221,28 @@ $GLOBALS['la_nonces']['shipping_desk_order_41'] = 'for-another-order';
 $e = la_run( function () use ( $actions ) { la_call( $actions, 'get_shipment_action_context' ); } );
 la_check( $e && 400 === $e->status, 'a nonce is only good for the order it was made for' );
 
+
+// The lookup nonce names its shipment: a nonce minted for one id cannot act on another,
+// and a lookup that names a shipment with no order here is refused.
+list( $plugin, $actions ) = la_reset( array( 'remote_id' => 'rem-9', 'order_id' => '41', '_wpnonce' => 'good' ) );
+$GLOBALS['la_nonces']['shipping_desk_lookup_rem-9'] = 'good';
+$GLOBALS['la_orders'][41] = new La_Order( 41, array( $m['remote_id'] => 'rem-9', $m['provider'] => 'shippo' ) );
+$ctx = la_call( $actions, 'get_shipment_action_context' );
+la_check( 41 === $ctx['order']->get_id() && 'rem-9' === $ctx['remote_id'], 'a lookup for an id this store owns still comes back with its order' );
+
+$GLOBALS['la_nonces']['shipping_desk_lookup_rem-9'] = 'for-another-shipment';
+$e = la_run( function () use ( $actions ) { la_call( $actions, 'get_shipment_action_context' ); } );
+la_check( $e && ! $e->ok && 400 === $e->status && 'Invalid nonce.' === $e->data['message'], 'a lookup nonce is only good for the shipment id it names' );
+
+list( $plugin, $actions ) = la_reset( array( 'remote_id' => 'rem-foreign', '_wpnonce' => 'good' ) );
+$GLOBALS['la_nonces']['shipping_desk_lookup_rem-foreign'] = 'good';
+$e = la_run( function () use ( $actions ) { la_call( $actions, 'get_shipment_action_context' ); } );
+la_check( $e && ! $e->ok && 403 === $e->status && false !== strpos( (string) $e->data['message'], 'not an order in this store' ), 'a shipment with no order in this store is refused with 403' );
+
+$GLOBALS['la_filters']['shipping_desk_lookup_allow_foreign_shipment'] = true;
+$ctx = la_call( $actions, 'get_shipment_action_context' );
+la_check( null === $ctx['order'] && 'rem-foreign' === $ctx['remote_id'], 'unless the store opts out with the filter, and then there is no order to act on' );
+$GLOBALS['la_filters'] = array();
 
 /* -- Which client, and what if the key is missing ------------------------------ */
 
@@ -335,7 +372,7 @@ la_check( array( 'TRK80' ) === $plugin->labels->dead_tracking, 'but a refunded l
 list( $plugin, $actions, $order ) = la_reset_setup( false );
 $_POST['_wpnonce'] = 'forged';
 $e = la_run( function () use ( $actions ) { $actions->shipping_desk_reset_shipping(); } );
-la_check( $e && 400 === $e->status && array() !== $order->meta, 'a reset with a wrong nonce changes nothing' );
+la_check( $e && 403 === $e->status && array() !== $order->meta, 'a reset with a wrong nonce changes nothing' );
 $_POST = array( 'order_id' => '81', '_wpnonce' => 'n' );
 $GLOBALS['la_nonces']['shipping_desk_order_81'] = 'n';
 $e = la_run( function () use ( $actions ) { $actions->shipping_desk_reset_shipping(); } );

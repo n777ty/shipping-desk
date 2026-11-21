@@ -1326,13 +1326,18 @@ class Shipping_Desk_Shippo_Client implements Shipping_Desk_Provider_Interface, S
             $raw  = (string) wp_remote_retrieve_body( $response );
             $data = '' === $raw ? [] : json_decode( $raw, true );
 
-            if ( 429 === $code ) {
-                // Slow the rest of the run down too, not just this call.
-                $this->widen_spacing();
+            if ( $this->should_retry( $method, $code ) ) {
+                if ( 429 === $code ) {
+                    // Slow the rest of the run down too, not just this call.
+                    $this->widen_spacing();
+                }
                 if ( $attempt < self::MAX_ATTEMPTS ) {
                     $this->backoff( $attempt, $response );
                     continue;
                 }
+            }
+
+            if ( 429 === $code ) {
                 return new WP_Error(
                     'shippo_rate_limited',
                     __( 'Shippo is rate limiting requests (HTTP 429). Please try again in a moment.', 'shipping-desk' ),
@@ -1356,6 +1361,25 @@ class Shipping_Desk_Shippo_Client implements Shipping_Desk_Provider_Interface, S
 
             return $data;
         }
+    }
+
+    /**
+     * Whether a failed request is worth sending again.
+     *
+     * A 429 means "not processed", so even a POST is safe to repeat. A 5xx is
+     * only retried for a read: a lost answer to a spending POST could hide a
+     * purchase that really happened, so those are never repeated.
+     *
+     * @param string $method HTTP method.
+     * @param int    $code   HTTP status code.
+     * @return bool
+     */
+    protected function should_retry( $method, $code ) {
+        if ( 429 === (int) $code ) {
+            return true;
+        }
+
+        return 'GET' === strtoupper( (string) $method ) && (int) $code >= 500;
     }
 
     /**

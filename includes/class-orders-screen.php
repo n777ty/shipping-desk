@@ -256,6 +256,15 @@ class Shipping_Desk_Orders_Screen {
         $currency      = $order->get_currency();
         $shipping_paid = max( 0, (float) $order->get_shipping_total() );
 
+        // A row can carry an order that already has a label but is not Completed: the Completed
+        // transition was skipped, or the store turned "mark Completed on purchase" off. Such an
+        // order is never bought again — the buy guard refuses on the label meta — so its actions
+        // are the label's, not rates. Without this the order is a dead end (RW-7).
+        $m         = Shipping_Desk_Helpers::meta_keys();
+        $label_id  = (string) $order->get_meta( $m['label_id'] );
+        $has_label = '' !== $label_id || '' !== (string) $order->get_meta( $m['remote_id'] );
+        $refunded  = (bool) $order->get_meta( $m['refunded'] );
+
         // Services that are priced into the rate. Shippo and EasyPost both price
         // signature confirmation at quote time (EasyPost through shipment
         // options), so both get the dropdown; Veeqo prices VAS after the quotes.
@@ -345,8 +354,23 @@ class Shipping_Desk_Orders_Screen {
                         <div class="shipping-desk-rates-container"><em><?php esc_html_e( 'Rates not loaded. Select a box and choose Get Rates.', 'shipping-desk' ); ?></em></div>
                     </td>
                     <td>
-                        <button type="button" class="shipping-desk-get-rates"><?php esc_html_e( 'Get Rates', 'shipping-desk' ); ?></button>
-                        <button type="button" class="shipping-desk-buy-label" disabled><?php esc_html_e( 'Buy Label', 'shipping-desk' ); ?></button>
+                        <?php if ( $has_label ) : ?>
+                            <?php // Refund and Reset render on the Completed tab, which this order is not on.
+                            // They are offered here too, so a labelled order is never stranded (RW-7). ?>
+                            <?php if ( $refunded ) : ?>
+                                <p class="description"><?php esc_html_e( 'This label has been refunded. Reset Shipping to buy a replacement.', 'shipping-desk' ); ?></p>
+                            <?php else : ?>
+                                <p class="description"><?php esc_html_e( 'A label is already purchased for this order. Refund it, or reset the shipping state before buying another.', 'shipping-desk' ); ?></p>
+                            <?php endif; ?>
+                            <?php if ( '' !== $label_id && ! $refunded ) : ?>
+                                <button type="button" class="shipping-desk-print-label"><?php esc_html_e( 'Print', 'shipping-desk' ); ?></button>
+                                <button type="button" class="shipping-desk-refund-label"><?php esc_html_e( 'Refund', 'shipping-desk' ); ?></button>
+                            <?php endif; ?>
+                            <button type="button" class="shipping-desk-reset-shipping"><?php esc_html_e( 'Reset Shipping', 'shipping-desk' ); ?></button>
+                        <?php else : ?>
+                            <button type="button" class="shipping-desk-get-rates"><?php esc_html_e( 'Get Rates', 'shipping-desk' ); ?></button>
+                            <button type="button" class="shipping-desk-buy-label" disabled><?php esc_html_e( 'Buy Label', 'shipping-desk' ); ?></button>
+                        <?php endif; ?>
                     </td>
                 </tr>
         <?php
@@ -435,16 +459,8 @@ class Shipping_Desk_Orders_Screen {
      * without changing its status.
      */
     public function shipping_desk_render_purchase_row() {
-        $this->plugin->require_cap();
         $order_id = isset( $_POST['order_id'] ) ? intval( $_POST['order_id'] ) : 0;
-        $nonce    = isset( $_POST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ) : '';
-        if ( ! wp_verify_nonce( $nonce, 'shipping_desk_order_' . $order_id ) ) {
-            wp_send_json_error( [ 'message' => __( 'Invalid nonce.', 'shipping-desk' ) ], 400 );
-        }
-        $order = wc_get_order( $order_id );
-        if ( ! $order ) {
-            wp_send_json_error( [ 'message' => __( 'Order not found.', 'shipping-desk' ) ], 404 );
-        }
+        $order    = $this->plugin->authorized_order( $order_id, 'shipping_desk_order_' . $order_id );
 
         $boxes = get_option( 'shipping_desk_boxes', [] );
         if ( ! is_array( $boxes ) ) {

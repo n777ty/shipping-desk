@@ -1090,10 +1090,12 @@ class Shipping_Desk_EasyPost_Client implements Shipping_Desk_Provider_Interface,
         $code = (int) wp_remote_retrieve_response_code( $response );
         $raw  = (string) wp_remote_retrieve_body( $response );
 
-        if ( 429 === $code ) {
-            // Slow the rest of the run down as well: retrying this one call at the
-            // same pace is how a limiter becomes a loop of 429s.
-            $this->widen_spacing();
+        if ( $this->should_retry( $method, $code ) ) {
+            if ( 429 === $code ) {
+                // Slow the rest of the run down as well: retrying this one call at the
+                // same pace is how a limiter becomes a loop of 429s.
+                $this->widen_spacing();
+            }
             if ( $attempt < self::MAX_ATTEMPTS ) {
                 $this->pause( $this->retry_delay( $response, $attempt ) );
                 return $this->request( $method, $path, $body, $timeout, $attempt + 1 );
@@ -1120,6 +1122,25 @@ class Shipping_Desk_EasyPost_Client implements Shipping_Desk_Provider_Interface,
         $this->ease_spacing();
 
         return $data;
+    }
+
+    /**
+     * Whether a failed request is worth sending again.
+     *
+     * A 429 means "not processed", so even a POST is safe to repeat. A 5xx is
+     * only retried for a read: a lost answer to a spending POST could hide a
+     * purchase that really happened, so those are never repeated.
+     *
+     * @param string $method 'GET' or 'POST'.
+     * @param int    $code   HTTP status code.
+     * @return bool
+     */
+    protected function should_retry( $method, $code ) {
+        if ( 429 === (int) $code ) {
+            return true;
+        }
+
+        return 'GET' === strtoupper( (string) $method ) && (int) $code >= 500;
     }
 
     /**

@@ -3,7 +3,7 @@
  * Plugin Name: Shipping Desk
  * Plugin URI:  https://github.com/n777ty/shipping-desk
  * Description: Buy, print and refund Veeqo, Shippo and EasyPost shipping labels from the WooCommerce orders screen, with box presets, bulk buy/print and optional PrintNode server-side printing.
- * Version:     1.6.2
+ * Version:     1.6.3
  * Author:      Jailbreak777
  * Author URI:  https://t.me/Jailbreak777
  * License:     GPL-2.0-or-later
@@ -18,7 +18,7 @@
 defined( 'ABSPATH' ) || exit;
 
 if ( ! defined( 'SHIPPING_DESK_VERSION' ) ) {
-    define( 'SHIPPING_DESK_VERSION', '1.6.2' );
+    define( 'SHIPPING_DESK_VERSION', '1.6.3' );
 }
 
 /*
@@ -48,7 +48,7 @@ add_action( 'before_woocommerce_init', function () {
 add_action( 'plugins_loaded', function () {
     if ( ! class_exists( 'WooCommerce' ) ) {
         add_action( 'admin_notices', function () {
-            echo '<div class="notice notice-error"><p><strong>Veeqo Shipping</strong> requires WooCommerce to be active.</p></div>';
+            printf( '<div class="notice notice-error"><p><strong>%s</strong> %s</p></div>', esc_html__( 'Shipping Desk', 'shipping-desk' ), esc_html__( 'requires WooCommerce to be active.', 'shipping-desk' ) );
         } );
         return;
     }
@@ -56,8 +56,8 @@ add_action( 'plugins_loaded', function () {
     $base = plugin_dir_path( __FILE__ );
 
     require_once $base . 'includes/class-provider-interface.php';
-require_once $base . 'includes/class-address-validator-interface.php';
-require_once $base . 'includes/class-easypost-client.php';
+    require_once $base . 'includes/class-address-validator-interface.php';
+    require_once $base . 'includes/class-easypost-client.php';
     require_once $base . 'includes/class-api-client.php';
     require_once $base . 'includes/class-shippo-client.php';
     require_once $base . 'includes/helpers.php';

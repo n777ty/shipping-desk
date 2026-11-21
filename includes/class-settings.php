@@ -12,6 +12,25 @@ class Shipping_Desk_Settings {
     /** @var Shipping_Desk_Plugin */
     protected $plugin;
 
+    /**
+     * Options that hold credentials. Stored with autoload off, so a key is not read on every
+     * front-end page of the site: only the plugin's own screens read them.
+     *
+     * WordPress 6.6+ honours the autoload argument on register_setting(). The sweep in
+     * maybe_fix_secret_option_autoload() fixes installs on older WordPress, where
+     * update_option() on an existing row keeps its autoload flag, so one correction sticks
+     * and later saves do not undo it.
+     */
+    const SECRET_OPTIONS = [
+        'shipping_desk_veeqo_api_key',
+        'shipping_desk_shippo_test_api_key',
+        'shipping_desk_shippo_live_api_key',
+        'shipping_desk_easypost_test_api_key',
+        'shipping_desk_easypost_live_api_key',
+        'shipping_desk_printnode_api_key',
+        'shipping_desk_easypost_api_key', // Legacy: copied into a slot, then unused.
+    ];
+
     public function __construct( Shipping_Desk_Plugin $plugin ) {
         $this->plugin = $plugin;
     }
@@ -27,6 +46,10 @@ class Shipping_Desk_Settings {
         add_action( 'admin_init', [ $this, 'maybe_migrate_legacy_settings' ], 1 );
         add_action( 'admin_init', [ $this, 'maybe_migrate_easypost_key' ], 2 );
         add_action( 'admin_init', [ $this, 'maybe_default_legacy_provider' ], 3 );
+        // Keys are read only on the plugin's own screens, so they must not be autoloaded site-wide.
+        add_action( 'admin_init', [ $this, 'maybe_fix_secret_option_autoload' ], 4 );
+        add_action( 'added_option', [ $this, 'hold_secret_option_autoload' ] );
+        add_action( 'updated_option', [ $this, 'hold_secret_option_autoload' ] );
     }
 
     public function register_settings() {
@@ -42,8 +65,8 @@ class Shipping_Desk_Settings {
         register_setting( 'shipping_desk_api_settings', 'shipping_desk_shippo_mode', [ 'sanitize_callback' => function ( $value ) {
             return 'live' === $value ? 'live' : 'test';
         } ] );
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_shippo_test_api_key' );
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_shippo_live_api_key' );
+        register_setting( 'shipping_desk_api_settings', 'shipping_desk_shippo_test_api_key', [ 'autoload' => false ] );
+        register_setting( 'shipping_desk_api_settings', 'shipping_desk_shippo_live_api_key', [ 'autoload' => false ] );
 
         // EasyPost is both a label provider and the address verifier, so one mode
         // and one pair of keys govern both jobs. There is deliberately no third,
@@ -51,8 +74,8 @@ class Shipping_Desk_Settings {
         register_setting( 'shipping_desk_api_settings', 'shipping_desk_easypost_mode', [ 'sanitize_callback' => function ( $value ) {
             return 'live' === $value ? 'live' : 'test';
         } ] );
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_easypost_test_api_key' );
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_easypost_live_api_key' );
+        register_setting( 'shipping_desk_api_settings', 'shipping_desk_easypost_test_api_key', [ 'autoload' => false ] );
+        register_setting( 'shipping_desk_api_settings', 'shipping_desk_easypost_live_api_key', [ 'autoload' => false ] );
 
         // Checkout address validation: one switch and one verifier choice, both in
         // the provider form because they decide who sees the customer's address,
@@ -64,7 +87,7 @@ class Shipping_Desk_Settings {
             return in_array( $value, [ 'auto', 'easypost', 'provider', 'off' ], true ) ? $value : 'auto';
         } ] );
 
-        register_setting( 'shipping_desk_api_settings', 'shipping_desk_veeqo_api_key' );
+        register_setting( 'shipping_desk_api_settings', 'shipping_desk_veeqo_api_key', [ 'autoload' => false ] );
         // The legacy single EasyPost key is deliberately NOT registered. It has no field on
         // this page, and any option registered to a settings group is set to null whenever a
         // form in that group is saved without it - which would erase the key before
@@ -97,7 +120,7 @@ class Shipping_Desk_Settings {
         add_settings_section( 'shipping_desk_from_address_section', __( 'From Address (Optional)', 'shipping-desk' ), '__return_false', 'shipping_desk_from_settings' );
         add_settings_field( 'shipping_desk_from_address_field', __( 'Shipment Origin', 'shipping-desk' ), [ $this, 'render_from_address_field' ], 'shipping_desk_from_settings', 'shipping_desk_from_address_section' );
 
-        register_setting( 'shipping_desk_printnode_settings', 'shipping_desk_printnode_api_key' );
+        register_setting( 'shipping_desk_printnode_settings', 'shipping_desk_printnode_api_key', [ 'autoload' => false ] );
         register_setting( 'shipping_desk_printnode_settings', 'shipping_desk_printnode_printer_id', [ 'sanitize_callback' => 'absint' ] );
         register_setting( 'shipping_desk_printnode_settings', 'shipping_desk_print_mode', [ 'sanitize_callback' => function ( $value ) {
             return in_array( $value, [ 'browser', 'printnode' ], true ) ? $value : 'browser';
@@ -601,4 +624,60 @@ class Shipping_Desk_Settings {
 
         return '';
     }
+
+    /**
+     * Once per install, stop the key options being loaded on every page.
+     *
+     * Runs one UPDATE that matches nothing once it has been done, then records that it is
+     * done so it does not run on every admin page load.
+     *
+     * @return void
+     */
+    public function maybe_fix_secret_option_autoload() {
+        if ( get_option( 'shipping_desk_secret_autoload_fixed' ) ) {
+            return;
+        }
+
+        self::set_secret_options_autoload_no();
+        update_option( 'shipping_desk_secret_autoload_fixed', 1, false );
+    }
+
+    /**
+     * Keep a key option off the autoload list when it is first written.
+     *
+     * update_option() leaves an existing row's autoload flag alone, so this only matters for
+     * the first save - which is exactly the case that would otherwise autoload the key on
+     * every page of the site from then on.
+     *
+     * @param string $option Option name.
+     * @return void
+     */
+    public function hold_secret_option_autoload( $option ) {
+        if ( ! in_array( (string) $option, self::SECRET_OPTIONS, true ) ) {
+            return;
+        }
+
+        self::set_secret_options_autoload_no();
+    }
+
+    /**
+     * Write autoload = 'no' on every key option that is not already off.
+     *
+     * @return void
+     */
+    protected static function set_secret_options_autoload_no() {
+        global $wpdb;
+
+        $names        = self::SECRET_OPTIONS;
+        $placeholders = implode( ', ', array_fill( 0, count( $names ), '%s' ) );
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $placeholders is a generated list of %s; every value is bound below.
+        $wpdb->query(
+            $wpdb->prepare(
+                "UPDATE `{$wpdb->options}` SET `autoload` = 'no' WHERE `option_name` IN ( {$placeholders} ) AND `autoload` <> 'no'",
+                $names
+            )
+        );
+    }
+
 }

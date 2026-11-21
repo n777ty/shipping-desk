@@ -411,5 +411,11 @@ helper_same( 6.01, Shipping_Desk_Helpers::daily_average( [ 'amount' => 42.10, 'l
 helper_same( 6.67, Shipping_Desk_Helpers::daily_average( [ 'amount' => 20.0, 'labels' => 3 ] ), 'and rounds to cents' );
 helper_same( null, Shipping_Desk_Helpers::daily_average( [] ), 'a missing record has no average' );
 
+/* The Lookup page's label buttons are bound to one shipment id. */
+helper_section( 'the lookup nonce is bound to its shipment' );
+
+helper_same( 'shipping_desk_lookup_rem-9', Shipping_Desk_Helpers::lookup_nonce_action( 'rem-9' ), 'lookup_nonce_action() names the shipment id it is minted for' );
+helper_same( true, Shipping_Desk_Helpers::lookup_nonce_action( 'rem-9' ) !== Shipping_Desk_Helpers::lookup_nonce_action( 'rem-10' ), 'and two different shipment ids give two different actions' );
+
 echo PHP_EOL . 'Checks: ' . $GLOBALS['helper_checks'] . ', failures: ' . $GLOBALS['helper_failures'] . PHP_EOL;
 exit( 0 === $GLOBALS['helper_failures'] ? 0 : 1 );

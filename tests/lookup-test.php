@@ -180,6 +180,11 @@ lookup_check( false !== strpos( $js, "'#shipping-desk-lookup-track'" ), 'reading
 lookup_check( false !== strpos( $js, "'.shipping-desk-lookup-chip, .shipping-desk-lookup-mode'" ), 'on both the provider and the mode' );
 lookup_check( false !== strpos( $js, '\u2014 the provider and mode recorded on the order' ), 'and keeps the Auto case qualified' );
 
+echo "\n[the label-action nonce is bound to its shipment]\n";
+lookup_check( false !== strpos( $source, 'wp_create_nonce( Shipping_Desk_Helpers::lookup_nonce_action( $shipment_id ) )' ), 'the action nonce is minted for the shipment that was just looked up' );
+lookup_check( 1 === preg_match( '/if \( \$lookup_order_id \) : \?>\s*<tr data-order-id=/', $source ), 'and the action row is gated on the order match, so a foreign shipment offers no Print or Refund' );
+lookup_check( false !== strpos( $source, 'That shipment is not an order in this store, so label actions are not available here.' ), 'a foreign shipment says so where the buttons would have been' );
+
 echo "\n[the page is reached through its own class]\n";
 lookup_check( 1 === substr_count( $plugin_source, "[ \$this->lookup_page(), 'render_lookup_page' ]" ), 'the submenu entry calls the page method through the accessor' );
 lookup_check( 0 === substr_count( $plugin_source, "[ \$this, 'render_lookup_page' ]" ), 'and nothing points the menu at a plugin method that no longer exists' );

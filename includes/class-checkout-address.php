@@ -30,6 +30,12 @@ class Shipping_Desk_Checkout_Address {
     /** Seconds in one throttle bucket. */
     const BUCKET_SECONDS = 3600;
 
+    /** Validations the whole store may spend per hour, across every session and IP. */
+    const GLOBAL_LIMIT = 1000;
+
+    /** Option-name prefix for the hourly counters. */
+    const COUNT_PREFIX = 'shipping_desk_co_count_';
+
     /** @var Shipping_Desk_Plugin */
     protected $plugin;
 
@@ -364,6 +370,21 @@ class Shipping_Desk_Checkout_Address {
     }
 
     /**
+     * The store-wide hourly ceiling, in validations.
+     *
+     * A cost guard, not a security boundary: generous by default, and filterable so a busy
+     * store can raise it. A value of zero or less falls back to the constant rather than
+     * quietly removing the guard.
+     *
+     * @return int
+     */
+    public static function global_limit() {
+        $limit = (int) apply_filters( 'shipping_desk_checkout_global_limit', self::GLOBAL_LIMIT );
+
+        return $limit > 0 ? $limit : self::GLOBAL_LIMIT;
+    }
+
+    /**
      * Nothing to check, and nothing to say.
      *
      * @param string $reason  Slug: country_not_supported, not_worth_checking, no_verifier.
@@ -411,20 +432,31 @@ class Shipping_Desk_Checkout_Address {
     }
 
     /**
-     * Charge one validation against this session and this IP.
+     * Charge one validation against the store, this IP and this session.
      *
-     * @return bool False when either budget is already spent.
+     * Cheapest check first. The session cap needs no database; the two counters that do are
+     * counted *before* they are judged, and each count is a single statement, so two
+     * simultaneous requests cannot both read n and both proceed: whichever lands over the
+     * line is the one refused. The read-modify-write this replaced lost counts under exactly
+     * the burst it existed to measure.
+     *
+     * @return bool False when a budget is already spent.
      */
     protected function spend() {
-        if ( $this->spent( 'session' ) >= self::SESSION_LIMIT ) {
-            return false;
-        }
-        if ( $this->spent( 'ip' ) >= self::IP_LIMIT ) {
+        if ( $this->session_spent() >= self::SESSION_LIMIT ) {
             return false;
         }
 
-        $this->count_up( 'session' );
-        $this->count_up( 'ip' );
+        // Per IP before store-wide, so one abusive address cannot burn the store's budget
+        // and lock out everyone else.
+        if ( $this->bump_counter( 'ip', $this->ip_fingerprint() ) > self::IP_LIMIT ) {
+            return false;
+        }
+        if ( $this->bump_counter( 'global' ) > self::global_limit() ) {
+            return false;
+        }
+
+        $this->session_bump();
 
         return true;
     }
@@ -454,68 +486,145 @@ class Shipping_Desk_Checkout_Address {
     }
 
     /**
-     * How many validations this scope has already spent in the current window.
+     * How many validations this browser session has already spent in the current window.
      *
-     * @param string $scope 'session' or 'ip'.
      * @return int
      */
-    protected function spent( $scope ) {
-        if ( 'session' === $scope ) {
-            $session = $this->session();
-            if ( null === $session ) {
-                return 0;
-            }
-
-            $data = $session->get( 'shipping_desk_co_throttle' );
-            if ( ! is_array( $data ) || ! isset( $data['bucket'], $data['count'] ) ) {
-                return 0;
-            }
-
-            return (int) $data['bucket'] === $this->throttle_bucket() ? (int) $data['count'] : 0;
+    protected function session_spent() {
+        $session = $this->session();
+        if ( null === $session ) {
+            return 0;
         }
 
-        return (int) get_transient( $this->ip_throttle_key() );
+        $data = $session->get( 'shipping_desk_co_throttle' );
+        if ( ! is_array( $data ) || ! isset( $data['bucket'], $data['count'] ) ) {
+            return 0;
+        }
+
+        return (int) $data['bucket'] === $this->throttle_bucket() ? (int) $data['count'] : 0;
     }
 
     /**
-     * Add one to a scope's count for the current window.
+     * Add one to this session's count for the current window.
      *
-     * @param string $scope 'session' or 'ip'.
+     * The session counter is per browser and serialised by the session handler, so it is not
+     * the shared counter that needs an atomic increment; the ones in the database are.
+     *
      * @return void
      */
-    protected function count_up( $scope ) {
-        if ( 'session' === $scope ) {
-            $session = $this->session();
-            if ( null === $session ) {
-                return;
-            }
-
-            $session->set(
-                'shipping_desk_co_throttle',
-                [
-                    'bucket' => $this->throttle_bucket(),
-                    'count'  => $this->spent( 'session' ) + 1,
-                ]
-            );
-
+    protected function session_bump() {
+        $session = $this->session();
+        if ( null === $session ) {
             return;
         }
 
-        set_transient( $this->ip_throttle_key(), $this->spent( 'ip' ) + 1, self::BUCKET_SECONDS );
+        $session->set(
+            'shipping_desk_co_throttle',
+            [
+                'bucket' => $this->throttle_bucket(),
+                'count'  => $this->session_spent() + 1,
+            ]
+        );
     }
 
     /**
-     * Throttle key for the visitor's IP in the current window.
+     * A stable, non-reversible key for the visitor's address.
      *
-     * Proxies are not unwound: a store behind one sees the proxy's address for
-     * every visitor, so IP_LIMIT throttles the whole shop rather than one abuser.
+     * Proxies are not unwound: a store behind one sees the proxy's address for every
+     * visitor, so the per-IP cap then throttles the whole shop rather than one abuser.
      * That is the safe direction for a cost guard.
      *
      * @return string
      */
-    protected function ip_throttle_key() {
+    protected function ip_fingerprint() {
         $ip = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : '';
 
-        return 'shipping_desk_co_ip_' . md5( $ip . '|' . $this->throttle_bucket() );
+        return md5( $ip );
+    }
+
+    /**
+     * Option name for a counter row: one row per scope, per window, per key.
+     *
+     * The window is in the name, so a new hour starts empty; last hour's rows are pruned
+     * rather than reset, because a reset would race with a request that is mid-count.
+     *
+     * @param string $scope 'global' or 'ip'.
+     * @param string $key   Distinguisher within the scope (the IP fingerprint), or ''.
+     * @return string
+     */
+    protected function counter_name( $scope, $key = '' ) {
+        return self::COUNT_PREFIX . $scope . '_' . $this->throttle_bucket() . '_' . (string) $key;
+    }
+
+    /**
+     * Add one to a counter and return the new value.
+     *
+     * @param string $scope 'global' or 'ip'.
+     * @param string $key   Distinguisher within the scope, or ''.
+     * @return int Value after the increment.
+     */
+    protected function bump_counter( $scope, $key = '' ) {
+        $this->prune_old_counters( $scope );
+
+        return $this->bump( $this->counter_name( $scope, $key ) );
+    }
+
+    /**
+     * Increment one counter row.
+     *
+     * One statement on the options table's unique option_name key: the database does the
+     * arithmetic, so a burst cannot lose counts the way a read-then-write did. Stored with
+     * autoload off, like the purchase lock, because only this request path reads it.
+     *
+     * @param string $name Option name.
+     * @return int Value after the increment.
+     */
+    protected function bump( $name ) {
+        global $wpdb;
+
+        $wpdb->query(
+            $wpdb->prepare(
+                "INSERT INTO `{$wpdb->options}` ( `option_name`, `option_value`, `autoload` ) VALUES ( %s, '1', 'no' ) ON DUPLICATE KEY UPDATE `option_value` = `option_value` + 1",
+                $name
+            )
+        );
+
+        return $this->tally( $name );
+    }
+
+    /**
+     * A counter's value, read straight from its row (never the per-request options cache).
+     *
+     * @param string $name Option name.
+     * @return int
+     */
+    protected function tally( $name ) {
+        global $wpdb;
+
+        return (int) $wpdb->get_var(
+            $wpdb->prepare( "SELECT `option_value` FROM `{$wpdb->options}` WHERE `option_name` = %s", $name )
+        );
+    }
+
+    /**
+     * Delete a scope's counters from earlier windows.
+     *
+     * Each window is its own row, so nothing overwrites a live count; the rows would
+     * otherwise collect one per window forever. The DELETE matches nothing once only the
+     * current window is left.
+     *
+     * @param string $scope 'global' or 'ip'.
+     * @return void
+     */
+    protected function prune_old_counters( $scope ) {
+        global $wpdb;
+
+        $wpdb->query(
+            $wpdb->prepare(
+                "DELETE FROM `{$wpdb->options}` WHERE `option_name` LIKE %s AND `option_name` NOT LIKE %s",
+                $wpdb->esc_like( self::COUNT_PREFIX . $scope . '_' ) . '%',
+                $wpdb->esc_like( self::COUNT_PREFIX . $scope . '_' . $this->throttle_bucket() . '_' ) . '%'
+            )
+        );
     }
 }

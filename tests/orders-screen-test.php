@@ -69,12 +69,33 @@ foreach ( array( 'render_orders_page', 'render_bulk_actions', 'render_pagination
 os_check( 0 === preg_match( '/\$this->render_(order_row|processing_table|completed_table|bulk_actions|pagination)\(/', $plugin ), 'and nothing in the plugin still calls them directly' );
 
 echo "\n[what the screen asks of the plugin]\n";
-foreach ( array( 'render_provider_switch', 'render_daily_spend', 'from_address_problems', 'quote_store', 'require_cap', 'provider', 'provider_mode' ) as $method ) {
+foreach ( array( 'render_provider_switch', 'render_daily_spend', 'from_address_problems', 'quote_store', 'provider', 'provider_mode' ) as $method ) {
 	$reflection = preg_match( '/(public|protected|private)\s+function\s+' . $method . '\(/', $plugin, $m ) ? $m[1] : 'missing';
 	os_check( 'public' === $reflection && 1 === substr_count( $plugin, "function {$method}(" ), "{$method} is public on the plugin, and defined once" );
 	os_check( false !== strpos( $screen, "\$this->plugin->{$method}(" ), "the screen reaches {$method} through the plugin, not as its own method" );
 }
-os_check( 0 === preg_match( '/\$this->(render_provider_switch|render_daily_spend|from_address_problems|require_cap)\(/', $screen ), 'it calls none of them as if they were its own' );
+// The per-order guard is now one shared answer: the screen asks the plugin for
+// authorized_order(), which runs require_cap() itself. Both stay public and defined once,
+// and the screen still reaches the guard through the plugin, not as its own method.
+foreach ( array( 'require_cap', 'authorized_order' ) as $guard ) {
+	$reflection = preg_match( '/(public|protected|private)\s+function\s+' . $guard . '\(/', $plugin, $m ) ? $m[1] : 'missing';
+	os_check( 'public' === $reflection && 1 === substr_count( $plugin, "function {$guard}(" ), "{$guard} is public on the plugin, and defined once" );
+}
+os_check( false !== strpos( $screen, "\$this->plugin->authorized_order(" ), 'the screen reaches authorized_order through the plugin, not as its own method' );
+os_check( 0 === preg_match( '/\$this->(render_provider_switch|render_daily_spend|from_address_problems|require_cap|authorized_order)\(/', $screen ), 'it calls none of them as if they were its own' );
+
+echo "\n[a labelled order still offers its label actions]\n";
+// RW-7: a label whose order is not Completed (the transition skipped, or completion turned off)
+// would otherwise be a dead end — the buy guard refuses on the label meta, and Refund/Reset render
+// only on the Completed tab. The purchase row offers them too, so the state is never unrecoverable.
+$row_start = strpos( $screen, 'function render_order_row(' );
+$row_end   = strpos( $screen, 'function render_completed_table(' );
+$row       = ( false !== $row_start && false !== $row_end && $row_end > $row_start ) ? substr( $screen, $row_start, $row_end - $row_start ) : '';
+os_check( '' !== $row, 'the purchase row was found' );
+os_check( false !== strpos( $row, '$has_label' ), 'the row knows whether the order already has a label' );
+os_check( false !== strpos( $row, 'class="shipping-desk-reset-shipping"' ), 'and offers Reset Shipping for it' );
+os_check( false !== strpos( $row, 'class="shipping-desk-refund-label"' ) && false !== strpos( $row, 'class="shipping-desk-print-label"' ), 'with Refund and Print' );
+os_check( false !== strpos( $row, 'class="shipping-desk-get-rates"' ) && false !== strpos( $row, 'class="shipping-desk-buy-label"' ), 'while an order with no label keeps Get Rates and Buy Label' );
 
 echo "\n[it ships]\n";
 $manifest_path = dirname( __DIR__ ) . '/tools/build-public.php';

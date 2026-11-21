@@ -287,6 +287,11 @@ class Shipping_Desk_Labels {
                 return;
             }
 
+            // The JSON answer reaches the browser, but a fatal is exactly when a server-side
+            // trace is wanted, so it is written to the PHP error log as well.
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- deliberate: a fatal during a purchase must be logged.
+            error_log( 'Shipping Desk: fatal during label purchase - ' . (string) $error['message'] . ' in ' . (string) $error['file'] . ':' . (int) $error['line'] );
+
             if ( ! empty( $this->committed_purchase ) ) {
                 // The label already exists, so this is not a failed purchase: something
                 // that runs after it broke. Saying "error" here would send the operator
@@ -359,7 +364,7 @@ class Shipping_Desk_Labels {
         // against it. EasyPost accepts the value whether or not the carrier applies it.
         $requested_insurance = isset( $vas_input['liability_amount'] ) ? (float) $vas_input['liability_amount'] : 0.0;
         $total_weight = isset( $_POST['total_weight'] ) ? floatval( $_POST['total_weight'] ) : 0.0;
-        $box          = ( isset( $_POST['box'] ) && is_array( $_POST['box'] ) ) ? $_POST['box'] : [];
+        $box          = $this->sanitize_box_input( isset( $_POST['box'] ) ? $_POST['box'] : [] );
 
         // One purchase per order at a time. "Already purchased" below reads meta that is only
         // written after the provider has answered, which can take half a minute: without this a
@@ -526,19 +531,22 @@ class Shipping_Desk_Labels {
 
         // Tracking goes to whichever plugin owns tracking on this site — AST first, then
         // Shipment Tracking — or to the customer by note when neither is installed.
-        if ( $tracking ) {
-            $this->record_label_tracking(
-                $order,
-                $provider,
-                $tracking,
-                $carrier_id,
-                Shipping_Desk_Helpers::tracking_url( $carrier_id, $tracking ),
-                $label_id,
-                $remote_id,
-                $insured,
-                $insured_fee
-            );
-        }
+        //
+        // Run even when the provider returned no tracking number: the label exists, and the
+        // relay call inside also completes the order (when the setting allows). Skipping it
+        // left a numberless label's order in Processing, where the buy guard already reads
+        // the label meta as "already purchased" and Refund/Reset are out of reach.
+        $this->record_label_tracking(
+            $order,
+            $provider,
+            (string) $tracking,
+            $carrier_id,
+            Shipping_Desk_Helpers::tracking_url( $carrier_id, (string) $tracking ),
+            $label_id,
+            $remote_id,
+            $insured,
+            $insured_fee
+        );
 
         // The quotes are now spent: they must not be reused for a reship or shown
         // next to a row that already has a label.
@@ -698,7 +706,7 @@ class Shipping_Desk_Labels {
             $rate_id      = isset( $entry['rate_id'] ) ? sanitize_text_field( $entry['rate_id'] ) : '';
             $remote_id    = isset( $entry['remote_id'] ) ? sanitize_text_field( $entry['remote_id'] ) : '';
             $total_weight = isset( $entry['total_weight'] ) ? floatval( $entry['total_weight'] ) : 0.0;
-            $box          = isset( $entry['box'] ) && is_array( $entry['box'] ) ? $entry['box'] : [];
+            $box          = $this->sanitize_box_input( isset( $entry['box'] ) ? $entry['box'] : [] );
             $rate         = isset( $entry['rate'] ) ? $this->parse_rate_input( $entry['rate'] ) : [];
 
             // The same lock a single purchase takes, so a batch and a click on one order cannot
@@ -880,6 +888,26 @@ class Shipping_Desk_Labels {
                 array_keys( $skipped )
             ),
         ] );
+    }
+
+    /**
+     * Keep only the four box fields a purchase uses, each coerced to a number.
+     *
+     * The box arrives from the browser and is never trusted as-is: only the dimensions that
+     * are stored on the order are read out of it, so an extra key cannot travel any further.
+     *
+     * @param mixed $input Raw box input, POST or a bulk entry.
+     * @return array<string,float>
+     */
+    protected function sanitize_box_input( $input ) {
+        $input = is_array( $input ) ? $input : [];
+        $box   = [];
+
+        foreach ( [ 'length', 'width', 'height', 'weight' ] as $key ) {
+            $box[ $key ] = isset( $input[ $key ] ) ? floatval( $input[ $key ] ) : 0.0;
+        }
+
+        return $box;
     }
 
     /**

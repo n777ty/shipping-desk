@@ -34,7 +34,7 @@ class Shipping_Desk_Tracking_Relay {
 	/** No tracking plugin: the customer was told by note. */
 	const NOTE = 'note';
 
-	/** Set the order to Completed after a label is bought (AST only). */
+	/** Set the order to Completed after a label is bought (all handlers). */
 	const OPTION_COMPLETE = 'shipping_desk_complete_order_on_label';
 
 	/** Where Shipment Tracking keeps its items. Read-only here. */
@@ -243,8 +243,15 @@ class Shipping_Desk_Tracking_Relay {
 			$args
 		);
 
-		$number = trim( (string) $args['number'] );
+		$number   = trim( (string) $args['number'] );
+		$complete = ! empty( $args['complete'] );
+
 		if ( '' === $number ) {
+			// A label was bought but the provider reported no number to hand to a tracking
+			// plugin. The order is completed anyway: leaving a bought label's order in
+			// Processing strands it, because the buy guard reads the label meta as "already
+			// purchased" while Refund and Reset live only on the Completed screen.
+			self::maybe_complete( $order, $complete );
 			return '';
 		}
 
@@ -253,7 +260,10 @@ class Shipping_Desk_Tracking_Relay {
 
 		if ( in_array( $handler, [ self::AST, self::ST ], true ) && self::already_tracked( $handler, $order, $number ) ) {
 			// Already there: adding again would duplicate the item, and the customer has
-			// been told once already.
+			// been told once already. The order is still completed: a number that is
+			// already on the order must not be the reason a bought label's order stays
+			// out of Completed.
+			self::maybe_complete( $order, $complete );
 			return $handler;
 		}
 
@@ -262,7 +272,7 @@ class Shipping_Desk_Tracking_Relay {
 			// has to exist before the email renders, and passing 1 leaves that ordering to AST.
 			ast_insert_tracking_number( $order->get_id(), $number, $carrier, null, 0 );
 
-			self::maybe_complete( $order, ! empty( $args['complete'] ) );
+			self::maybe_complete( $order, $complete );
 
 			return self::AST;
 		}
@@ -280,7 +290,7 @@ class Shipping_Desk_Tracking_Relay {
 
 			// Shipment Tracking has no status parameter and does not email when a number is
 			// added, so completing the order is the only notification an ST shop receives.
-			self::maybe_complete( $order, ! empty( $args['complete'] ) );
+			self::maybe_complete( $order, $complete );
 
 			return self::ST;
 		}
@@ -293,7 +303,7 @@ class Shipping_Desk_Tracking_Relay {
 		$order->add_order_note( self::public_note( $number, $carrier, (string) $args['url'] ), 1 );
 		self::mark_shipping_note( false );
 
-		self::maybe_complete( $order, ! empty( $args['complete'] ) );
+		self::maybe_complete( $order, $complete );
 
 		return self::NOTE;
 	}

@@ -8,6 +8,9 @@
  */
 class Shipping_Desk_Settings_Transfer {
 
+    /** Largest settings export that will be read back in, in bytes. */
+    const IMPORT_MAX_BYTES = 262144;
+
     /** @var Shipping_Desk_Plugin */
     protected $plugin;
 
@@ -34,27 +37,47 @@ class Shipping_Desk_Settings_Transfer {
         }
         check_admin_referer( 'shipping_desk_export_settings' );
 
-        $boxes = get_option( 'shipping_desk_boxes', [] );
+        $include_keys = ! empty( $_GET['include_keys'] );
+        $boxes        = get_option( 'shipping_desk_boxes', [] );
+
+        $settings = [
+            'provider'             => $this->plugin->provider(),
+            'shippo_mode'          => $this->plugin->shippo_mode(),
+            'easypost_mode'        => $this->plugin->easypost_mode(),
+            'from_address'         => get_option( 'shipping_desk_from_address', [] ),
+            'boxes'                => is_array( $boxes ) ? array_values( $boxes ) : [],
+            'print_mode'           => (string) get_option( 'shipping_desk_print_mode', 'browser' ),
+            'printnode_printer_id' => (int) get_option( 'shipping_desk_printnode_printer_id', 0 ),
+        ];
+
+        // API keys are the one thing a settings file must not leak by accident: a file pasted
+        // into a ticket, a support chat or a public backup otherwise carries live credentials.
+        // They are written only when the export was explicitly asked to include them.
+        if ( $include_keys ) {
+            $settings = array_merge(
+                $settings,
+                [
+                    'api_key'               => (string) get_option( 'shipping_desk_veeqo_api_key', '' ),
+                    'shippo_test_api_key'   => (string) get_option( 'shipping_desk_shippo_test_api_key', '' ),
+                    'shippo_live_api_key'   => (string) get_option( 'shipping_desk_shippo_live_api_key', '' ),
+                    'easypost_test_api_key' => (string) get_option( 'shipping_desk_easypost_test_api_key', '' ),
+                    'easypost_live_api_key' => (string) get_option( 'shipping_desk_easypost_live_api_key', '' ),
+                    'printnode_api_key'     => (string) get_option( 'shipping_desk_printnode_api_key', '' ),
+                ]
+            );
+        }
+
         $payload = [
             'plugin'      => 'shipping-desk',
             'version'     => defined( 'SHIPPING_DESK_VERSION' ) ? SHIPPING_DESK_VERSION : '',
             'exported_at' => gmdate( 'c' ),
-            'settings'    => [
-                'api_key'              => (string) get_option( 'shipping_desk_veeqo_api_key', '' ),
-                'provider'             => $this->plugin->provider(),
-                'shippo_mode'          => $this->plugin->shippo_mode(),
-                'shippo_test_api_key'  => (string) get_option( 'shipping_desk_shippo_test_api_key', '' ),
-                'shippo_live_api_key'  => (string) get_option( 'shipping_desk_shippo_live_api_key', '' ),
-                'easypost_mode'        => $this->plugin->easypost_mode(),
-                'easypost_test_api_key' => (string) get_option( 'shipping_desk_easypost_test_api_key', '' ),
-                'easypost_live_api_key' => (string) get_option( 'shipping_desk_easypost_live_api_key', '' ),
-                'from_address'         => get_option( 'shipping_desk_from_address', [] ),
-                'boxes'                => is_array( $boxes ) ? array_values( $boxes ) : [],
-                'print_mode'           => (string) get_option( 'shipping_desk_print_mode', 'browser' ),
-                'printnode_api_key'    => (string) get_option( 'shipping_desk_printnode_api_key', '' ),
-                'printnode_printer_id' => (int) get_option( 'shipping_desk_printnode_printer_id', 0 ),
-            ],
+            'secrets'     => $include_keys,
+            'settings'    => $settings,
         ];
+
+        if ( $include_keys ) {
+            $payload['warning'] = 'This file contains live API keys. Store it somewhere safe, and delete it when it is no longer needed.';
+        }
 
         $filename = 'shipping-desk-settings-' . gmdate( 'Ymd-His' ) . '.json';
 
@@ -81,9 +104,22 @@ class Shipping_Desk_Settings_Transfer {
             exit;
         }
 
-        $file    = $_FILES['shipping_desk_import_file'];
-        $raw     = file_get_contents( $file['tmp_name'] );
-        $decoded = json_decode( (string) $raw, true );
+        $file = $_FILES['shipping_desk_import_file'];
+
+        // An upload is untrusted input: confirm PHP reported no error, that the file really
+        // arrived as an upload, and that it is not absurdly large, before reading it.
+        if (
+            ! isset( $file['error'], $file['size'] )
+            || UPLOAD_ERR_OK !== (int) $file['error']
+            || (int) $file['size'] > self::IMPORT_MAX_BYTES
+            || ! is_uploaded_file( (string) $file['tmp_name'] )
+        ) {
+            wp_safe_redirect( add_query_arg( 'shipping_desk_import', 'invalid', $redirect ) );
+            exit;
+        }
+
+        $raw     = (string) file_get_contents( (string) $file['tmp_name'] );
+        $decoded = json_decode( $raw, true );
 
         if ( ! is_array( $decoded ) || empty( $decoded['settings'] ) || ! is_array( $decoded['settings'] ) ) {
             wp_safe_redirect( add_query_arg( 'shipping_desk_import', 'invalid', $redirect ) );

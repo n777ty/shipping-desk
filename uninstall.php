@@ -36,6 +36,8 @@ delete_option( 'shipping_desk_complete_order_on_label' );
     delete_option( 'shipping_desk_reship_send_completed_email' );
     delete_option( 'shipping_desk_delete_data_on_uninstall' );
     delete_option( 'shipping_desk_legacy_migrated' );
+    delete_option( 'shipping_desk_whats_new' );
+    delete_option( 'shipping_desk_secret_autoload_fixed' );
 
     // Remove post meta for all orders (HPOS-aware not guaranteed at uninstall; use meta API).
     global $wpdb;
@@ -57,4 +59,27 @@ delete_option( 'shipping_desk_complete_order_on_label' );
             $wpdb->esc_like( 'shipping_desk_buy_lock_' ) . '%'
         )
     );
+
+    // The checkout throttle counters (one row per window, per scope).
+    $wpdb->query(
+        $wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $wpdb->esc_like( 'shipping_desk_co_count_' ) . '%'
+        )
+    );
+
+    // Caches this plugin leaves in the options table: stored quotes and remembered address
+    // verdicts, the checkout address book and its throttle, and the update-check cache. Each
+    // is a transient, so both the value row and its _transient_timeout_ row are removed, and
+    // every one starts with shipping_desk_.
+    $wpdb->query(
+        $wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+            $wpdb->esc_like( '_transient_shipping_desk_' ) . '%',
+            $wpdb->esc_like( '_transient_timeout_shipping_desk_' ) . '%'
+        )
+    );
+
+    // Which changelog each user had dismissed, for everyone who ever saw the popup.
+    delete_metadata( 'user', 0, 'shipping_desk_whats_new_seen', '', true );
 }

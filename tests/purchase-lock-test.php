@@ -297,6 +297,12 @@ $call_bulk   = strpos( $bulk, '->book_shipments(' );
 pl_check( false !== $call_single && strpos( $single, 'purchase_lock()->acquire(' ) < $call_single, 'the lock is taken before the provider is called (single)' );
 pl_check( false !== $call_bulk && strpos( $bulk, 'purchase_lock()->acquire(' ) < $call_bulk, 'and before the provider is called (bulk)' );
 
+// RW-7: recording the label also completes the order. It used to be wrapped in `if ( $tracking )`,
+// so a label the provider returned without a tracking number was never handed to the relay and the
+// order was left in Processing with its label meta (buy blocked, Refund/Reset out of reach).
+pl_check( 0 === preg_match( '/if \\( \\$tracking \\) \\{\\s*\\$this->record_label_tracking\\(/', $single ), 'a single purchase records the label even when there is no tracking number' );
+pl_check( false !== strpos( $single, '$this->record_label_tracking(' ), 'and it does hand the label over' );
+
 pl_check( 0 === substr_count( $plugin_main, 'function shipping_desk_buy_label' ) && 0 === substr_count( $plugin_main, 'function shipping_desk_bulk_buy' ), 'the plugin class no longer defines the buy handlers: one definition, not two' );
 pl_check( 0 === substr_count( $plugin_main, 'purchase_lock()->acquire(' ), 'and takes no lock of its own' );
 pl_check( false !== strpos( $plugin, "'wp_ajax_' . \$action" ) && false !== strpos( $plugin, "'shipping_desk_buy_label', 'shipping_desk_bulk_buy'" ), 'the labels class hooks both purchase actions itself' );

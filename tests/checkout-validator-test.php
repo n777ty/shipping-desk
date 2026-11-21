@@ -459,5 +459,85 @@ cv_same( 1, substr_count( $js, 'shipping-desk-checkout-address__accept' ), 'and 
 cv_same( true, false !== strpos( $class_source, "'unconfirmed'" ), 'the wording is translated, not hard-coded in the script' );
 cv_same( true, false !== strpos( $css, '.is-unconfirmed' ), 'and the note is styled' );
 
+/*
+ * The cost guards. The checkout endpoint is the only unauthenticated path that spends money, so
+ * the counters bounding it must hold under a burst: each is incremented with one statement, not a
+ * read-then-write, and a store-wide ceiling sits on top of the per-session and per-IP ones.
+ */
+cv_section( 'cost guards' );
+
+cv_same( 1000, Shipping_Desk_Checkout_Address::global_limit(), 'the store-wide ceiling has a default' );
+$GLOBALS['cv_filters']['shipping_desk_checkout_global_limit'] = 7;
+cv_same( 7, Shipping_Desk_Checkout_Address::global_limit(), 'a store can move it with a filter' );
+$GLOBALS['cv_filters']['shipping_desk_checkout_global_limit'] = 0;
+cv_same( 1000, Shipping_Desk_Checkout_Address::global_limit(), 'a nonsense value falls back rather than removing the guard' );
+unset( $GLOBALS['cv_filters']['shipping_desk_checkout_global_limit'] );
+
+// The counters, against a database that behaves like the options table.
+if ( ! class_exists( 'Shipping_Desk_Plugin' ) ) {
+	class Shipping_Desk_Plugin {
+		public function __construct( $file = '' ) {}
+	}
+}
+
+class Cv_Counter_Address extends Shipping_Desk_Checkout_Address {
+	public function __construct() {
+		parent::__construct( new Shipping_Desk_Plugin() );
+	}
+	public function spend_now() {
+		return $this->spend();
+	}
+}
+
+class Cv_Wpdb {
+	public $options = 'wp_options';
+	public function esc_like( $s ) {
+		return addcslashes( $s, '_%\\' );
+	}
+	public function prepare( $sql, ...$args ) {
+		return vsprintf( str_replace( '%s', "'%s'", $sql ), $args );
+	}
+	public function query( $sql ) {
+		$GLOBALS['cv_sql'][] = $sql;
+		if ( preg_match( "/INSERT INTO .*VALUES \( '([^']*)', '1', 'no' \) ON DUPLICATE KEY UPDATE/", $sql, $m ) ) {
+			$name                      = $m[1];
+			$GLOBALS['cv_db'][ $name ] = (string) ( (int) ( isset( $GLOBALS['cv_db'][ $name ] ) ? $GLOBALS['cv_db'][ $name ] : 0 ) + 1 );
+		}
+		return 1;
+	}
+	public function get_var( $sql ) {
+		if ( preg_match( "/WHERE `option_name` = '([^']*)'/", $sql, $m ) ) {
+			return isset( $GLOBALS['cv_db'][ $m[1] ] ) ? $GLOBALS['cv_db'][ $m[1] ] : null;
+		}
+		return null;
+	}
+}
+
+$GLOBALS['cv_db']  = array();
+$GLOBALS['cv_sql'] = array();
+$GLOBALS['wpdb']   = new Cv_Wpdb();
+
+// Two requests are two objects; the count lives in a row, so it must not restart per request.
+unset( $_SERVER['REMOTE_ADDR'] );
+$GLOBALS['cv_filters']['shipping_desk_checkout_global_limit'] = 2;
+
+cv_same( true, ( new Cv_Counter_Address() )->spend_now(), 'the first validation is allowed' );
+cv_same( true, ( new Cv_Counter_Address() )->spend_now(), 'the second is allowed' );
+cv_same( false, ( new Cv_Counter_Address() )->spend_now(), 'the third is refused by the store-wide ceiling' );
+
+$_SERVER['REMOTE_ADDR'] = '203.0.113.9';
+cv_same( false, ( new Cv_Counter_Address() )->spend_now(), 'and a different address is refused too: the ceiling is not per IP' );
+unset( $_SERVER['REMOTE_ADDR'] );
+unset( $GLOBALS['cv_filters']['shipping_desk_checkout_global_limit'] );
+
+cv_same( 1, substr_count( $class_source, 'ON DUPLICATE KEY UPDATE' ), 'a counter is one atomic increment, not a read then a write' );
+cv_same( false, strpos( $class_source, 'ip_throttle_key' ), 'the per-IP read-modify-write key is gone' );
+cv_same( false, strpos( $class_source, "spent( 'ip' )" ), 'and no counter is read through the options cache' );
+cv_same( true, false !== strpos( $class_source, '> self::global_limit()' ), 'the store-wide ceiling is judged after the increment' );
+cv_same( true, false !== strpos( $class_source, '> self::IP_LIMIT' ), 'and so is the per-IP cap' );
+cv_same( true, false !== strpos( $class_source, "VALUES ( %s, '1', 'no' )" ), 'counter rows are stored with autoload off' );
+cv_same( true, false !== strpos( $class_source, "'shipping_desk_checkout_global_limit'" ), 'the ceiling is filterable' );
+cv_same( 1, substr_count( $class_source, '`option_name` NOT LIKE %s' ), 'older windows are pruned by prefix, so the rows do not collect' );
+
 echo PHP_EOL . 'Checks: ' . $GLOBALS['cv_checks'] . ', failures: ' . $GLOBALS['cv_failures'] . PHP_EOL;
 exit( 0 === $GLOBALS['cv_failures'] ? 0 : 1 );

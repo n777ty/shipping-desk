@@ -485,8 +485,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.6.2' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.6.2', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.6.3' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.6.3', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -640,6 +640,34 @@ class Shipping_Desk_Plugin {
             exit;
         }
     }
+
+    /**
+     * The guard an order-scoped AJAX handler starts with: capability, nonce, order.
+     *
+     * One answer instead of the same three checks in every handler, so a handler cannot
+     * forget the nonce or check it against the wrong action. Anything but success ends
+     * the request here: the caller only ever sees an order.
+     *
+     * @param int    $order_id     Order id from the request.
+     * @param string $nonce_action Action the request's nonce must be for.
+     * @return WC_Order The order the request is about.
+     */
+    public function authorized_order( $order_id, $nonce_action ) {
+        $this->require_cap();
+
+        $nonce = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
+        if ( ! wp_verify_nonce( $nonce, $nonce_action ) ) {
+            wp_send_json_error( [ 'message' => __( 'Invalid nonce.', 'shipping-desk' ) ], 403 );
+        }
+
+        $order = wc_get_order( absint( $order_id ) );
+        if ( ! $order ) {
+            wp_send_json_error( [ 'message' => __( 'Order not found.', 'shipping-desk' ) ], 404 );
+        }
+
+        return $order;
+    }
+
     /**
      * Switch the active label provider, or toggle its Test/Production mode.
      *
@@ -949,7 +977,7 @@ class Shipping_Desk_Plugin {
 
             <h2><?php esc_html_e( 'Backup / Restore Settings', 'shipping-desk' ); ?></h2>
             <p class="description">
-                <?php esc_html_e( 'Export all plugin settings (API keys, box sizes, origin address and print mode) to a JSON file. Import restores them after a reinstall or on another site.', 'shipping-desk' ); ?>
+                <?php esc_html_e( 'Export the plugin settings (box sizes, origin address, print mode) to a JSON file, and import them after a reinstall or on another site. API keys are left out unless you ask for them.', 'shipping-desk' ); ?>
             </p>
 
             <table class="form-table" role="presentation">
@@ -959,7 +987,13 @@ class Shipping_Desk_Plugin {
                         <a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=shipping_desk_export_settings' ), 'shipping_desk_export_settings' ) ); ?>">
                             <?php esc_html_e( 'Download JSON', 'shipping-desk' ); ?>
                         </a>
-                        <p class="description"><?php esc_html_e( 'The file contains secrets (API keys), so store it somewhere safe.', 'shipping-desk' ); ?></p>
+                        <p class="description"><?php esc_html_e( 'Settings only, no API keys: safe to keep or hand to someone else.', 'shipping-desk' ); ?></p>
+                        <p>
+                            <a class="button button-secondary" href="<?php echo esc_url( wp_nonce_url( add_query_arg( 'include_keys', '1', admin_url( 'admin-post.php?action=shipping_desk_export_settings' ) ), 'shipping_desk_export_settings' ) ); ?>">
+                                <?php esc_html_e( 'Download JSON including API keys', 'shipping-desk' ); ?>
+                            </a>
+                        </p>
+                        <p class="description"><?php esc_html_e( 'Use this to move the store to another site. The file then contains live API keys: store it somewhere safe and delete it when you are done.', 'shipping-desk' ); ?></p>
                     </td>
                 </tr>
                 <tr>
@@ -1079,16 +1113,8 @@ class Shipping_Desk_Plugin {
 
 
     public function shipping_desk_get_rates() {
-        $this->require_cap();
         $order_id = isset( $_POST['order_id'] ) ? intval( $_POST['order_id'] ) : 0;
-        $nonce    = isset( $_POST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ) : '';
-        if ( ! wp_verify_nonce( $nonce, 'shipping_desk_order_' . $order_id ) ) {
-            wp_send_json_error( [ 'message' => __( 'Invalid nonce.', 'shipping-desk' ) ], 400 );
-        }
-        $order = wc_get_order( $order_id );
-        if ( ! $order ) {
-            wp_send_json_error( [ 'message' => __( 'Order not found.', 'shipping-desk' ) ], 404 );
-        }
+        $order    = $this->authorized_order( $order_id, 'shipping_desk_order_' . $order_id );
         // Shipping Desk ships within the US. Refusing is the honest answer: a
         // foreign address described as a US one quoted a rate that could not be
         // bought, and then tripped an address gate over an address that was valid
@@ -1771,8 +1797,8 @@ class Shipping_Desk_Plugin {
     /** -- PrintNode AJAX handlers -- */
 
     /**
-     * No'cap'check status endpoint so the client can verify PrintNode
-     * is configured without requiring a per'order nonce.
+     * Status endpoint so the client can verify PrintNode is configured without a per-order
+     * nonce. It still requires the manage_woocommerce capability (see require_cap() below).
      */
     public function shipping_desk_printnode_status() {
         $this->require_cap();

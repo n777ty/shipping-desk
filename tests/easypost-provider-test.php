@@ -799,6 +799,32 @@ $result = $client->refund_shipment( 'shp_123' );
 gate_check( ! is_wp_error( $result ), 'a throttled refund succeeds on the retry' );
 gate_same( [ 2 ], $client->pauses, 'the Retry-After value is honoured' );
 
+// A transient 5xx on a read is retried on the same budget, pause and
+// Retry-After handling as a 429.
+gate_reset();
+$GLOBALS['gate_responses'][] = gate_canned( 503, [ 'error' => [ 'message' => 'Service unavailable' ] ] );
+$GLOBALS['gate_responses'][] = gate_canned( 200, gate_bought() );
+$server_error                = gate_client();
+$result                      = $server_error->get_shipment( 'shp_123' );
+gate_check( ! is_wp_error( $result ), 'a read that fails with a server error is retried' );
+gate_same( 2, count( $GLOBALS['gate_requests'] ), 'HTTP 503 triggers one retry on a GET' );
+gate_same( [ 1 ], $server_error->pauses, 'the retry waits the backoff delay' );
+
+gate_reset();
+$GLOBALS['gate_responses'][] = gate_canned( 503, [ 'error' => [ 'message' => 'Service unavailable' ] ] );
+$GLOBALS['gate_responses'][] = gate_canned( 503, [ 'error' => [ 'message' => 'Service unavailable' ] ] );
+$GLOBALS['gate_responses'][] = gate_canned( 503, [ 'error' => [ 'message' => 'Service unavailable' ] ] );
+$result                      = gate_client()->get_shipment( 'shp_123' );
+gate_same( 'easypost_error', $result->get_error_code(), 'a server error that never clears is an error' );
+gate_same( 3, count( $GLOBALS['gate_requests'] ), 'a GET is attempted three times' );
+
+// A purchase is never repeated on a 5xx: the label may already be bought.
+gate_reset();
+$GLOBALS['gate_responses'][] = gate_canned( 503, [ 'error' => [ 'message' => 'Service unavailable' ] ] );
+$result                      = gate_client()->book_shipment( 'shp_123', 'rate_1', [], 1042 );
+gate_check( is_wp_error( $result ), 'a server error on a purchase is reported, not hidden' );
+gate_same( 1, count( $GLOBALS['gate_requests'] ), 'a spending POST is never retried on a server error' );
+
 gate_reset();
 $GLOBALS['gate_responses'][] = gate_canned( 200, gate_bought() );
 $GLOBALS['gate_responses'][] = gate_canned( 429, [], [] );
@@ -1017,6 +1043,35 @@ gate_same(
     '2026-11-16T12:00:00-05:00',
     gate_shipment_body()['options']['label_date'],
     'a Friday-evening quote carries Monday, never a weekend'
+);
+
+/* -- Retry rule (structural) ---------------------------------------------- */
+
+gate_section( 'retry rule' );
+
+// The rule lives in one helper and is method-aware, so a later edit cannot
+// quietly start repeating a spending POST.
+$ep_source = str_replace(
+    "\r\n",
+    "\n",
+    (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-easypost-client.php' )
+);
+
+gate_check(
+    false !== strpos( $ep_source, 'function should_retry( $method, $code )' ),
+    'the retry decision is stated in one should_retry() helper'
+);
+gate_check(
+    false !== strpos( $ep_source, "\$this->should_retry( \$method, \$code )" ),
+    'request() decides through that helper, passing the method'
+);
+gate_check(
+    false !== strpos( $ep_source, "'GET' === strtoupper( (string) \$method )" ),
+    'the helper only retries a server error for GET, never for POST'
+);
+gate_check(
+    false !== strpos( $ep_source, '$code >= 500' ),
+    'the 5xx threshold is >= 500'
 );
 
 /* -- Summary -------------------------------------------------------------- */
