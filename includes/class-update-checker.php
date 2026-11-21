@@ -337,7 +337,10 @@ class Shipping_Desk_Update_Checker {
 			'download_link' => $release['package'],
 			'sections'      => [
 				'description' => '<p>' . esc_html__( 'Buy, print and refund shipping labels from WooCommerce orders.', 'shipping-desk' ) . '</p>',
-				'changelog'   => self::changelog_html( self::readme_changelog() ),
+				// The release's own notes first, then the installed readme's older history: the
+				// readme on disk belongs to the version being replaced, so it cannot describe the
+				// one being offered.
+				'changelog'   => self::offered_changelog( $release ),
 			],
 		];
 	}
@@ -507,6 +510,204 @@ class Shipping_Desk_Update_Checker {
 		return $html;
 	}
 
+	/**
+	 * A release's own notes as safe HTML: `## Heading`, `- bullets`, paragraphs, `**bold**`,
+	 * `` `code` `` and `[label](url)`.
+	 *
+	 * Why this exists. The changelog in the "view version details" modal used to be read from
+	 * the readme on disk, which is the *installed* version's readme - so while WordPress was
+	 * offering 1.6.1, the modal showed the 1.6.0 changelog and nothing about 1.6.1 at all. The
+	 * release body is fetched with the offer, so it is the only text that can describe the
+	 * version being offered. It is escaped here first and then given the few tags above, so a
+	 * note cannot inject markup.
+	 *
+	 * @param string $markdown Release body from the GitHub API.
+	 * @param string $version  Version the notes belong to, used as the heading.
+	 * @return string Safe HTML; '' when there are no notes.
+	 */
+	public static function notes_html( $markdown, $version = '' ) {
+		$text = str_replace( array( "\r\n", "\r" ), "\n", (string) $markdown );
+		if ( '' === trim( $text ) ) {
+			return '';
+		}
+
+		// The notes start with their own `# Shipping Desk X.Y.Z`; the version is the heading here.
+		$text = (string) preg_replace( '/^#[^#].*$/m', '', $text );
+
+		$html = '' !== (string) $version ? '<h4>' . esc_html( $version ) . '</h4>' : '';
+
+		foreach ( preg_split( '/\n{2,}/', trim( $text ) ) as $block ) {
+			$block = trim( $block );
+			if ( '' === $block ) {
+				continue;
+			}
+
+			if ( preg_match( '/^#{1,6}\s+(.+)$/', $block, $heading ) ) {
+				$html .= '<h5>' . self::notes_inline( trim( $heading[1] ) ) . '</h5>';
+				continue;
+			}
+
+			$lines = array_values( array_filter( array_map( 'trim', explode( "\n", $block ) ), function ( $line ) {
+				return '' !== $line;
+			} ) );
+
+			$is_list = ! empty( $lines );
+			foreach ( $lines as $line ) {
+				if ( ! preg_match( '/^[-*]\s+/', $line ) ) {
+					$is_list = false;
+					break;
+				}
+			}
+
+			if ( $is_list ) {
+				$html .= '<ul>';
+				foreach ( $lines as $line ) {
+					$html .= '<li>' . self::notes_inline( (string) preg_replace( '/^[-*]\s+/', '', $line ) ) . '</li>';
+				}
+				$html .= '</ul>';
+				continue;
+			}
+
+			$html .= '<p>' . self::notes_inline( implode( ' ', $lines ) ) . '</p>';
+		}
+
+		return '' === $html ? '' : '<div class="shipping-desk-release-notes">' . $html . '</div>';
+	}
+
+	/**
+	 * Bullets from a release's notes, as plain text for the "what's new" popup.
+	 *
+	 * @param string $markdown Release body.
+	 * @return string[]
+	 */
+	public static function notes_bullets( $markdown ) {
+		$out = array();
+
+		foreach ( explode( "\n", str_replace( array( "\r\n", "\r" ), "\n", (string) $markdown ) ) as $line ) {
+			if ( ! preg_match( '/^[-*]\s+(.+)$/', trim( $line ), $item ) ) {
+				continue;
+			}
+
+			$text = (string) preg_replace( '/\s+/', ' ', $item[1] );
+			$text = (string) preg_replace( '/\[([^\]]+)\]\([^)]*\)/', '$1', $text ); // [label](url) → label
+			$text = str_replace( array( '**', '`' ), '', $text );
+			$text = trim( $text );
+
+			if ( '' !== $text ) {
+				$out[] = $text;
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * The bullets the popup shows for a version: the installed readme's, or the release's notes.
+	 *
+	 * Named and public so the popup's source of truth can be tested on its own. Both come down
+	 * to the same thing — what changed in this version — and the readme wins when it has it,
+	 * because that is the text the site can read offline.
+	 *
+	 * @param string     $version Version the popup is about.
+	 * @param array|null $entries Parsed readme changelog; read when not given.
+	 * @return string[]
+	 */
+	public static function whats_new_items( $version, $entries = null ) {
+		if ( ! is_array( $entries ) ) {
+			$entries = self::readme_changelog();
+		}
+
+		if ( ! empty( $entries[ $version ] ) ) {
+			return $entries[ $version ];
+		}
+
+		return self::cached_notes_bullets( $version );
+	}
+
+	/**
+	 * The popup's bullets when the installed readme has no section for that version.
+	 *
+	 * The readme is the normal source. If its section is missing — a readme that did not travel,
+	 * or a release whose section was never written — the notes cached with the offer still say
+	 * what changed, and saying nothing is the one outcome that is certainly wrong.
+	 *
+	 * @param string $version Version the popup is about.
+	 * @return string[]
+	 */
+	public static function cached_notes_bullets( $version ) {
+		$cached = get_transient( self::TRANSIENT );
+
+		if ( ! is_array( $cached ) || empty( $cached['release']['version'] ) ) {
+			return array();
+		}
+
+		if ( (string) $version !== (string) $cached['release']['version'] ) {
+			return array();
+		}
+
+		return self::notes_bullets( isset( $cached['release']['notes'] ) ? $cached['release']['notes'] : '' );
+	}
+
+	/**
+	 * Inline markdown in one line of notes. Escaped first, then marked up.
+	 *
+	 * @param string $text Plain text.
+	 * @return string Safe HTML.
+	 */
+	protected static function notes_inline( $text ) {
+		$html = esc_html( (string) $text );
+
+		// After escaping there are no tags left, so the brackets and parentheses of a link survive.
+		$html = (string) preg_replace_callback(
+			'/\[([^\]]+)\]\(([^)\s]+)\)/',
+			function ( $m ) {
+				// esc_url() would strip anything but http(s), mailto and a few others; the scheme
+				// is checked here as well so this cannot depend on which esc_url() is in force.
+				$url = (string) esc_url( $m[2] );
+				if ( '' === $url || ! preg_match( '#^(https?://|mailto:)#i', $url ) ) {
+					return $m[1];
+				}
+				return '<a href="' . $url . '">' . $m[1] . '</a>';
+			},
+			$html
+		);
+
+		$html = (string) preg_replace( '/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $html );
+
+		return (string) preg_replace( '/`([^`]+)`/', '<code>$1</code>', $html );
+	}
+
+	/**
+	 * The changelog to show for an offer: the version being offered first, then the history.
+	 *
+	 * The readme on disk is the installed version's, so it can only ever carry the *older*
+	 * entries. The release's notes describe the version being offered, and they travelled with
+	 * the offer.
+	 *
+	 * @param array $release Release from the cache.
+	 * @return string Safe HTML.
+	 */
+	public static function offered_changelog( array $release ) {
+		$version = isset( $release['version'] ) ? (string) $release['version'] : '';
+		$html    = self::notes_html( isset( $release['notes'] ) ? $release['notes'] : '', $version );
+
+		$history = self::readme_changelog();
+
+		// The offered version is in the readme only if this repository already carries it — which
+		// is the working copy, not an installed site. When its notes were shown above, drop the
+		// readme's copy so the same version is not listed twice.
+		if ( '' !== $html ) {
+			unset( $history[ $version ] );
+		}
+
+		$past = self::changelog_html( $history );
+		if ( '' === $past ) {
+			return $html;
+		}
+
+		return '' === $html ? $past : $html . '<hr />' . $past;
+	}
+
 	/* -- What's new ------------------------------------------------------------ */
 
 	/**
@@ -517,9 +718,11 @@ class Shipping_Desk_Update_Checker {
 	 * cannot announce a release the site does not have.
 	 *
 	 * @param int $user_id User to check; 0 means the current user.
+	 * @param array<string,string[]>|null $entries Parsed readme changelog; read when not given,
+	 *                                              so the gate can exercise the fallback.
 	 * @return array{version:string,items:string[]}|null
 	 */
-	public static function pending_whats_new( $user_id = 0 ) {
+	public static function pending_whats_new( $user_id = 0, $entries = null ) {
 		$recorded = get_option( self::WHATS_NEW_OPTION );
 		if ( ! is_array( $recorded ) || empty( $recorded['version'] ) ) {
 			return null;
@@ -536,8 +739,8 @@ class Shipping_Desk_Update_Checker {
 			return null;
 		}
 
-		$entries = self::readme_changelog();
-		$items   = isset( $entries[ $version ] ) ? $entries[ $version ] : [];
+		$entries = is_array( $entries ) ? $entries : self::readme_changelog();
+		$items   = self::whats_new_items( $version, $entries );
 
 		if ( empty( $items ) ) {
 			return null;

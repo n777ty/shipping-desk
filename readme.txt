@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.6.1
+Stable tag: 1.6.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,10 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.6.2 =
+* Fixed: the changelog shown while WordPress offers an update ("View version details") was built from the readme of the version already installed, so it could never describe the version being offered - 1.6.1 was offered with no 1.6.1 entry. The release's own notes are now shown first, with the earlier history below them.
+* Fixed: the "What's new" popup after an update now falls back to the release's notes if the installed readme has no section for the installed version, instead of showing nothing.
 
 = 1.6.1 =
 * Fixed: a label could be bought twice for one order if two requests arrived at once - a second browser tab, a second person, or a bulk purchase overlapping a single click - because the "already purchased" check only sees what has been saved so far. Each purchase now takes a per-order lock first; the second request is told a purchase is already in progress and buys nothing. The lock is released however the request ends, and kept (for five minutes) only when a request dies between asking the carrier and saving the answer, because nobody then knows whether a label exists.

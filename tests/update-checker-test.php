@@ -222,7 +222,7 @@ class Upd_Test_Checker extends Shipping_Desk_Update_Checker {
  * @param array  $assets  Assets; defaults to the expected zip.
  * @return array
  */
-function upd_release( $version, array $assets = null ) {
+function upd_release( $version, ?array $assets = null ) {
 	if ( null === $assets ) {
 		$assets = [
 			[
@@ -346,6 +346,79 @@ $html = Shipping_Desk_Update_Checker::changelog_html( [ '1.2.0' => [ 'A <b>bold<
 upd_check( false !== strpos( $html, '&lt;b&gt;' ), 'changelog html is escaped' );
 upd_check( false !== strpos( $html, '<h4>1.2.0</h4>' ), 'changelog html names the version' );
 
+/*
+ * The bug this section exists for: while WordPress offered 1.6.1 the "view version details"
+ * modal showed nothing about 1.6.1, because the changelog was built from the readme on disk -
+ * which is the *installed* version's readme and cannot contain the version being offered. The
+ * release's own notes travel with the offer, so they are the only text that can describe it.
+ */
+$notes = implode( "\n", [
+	'# Shipping Desk 1.9.0',
+	'',
+	'## One order, one purchase',
+	'',
+	'A purchase takes a **lock**; see `class-purchase-lock.php`.',
+	'',
+	'- The second request is refused.',
+	'- Nothing is bought **twice**, per `class-purchase-lock.php`.',
+	'',
+	'## Upgrading',
+	'',
+	'Install over 1.8.0.',
+] );
+
+$bullets = Shipping_Desk_Update_Checker::notes_bullets( $notes );
+upd_same( 2, count( $bullets ), 'notes bullets are read from the release body' );
+upd_same( 'The second request is refused.', $bullets[0], 'as plain text' );
+upd_same( 'Nothing is bought twice, per class-purchase-lock.php.', $bullets[1], 'with emphasis and code markers stripped for the popup' );
+upd_check( false === strpos( implode( ' ', $bullets ), '**' ) && false === strpos( implode( ' ', $bullets ), '`' ), 'so the popup never shows raw markdown' );
+
+$notes_html = Shipping_Desk_Update_Checker::notes_html( $notes, '1.9.0' );
+upd_check( false !== strpos( $notes_html, '<h4>1.9.0</h4>' ), 'the notes are headed with the version being offered' );
+upd_check( false !== strpos( $notes_html, '<h5>One order, one purchase</h5>' ), 'and keep their own headings' );
+upd_check( false !== strpos( $notes_html, '<li>The second request is refused.</li>' ), 'bullets become a list' );
+upd_check( false !== strpos( $notes_html, '<strong>lock</strong>' ) && false !== strpos( $notes_html, '<code>class-purchase-lock.php</code>' ), 'inline emphasis and code are marked up' );
+upd_check( false === strpos( $notes_html, '# Shipping Desk 1.9.0' ), 'the notes\' own title is not repeated' );
+
+$nasty = Shipping_Desk_Update_Checker::notes_html( "## <script>alert(1)</script>\n\n- [click](javascript:alert(1))\n- <img src=x onerror=alert(1)>", '1.9.0' );
+upd_check( false === strpos( $nasty, '<script' ) && false === strpos( $nasty, '<img' ), 'markup in notes is escaped, not rendered' );
+upd_check( false !== strpos( $nasty, '&lt;script&gt;' ), 'and the angle brackets are entities' );
+upd_check( false === strpos( $nasty, '<a ' ) && false !== strpos( $nasty, 'click' ), 'a link with a script URL becomes plain text' );
+
+/* -- The offer's changelog -------------------------------------------------- */
+
+echo "\n[what the offer shows]\n";
+
+$offer = Shipping_Desk_Update_Checker::offered_changelog( [
+	'version' => '1.9.0',
+	'notes'   => $notes,
+] );
+
+upd_check( false !== strpos( $offer, '<h4>1.9.0</h4>' ), 'the version being offered comes first' );
+upd_check( false !== strpos( $offer, 'The second request is refused.' ), 'with its own notes' );
+upd_check( false !== strpos( $offer, '<hr />' ) && false !== strpos( $offer, '<h4>1.6.0</h4>' ), 'then the installed history, which is all the readme can carry' );
+upd_same( 1, substr_count( $offer, '<h4>1.9.0</h4>' ), 'and the offered version is not repeated from the readme' );
+
+$no_notes = Shipping_Desk_Update_Checker::offered_changelog( [ 'version' => '1.6.0', 'notes' => '' ] );
+upd_check( 1 === substr_count( $no_notes, '<h4>1.6.0</h4>' ), 'a release without notes still shows its installed section, once' );
+
+// And the filter itself uses it: this is the bug, so it is pinned at the point where it was.
+$GLOBALS['upd_transients'][ Shipping_Desk_Update_Checker::TRANSIENT ] = [
+	'checked' => time(),
+	'release' => [
+		'version' => '1.9.0',
+		'package' => 'https://example.test/shipping-desk-1.9.0.zip',
+		'digest'  => '',
+		'url'     => 'https://example.test/release',
+		'notes'   => $notes,
+	],
+];
+$info = $checker->filter_plugins_api( false, 'plugin_information', (object) [ 'slug' => 'shipping-desk' ] );
+upd_check( is_object( $info ) && isset( $info->sections['changelog'] ), 'the version-details modal answers' );
+upd_check( is_object( $info ) && false !== strpos( $info->sections['changelog'], 'The second request is refused.' ), 'with the release\'s own notes: the installed readme cannot describe the version being offered' );
+upd_check( is_object( $info ) && false !== strpos( $info->sections['changelog'], '<h4>1.6.0</h4>' ), 'and the older history below them' );
+upd_reset();
+
 /* -- What's new ------------------------------------------------------------- */
 
 echo "\n[what's new]\n";
@@ -365,6 +438,39 @@ upd_same( $first_bullet, $pending['items'][0], 'the popup lists the installed re
 Shipping_Desk_Update_Checker::dismiss_whats_new( '1.1.0', 5 );
 upd_check( null === Shipping_Desk_Update_Checker::pending_whats_new( 5 ), 'a dismissed version is not shown again' );
 upd_check( is_array( Shipping_Desk_Update_Checker::pending_whats_new( 6 ) ), 'dismissal is per user' );
+
+// The readme is the normal source; the release's notes are the fallback, and nothing at all is
+// the one outcome that is certainly wrong.
+upd_reset();
+set_transient( Shipping_Desk_Update_Checker::TRANSIENT, [
+	'checked' => time(),
+	'release' => [ 'version' => '1.9.0', 'notes' => "- A note from the release.\n- Another one." ],
+] );
+$fallback = Shipping_Desk_Update_Checker::cached_notes_bullets( '1.9.0' );
+upd_same( [ 'A note from the release.', 'Another one.' ], $fallback, 'the popup can fall back to the release notes' );
+upd_same( array(), Shipping_Desk_Update_Checker::cached_notes_bullets( '1.9.1' ), 'but never for a version the notes do not describe' );
+upd_same( array(), Shipping_Desk_Update_Checker::cached_notes_bullets( '1.1.0' ), 'and not when the cached release is a different one' );
+
+// The popup's own entry point, which is what uses the fallback: asked for a version the readme
+// does not have, it must still answer.
+upd_same( [ 'A note from the release.', 'Another one.' ], Shipping_Desk_Update_Checker::whats_new_items( '1.9.0' ), 'the popup reads the notes when the readme has no section' );
+upd_same(
+	[ 'Readme bullet.' ],
+	Shipping_Desk_Update_Checker::whats_new_items( '1.9.0', [ '1.9.0' => [ 'Readme bullet.' ] ] ),
+	'and the readme when it does'
+);
+
+// And the popup itself must use that: a readme without a section for the running version still
+// shows the release's notes rather than nothing.
+upd_reset();
+update_option( Shipping_Desk_Update_Checker::WHATS_NEW_OPTION, [ 'version' => SHIPPING_DESK_VERSION, 'at' => time() ] );
+set_transient( Shipping_Desk_Update_Checker::TRANSIENT, [
+	'checked' => time(),
+	'release' => [ 'version' => SHIPPING_DESK_VERSION, 'notes' => "- A note from the release.\n- Another one." ],
+] );
+$no_section = Shipping_Desk_Update_Checker::pending_whats_new( 8, [] );
+upd_check( is_array( $no_section ), 'the popup still has something to show when the readme lost the section' );
+upd_same( 'A note from the release.', isset( $no_section['items'][0] ) ? $no_section['items'][0] : '', 'and it is the release notes' );
 
 update_option( Shipping_Desk_Update_Checker::WHATS_NEW_OPTION, [ 'version' => '9.9.9', 'at' => time() ] );
 upd_check( null === Shipping_Desk_Update_Checker::pending_whats_new( 7 ), 'a version that is not running is never announced' );
