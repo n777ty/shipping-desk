@@ -294,11 +294,11 @@ class Shipping_Desk_Plugin {
 
         add_submenu_page(
             'shipping-desk',
-            __( 'PrintNode Settings', 'shipping-desk' ),
-            __( 'PrintNode Settings', 'shipping-desk' ),
+            __( 'Print Settings', 'shipping-desk' ),
+            __( 'Print Settings', 'shipping-desk' ),
             'manage_woocommerce',
-            'shipping-desk-printnode',
-            [ $this, 'render_printnode_settings_page' ]
+            'shipping-desk-print',
+            [ $this, 'render_print_settings_page' ]
         );
     }
 
@@ -358,25 +358,63 @@ class Shipping_Desk_Plugin {
     }
 
 
-    /* -- PrintNode Settings -- */
+    /* -- Print Settings -- */
 
-    public function render_printnode_settings_page() {
+    public function render_print_settings_page() {
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
             wp_die( esc_html__( 'Permission denied.', 'shipping-desk' ) );
         }
-        $api_key     = get_option( 'shipping_desk_printnode_api_key', '' );
-        $printer_id  = (int) get_option( 'shipping_desk_printnode_printer_id', 0 );
-        $print_mode  = get_option( 'shipping_desk_print_mode', 'browser' );
+        $api_key         = get_option( 'shipping_desk_printnode_api_key', '' );
+        $printer_id      = (int) get_option( 'shipping_desk_printnode_printer_id', 0 );
+        $print_mode      = get_option( 'shipping_desk_print_mode', 'browser' );
+        $print_reference = get_option( 'shipping_desk_print_reference', 'order_number' );
+        $reference_text  = get_option( 'shipping_desk_print_reference_text', '' );
 
         ?>
         <div class="wrap shipping-desk-settings">
-            <h1><?php esc_html_e( 'PrintNode Settings', 'shipping-desk' ); ?></h1>
+            <h1><?php esc_html_e( 'Print Settings', 'shipping-desk' ); ?></h1>
             <form method="post" action="options.php">
-                <?php settings_fields( 'shipping_desk_printnode_settings' ); ?>
-                <table class="form-table">
+                <?php settings_fields( 'shipping_desk_print_settings' ); ?>
+
+                <h2><?php esc_html_e( 'Printing', 'shipping-desk' ); ?></h2>
+                <table class="form-table" role="presentation">
                     <tr>
-                        <th scope="row"><label for="veeqo_ship_pn_key"><?php esc_html_e( 'PrintNode API Key', 'shipping-desk' ); ?></label></th>
-                        <td><input type="text" id="veeqo_ship_pn_key" name="shipping_desk_printnode_api_key" class="regular-text" value="<?php echo esc_attr( $api_key ); ?>" /></td>
+                        <th scope="row"><?php esc_html_e( 'Print Mode', 'shipping-desk' ); ?></th>
+                        <td>
+                            <fieldset>
+                                <legend class="screen-reader-text"><?php esc_html_e( 'Print Mode', 'shipping-desk' ); ?></legend>
+                                <label><input type="radio" name="shipping_desk_print_mode" value="browser" <?php checked( $print_mode, 'browser' ); ?> /> <?php esc_html_e( 'Browser Print  -  open label in browser for the user to print', 'shipping-desk' ); ?></label><br />
+                                <label><input type="radio" name="shipping_desk_print_mode" value="printnode" <?php checked( $print_mode, 'printnode' ); ?> /> <?php esc_html_e( 'Server Print (PrintNode)  -  send directly to a printer', 'shipping-desk' ); ?></label>
+                            </fieldset>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php esc_html_e( 'Printed reference', 'shipping-desk' ); ?></th>
+                        <td>
+                            <fieldset>
+                                <legend class="screen-reader-text"><?php esc_html_e( 'Printed reference', 'shipping-desk' ); ?></legend>
+                                <label><input type="radio" name="shipping_desk_print_reference" value="order_number" <?php checked( $print_reference, 'order_number' ); ?> /> <?php esc_html_e( 'Order number  -  the WooCommerce order number (default)', 'shipping-desk' ); ?></label><br />
+                                <label><input type="radio" name="shipping_desk_print_reference" value="customer_name" <?php checked( $print_reference, 'customer_name' ); ?> /> <?php esc_html_e( 'Customer name  -  the ship-to name', 'shipping-desk' ); ?></label><br />
+                                <label><input type="radio" name="shipping_desk_print_reference" value="custom" <?php checked( $print_reference, 'custom' ); ?> /> <?php esc_html_e( 'Custom text', 'shipping-desk' ); ?></label>
+                                <p id="shipping-desk-print-reference-text-row"<?php echo 'custom' === $print_reference ? '' : ' style="display:none;"'; ?>>
+                                    <label for="shipping-desk-print-reference-text" class="screen-reader-text"><?php esc_html_e( 'Custom text to print on the label', 'shipping-desk' ); ?></label>
+                                    <input type="text" id="shipping-desk-print-reference-text" name="shipping_desk_print_reference_text" class="regular-text" maxlength="30" value="<?php echo esc_attr( $reference_text ); ?>" />
+                                </p>
+                            </fieldset>
+                            <p class="description">
+                                <?php esc_html_e( 'The text printed in the carrier\'s reference field on the label, for browser and server printing alike. Up to 30 characters - the tightest carrier limit.', 'shipping-desk' ); ?>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+                <hr />
+
+                <h2><?php esc_html_e( 'PrintNode (server printing)', 'shipping-desk' ); ?></h2>
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row"><label for="shipping-desk-printnode-api-key"><?php esc_html_e( 'PrintNode API Key', 'shipping-desk' ); ?></label></th>
+                        <td><input type="text" id="shipping-desk-printnode-api-key" name="shipping_desk_printnode_api_key" class="regular-text" value="<?php echo esc_attr( $api_key ); ?>" /></td>
                     </tr>
                     <tr>
                         <th scope="row"><?php esc_html_e( 'Printers', 'shipping-desk' ); ?></th>
@@ -388,23 +426,25 @@ class Shipping_Desk_Plugin {
                             <p class="description"><?php esc_html_e( 'Select the printer that will receive labels from this plugin.', 'shipping-desk' ); ?></p>
                         </td>
                     </tr>
-                    <tr>
-                        <th scope="row"><?php esc_html_e( 'Print Mode', 'shipping-desk' ); ?></th>
-                        <td>
-                            <fieldset>
-                                <legend class="screen-reader-text"><?php esc_html_e( 'Print Mode', 'shipping-desk' ); ?></legend>
-                                <label><input type="radio" name="shipping_desk_print_mode" value="browser" <?php checked( $print_mode, 'browser' ); ?> /> <?php esc_html_e( 'Browser Print  -  open label in browser for the user to print', 'shipping-desk' ); ?></label><br />
-                                <label><input type="radio" name="shipping_desk_print_mode" value="printnode" <?php checked( $print_mode, 'printnode' ); ?> /> <?php esc_html_e( 'Server Print (PrintNode)  -  send directly to a printer', 'shipping-desk' ); ?></label>
-                            </fieldset>
-                        </td>
-                    </tr>
                 </table>
+
                 <?php submit_button(); ?>
             </form>
         </div>
         <script>
         (function ($) {
             'use strict';
+
+            // The custom text field is hidden, not disabled, when another choice
+            // is selected: a disabled field posts nothing, which would erase the
+            // saved text on every save.
+            function shippingDeskToggleReferenceText() {
+                var custom = $('input[name="shipping_desk_print_reference"]:checked').val() === 'custom';
+                $('#shipping-desk-print-reference-text-row').toggle(custom);
+            }
+            $(document).on('change', 'input[name="shipping_desk_print_reference"]', shippingDeskToggleReferenceText);
+            shippingDeskToggleReferenceText();
+
             $(document).on('click', '#shipping-desk-printnode-refresh-printers', function () {
                 var $btn = $(this);
                 $btn.prop('disabled', true).text('<?php echo esc_js( __( 'Loading...', 'shipping-desk' ) ); ?>');
@@ -479,14 +519,14 @@ class Shipping_Desk_Plugin {
         <?php
     }
 
-    /* -- /PrintNode Settings -- */
+    /* -- /Print Settings -- */
 
     public function enqueue_assets( $hook ) {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.6.3' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.6.3', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.7.0' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.7.0', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),

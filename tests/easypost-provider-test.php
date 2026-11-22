@@ -568,6 +568,15 @@ $GLOBALS['gate_responses'][] = gate_canned( 201, gate_shipment() );
 gate_client()->get_rates( gate_payload( [ 'customer_reference' => "  \n  " ] ) );
 gate_check( ! isset( gate_shipment_body()['options']['print_custom_1'] ), 'a blank reference prints nothing' );
 
+// A shop may print something other than the order number. print_custom_1
+// follows the chosen printed reference; the API handle stays the order number.
+gate_reset();
+$GLOBALS['gate_responses'][] = gate_canned( 201, gate_shipment() );
+gate_client()->get_rates( gate_payload( [ 'print_reference' => 'GIFT' ] ) );
+$chosen = gate_shipment_body();
+gate_same( 'GIFT', $chosen['options']['print_custom_1'], 'print_custom_1 follows the chosen printed reference' );
+gate_same( '1042', $chosen['reference'], 'while the API handle stays the order number' );
+
 // Signature mapping — the UI keeps Shippo's enums.
 gate_reset();
 $GLOBALS['gate_responses'][] = gate_canned( 201, gate_shipment() );

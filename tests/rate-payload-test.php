@@ -200,6 +200,55 @@ $gb = Shipping_Desk_Helpers::build_shipping_desk_rate_payload(
 payload_same( 'GB', $gb['to_address']['country_code'], 'a British order keeps its country' );
 payload_same( '442079460958', $gb['to_address']['phone'], 'and a non-NANP phone keeps its country code' );
 
+/* -- The printed reference -------------------------------------------------- */
+
+payload_section( 'print_reference' );
+
+$reference_order = new WC_Order(
+    [
+        'order_number'        => '1042',
+        'shipping_first_name' => 'Jane',
+        'shipping_last_name'  => 'Doe',
+    ]
+);
+
+payload_same( '1001', $us['print_reference'], 'the payload prints the order number by default' );
+payload_same( '1001', $us['customer_reference'], 'and the API handle is the same order number' );
+
+$GLOBALS['payload_options']['shipping_desk_print_reference'] = 'customer_name';
+payload_same( 'Jane Doe', Shipping_Desk_Helpers::print_reference( $reference_order ), 'the customer name can be printed instead' );
+
+$GLOBALS['payload_options']['shipping_desk_print_reference']      = 'custom';
+$GLOBALS['payload_options']['shipping_desk_print_reference_text'] = 'PRIORITY';
+payload_same( 'PRIORITY', Shipping_Desk_Helpers::print_reference( $reference_order ), 'custom text can be printed instead' );
+
+$GLOBALS['payload_options']['shipping_desk_print_reference_text'] = '   ';
+payload_same( '1042', Shipping_Desk_Helpers::print_reference( $reference_order ), 'a blank custom value falls back to the order number' );
+
+$GLOBALS['payload_options']['shipping_desk_print_reference'] = 'nonsense';
+payload_same( '1042', Shipping_Desk_Helpers::print_reference( $reference_order ), 'an unknown choice falls back to the order number' );
+
+$GLOBALS['payload_options']['shipping_desk_print_reference']      = 'custom';
+$GLOBALS['payload_options']['shipping_desk_print_reference_text'] = 'PRIORITY';
+$custom = Shipping_Desk_Helpers::build_shipping_desk_rate_payload(
+    new WC_Order(
+        [
+            'order_number'      => '1042',
+            'shipping_country'  => 'US',
+            'shipping_postcode' => '33434',
+            'billing_phone'     => '704-555-1212',
+            'billing_email'     => 'buyer@example.com',
+        ]
+    ),
+    [],
+    16.0
+);
+payload_same( 'PRIORITY', $custom['print_reference'], 'the payload carries the chosen reference' );
+payload_same( '1042', $custom['customer_reference'], 'while the API handle stays the order number' );
+
+// Back to the defaults so the structural checks below see a clean state.
+unset( $GLOBALS['payload_options']['shipping_desk_print_reference'], $GLOBALS['payload_options']['shipping_desk_print_reference_text'] );
+
 /* -- Structural guarantees ------------------------------------------------- */
 
 payload_section( 'source guarantees' );

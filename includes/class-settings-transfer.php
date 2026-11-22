@@ -47,6 +47,8 @@ class Shipping_Desk_Settings_Transfer {
             'from_address'         => get_option( 'shipping_desk_from_address', [] ),
             'boxes'                => is_array( $boxes ) ? array_values( $boxes ) : [],
             'print_mode'           => (string) get_option( 'shipping_desk_print_mode', 'browser' ),
+            'print_reference'      => (string) get_option( 'shipping_desk_print_reference', 'order_number' ),
+            'print_reference_text' => (string) get_option( 'shipping_desk_print_reference_text', '' ),
             'printnode_printer_id' => (int) get_option( 'shipping_desk_printnode_printer_id', 0 ),
         ];
 
@@ -183,6 +185,19 @@ class Shipping_Desk_Settings_Transfer {
             $mode = in_array( $settings['print_mode'], [ 'browser', 'printnode' ], true ) ? $settings['print_mode'] : 'browser';
             update_option( 'shipping_desk_print_mode', $mode );
             $imported[] = 'print_mode';
+        }
+
+        if ( isset( $settings['print_reference'] ) ) {
+            $reference = in_array( $settings['print_reference'], [ 'order_number', 'customer_name', 'custom' ], true )
+                ? $settings['print_reference']
+                : 'order_number';
+            update_option( 'shipping_desk_print_reference', $reference );
+            $imported[] = 'print_reference';
+        }
+
+        if ( isset( $settings['print_reference_text'] ) ) {
+            update_option( 'shipping_desk_print_reference_text', $this->plugin->settings()->sanitize_print_reference_text( $settings['print_reference_text'] ) );
+            $imported[] = 'print_reference_text';
         }
 
         if ( isset( $settings['printnode_api_key'] ) ) {

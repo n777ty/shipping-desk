@@ -495,6 +495,13 @@ gate_check(
 );
 gate_check( ! isset( $body['extra']['insurance']['provider'] ), 'omits the XCover provider field' );
 
+// A shop may print something other than the order number. reference_1 follows
+// the chosen printed reference; customer_reference stays the order number.
+gate_reset_http();
+$GLOBALS['gate_responses'][] = gate_rates_response();
+gate_client()->get_rates( gate_rate_payload( [ 'print_reference' => 'GIFT' ] ) );
+gate_same( 'GIFT', gate_body( 0 )['extra']['reference_1'], 'reference_1 follows the chosen printed reference' );
+
 gate_same(
     'shipment0123456789abcdef01234567',
     $result['remote_shipment_id'],

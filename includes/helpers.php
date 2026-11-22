@@ -1020,6 +1020,44 @@ class Shipping_Desk_Helpers {
         return in_array( strtoupper( trim( (string) $country_code ) ), $supported, true );
     }
 
+    /**
+     * The text printed in the carrier's reference field on the label.
+     *
+     * Order number by default. One setting covers every provider: Shippo prints
+     * it as `extra.reference_1`, EasyPost as `options.print_custom_1` and Veeqo as
+     * `customer_reference`, because all three use the same reference field on the
+     * label. `customer_reference` in the payload stays the order number - EasyPost
+     * uses it as the shipment's API handle, which is never printed, and a bought
+     * label is mapped back to its order by id rather than by this text.
+     *
+     * @param WC_Order $order
+     * @return string Empty only when the order has no number to fall back to.
+     */
+    public static function print_reference( WC_Order $order ) {
+        $choice = (string) get_option( 'shipping_desk_print_reference', 'order_number' );
+
+        if ( 'custom' === $choice ) {
+            $custom = trim( (string) get_option( 'shipping_desk_print_reference_text', '' ) );
+            if ( '' !== $custom ) {
+                return $custom;
+            }
+            // A blank custom value prints the order number rather than nothing.
+            $choice = 'order_number';
+        }
+
+        if ( 'customer_name' === $choice ) {
+            $name = trim( $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() );
+            if ( '' === $name && method_exists( $order, 'get_billing_first_name' ) ) {
+                $name = trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );
+            }
+            if ( '' !== $name ) {
+                return $name;
+            }
+        }
+
+        return (string) $order->get_order_number();
+    }
+
     public static function build_shipping_desk_rate_payload( WC_Order $order, array $box, $total_weight_oz, $liability_amount = 0 ) {
         // The destination, not a constant. Callers gate on
         // is_supported_destination() before quoting, so a non-US order never
@@ -1059,6 +1097,7 @@ class Shipping_Desk_Helpers {
             ],
             'is_amazon_order'      => false,
             'customer_reference'   => (string) $order->get_order_number(),
+            'print_reference'      => self::print_reference( $order ),
             'estimated_value'      => (string) $order->get_total(),
             'currency_code'        => $order->get_currency(),
             'seller_display_name'  => get_bloginfo( 'name' ),

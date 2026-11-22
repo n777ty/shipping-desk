@@ -1703,9 +1703,14 @@ class Shipping_Desk_Shippo_Client implements Shipping_Desk_Provider_Interface, S
 
         $extra = [];
 
-        $reference = $this->truncate_reference(
-            isset( $payload['customer_reference'] ) ? $payload['customer_reference'] : ''
-        );
+        // The printed reference, when the shop chose one other than the order
+        // number; customer_reference is the fallback so a payload built before
+        // the setting existed still prints the order number.
+        $reference_source = ( isset( $payload['print_reference'] ) && '' !== trim( (string) $payload['print_reference'] ) )
+            ? $payload['print_reference']
+            : ( isset( $payload['customer_reference'] ) ? $payload['customer_reference'] : '' );
+
+        $reference = $this->truncate_reference( $reference_source );
         if ( '' !== $reference ) {
             $extra['reference_1'] = $reference;
             // reference_2 is deliberately unused (see the migration notes).

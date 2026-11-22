@@ -52,6 +52,18 @@ class Shipping_Desk_Veeqo_Client implements Shipping_Desk_Provider_Interface {
             }
         }
 
+        // Veeqo prints `customer_reference` on the label and has no separate API
+        // handle, so the chosen printed reference replaces it here. The
+        // `print_reference` key itself is stripped: Veeqo's schema has no such
+        // field. A blank or absent value leaves the order number in place.
+        if ( isset( $payload['print_reference'] ) ) {
+            $printed = trim( (string) $payload['print_reference'] );
+            if ( '' !== $printed ) {
+                $payload['customer_reference'] = $printed;
+            }
+        }
+        unset( $payload['print_reference'] );
+
         // `to_address.line2` is a documented field and is sent: without it a
         // suite or apartment number never reaches the label, because the order's
         // second address line had been dropped before the payload was built.

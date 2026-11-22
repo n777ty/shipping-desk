@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.6.3
+Stable tag: 1.7.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,10 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.7.0 =
+* New: choose what is printed in the carrier's reference field on the label - the order number (default), the customer's ship-to name, or a fixed piece of your own text (up to 30 characters). One setting covers browser and server printing and every provider, and it travels with your settings export/import.
+* Changed: the "PrintNode Settings" page is now "Print Settings" and holds every print option, with Print Mode at the top, so browser versus server printing is chosen before the PrintNode details below it.
 
 = 1.6.3 =
 * Security: exporting your settings no longer includes the API keys unless you click "Download JSON including API keys", so a file you keep or share is safe by default.

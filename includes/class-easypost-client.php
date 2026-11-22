@@ -1375,7 +1375,7 @@ class Shipping_Desk_EasyPost_Client implements Shipping_Desk_Provider_Interface,
 
         $reference = $this->print_reference( $payload );
         if ( '' !== $reference ) {
-            // The order number as text on the label. `shipment.reference` is
+            // The chosen reference as text on the label. `shipment.reference` is
             // EasyPost's API handle: it appears in the dashboard and in
             // endpoints, but it is never printed — which is why labels bought
             // before this option existed came out with no order number on them.
@@ -1400,7 +1400,7 @@ class Shipping_Desk_EasyPost_Client implements Shipping_Desk_Provider_Interface,
     }
 
     /**
-     * The order number as one printable line.
+     * The printed reference as one printable line.
      *
      * Order numbers are usually plain digits, but a custom numbering plugin can
      * put anything in them. Control characters and newlines are the only values
@@ -1412,7 +1412,12 @@ class Shipping_Desk_EasyPost_Client implements Shipping_Desk_Provider_Interface,
      * @return string Empty when there is nothing worth printing.
      */
     protected function print_reference( array $payload ) {
-        $reference = isset( $payload['customer_reference'] ) ? (string) $payload['customer_reference'] : '';
+        // The chosen printed reference, when it is something other than the order
+        // number; `customer_reference` stays the fallback so a payload built
+        // before the setting existed still prints the order number.
+        $reference = ( isset( $payload['print_reference'] ) && '' !== trim( (string) $payload['print_reference'] ) )
+            ? (string) $payload['print_reference']
+            : ( isset( $payload['customer_reference'] ) ? (string) $payload['customer_reference'] : '' );
         $reference = preg_replace( '/[\x00-\x1F\x7F]+/', ' ', $reference );
         $reference = trim( preg_replace( '/\s+/', ' ', (string) $reference ) );
 

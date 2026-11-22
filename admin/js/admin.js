@@ -1495,11 +1495,11 @@
                 action: 'shipping_desk_printnode_status'
             }, function (statusResp) {
                 if (!statusResp || !statusResp.success) {
-                    $status.text('PrintNode must be configured (API key and printer) - visit PrintNode Settings.');
+                    $status.text('PrintNode must be configured (API key and printer) - visit Print Settings.');
                     return;
                 }
                 if (!statusResp.data || !statusResp.data.configured) {
-                    $status.text(statusResp.data.message || 'PrintNode must be configured (API key and printer) - visit PrintNode Settings.');
+                    $status.text(statusResp.data.message || 'PrintNode must be configured (API key and printer) - visit Print Settings.');
                     return;
                 }
 
@@ -1525,7 +1525,7 @@
                 if (!statusResp || !statusResp.success || !statusResp.data || !statusResp.data.configured) {
                     $status.text((statusResp && statusResp.data && statusResp.data.message)
                         ? statusResp.data.message
-                        : 'PrintNode must be configured (API key and printer) - visit PrintNode Settings.');
+                        : 'PrintNode must be configured (API key and printer) - visit Print Settings.');
                     return;
                 }
                 startBulkBuy();

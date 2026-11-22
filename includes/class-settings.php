@@ -120,11 +120,18 @@ class Shipping_Desk_Settings {
         add_settings_section( 'shipping_desk_from_address_section', __( 'From Address (Optional)', 'shipping-desk' ), '__return_false', 'shipping_desk_from_settings' );
         add_settings_field( 'shipping_desk_from_address_field', __( 'Shipment Origin', 'shipping-desk' ), [ $this, 'render_from_address_field' ], 'shipping_desk_from_settings', 'shipping_desk_from_address_section' );
 
-        register_setting( 'shipping_desk_printnode_settings', 'shipping_desk_printnode_api_key', [ 'autoload' => false ] );
-        register_setting( 'shipping_desk_printnode_settings', 'shipping_desk_printnode_printer_id', [ 'sanitize_callback' => 'absint' ] );
-        register_setting( 'shipping_desk_printnode_settings', 'shipping_desk_print_mode', [ 'sanitize_callback' => function ( $value ) {
+        register_setting( 'shipping_desk_print_settings', 'shipping_desk_printnode_api_key', [ 'autoload' => false ] );
+        register_setting( 'shipping_desk_print_settings', 'shipping_desk_printnode_printer_id', [ 'sanitize_callback' => 'absint' ] );
+        register_setting( 'shipping_desk_print_settings', 'shipping_desk_print_mode', [ 'sanitize_callback' => function ( $value ) {
             return in_array( $value, [ 'browser', 'printnode' ], true ) ? $value : 'browser';
         } ] );
+        // What prints in the carrier's reference/PO field. Order number by
+        // default; the text option is only read when the custom choice is
+        // selected, and is capped at 30 characters (USPS, the tightest carrier).
+        register_setting( 'shipping_desk_print_settings', 'shipping_desk_print_reference', [ 'sanitize_callback' => function ( $value ) {
+            return in_array( $value, [ 'order_number', 'customer_name', 'custom' ], true ) ? $value : 'order_number';
+        } ] );
+        register_setting( 'shipping_desk_print_settings', 'shipping_desk_print_reference_text', [ 'sanitize_callback' => [ $this, 'sanitize_print_reference_text' ] ] );
 
         // Each of these lives in its own settings group, because WordPress saves a *group*,
         // not a form: every option registered to the submitted group is overwritten, and
@@ -193,6 +200,25 @@ class Shipping_Desk_Settings {
         $clean['email']        = sanitize_email( $clean['email'] );
         $clean['country_code'] = strtoupper( $clean['country_code'] );
         return $clean;
+    }
+
+    /**
+     * One printable line for the carrier's reference field.
+     *
+     * Control characters and newlines are the only values that reliably upset
+     * carrier label fields, and a label prints a single line regardless, so both
+     * are flattened. Capped at 30 characters, the tightest carrier limit (USPS);
+     * the Shippo and EasyPost clients apply the same cap again on the wire.
+     *
+     * @param mixed $value Raw submitted value.
+     * @return string
+     */
+    public function sanitize_print_reference_text( $value ) {
+        $value = sanitize_text_field( (string) $value );
+        $value = preg_replace( '/[\x00-\x1F\x7F]+/', ' ', $value );
+        $value = trim( preg_replace( '/\s+/', ' ', (string) $value ) );
+
+        return substr( $value, 0, 30 );
     }
 
     /**

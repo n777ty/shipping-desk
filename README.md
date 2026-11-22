@@ -23,7 +23,9 @@ confirmation and declared value priced into the quote where the provider allows 
 bulk buy with per-order results: one failed label never takes a batch down.
 
 **Printing** — browser printing or silent server-side printing through
-[PrintNode](https://www.printnode.com/). Both paths receive the same file: labels are bought
+[PrintNode](https://www.printnode.com/). The reference printed in the carrier's
+reference field is configurable: the order number (default), the customer's ship-to
+name, or a fixed string of your own. Both paths receive the same file: labels are bought
 as 4x6 PDFs, and carriers that return a different page size — UPS at 4x7, FedEx on a US
 letter page — are cropped to a true 4x6 page box, so a 4x6 thermal printer prints at 100%
 instead of scaling the label down to a quarter of the stock.

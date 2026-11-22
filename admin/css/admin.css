@@ -781,7 +781,7 @@
  * (1.6.0), and it kept core's 3px corners beside 30px buttons on the same table.
  *
  * The scope is the body, not a page wrapper. The wrappers are not uniform (four screens
- * use shipping-desk-wrap, PrintNode uses shipping-desk-settings) and the what's-new dialog
+ * use shipping-desk-wrap, Print Settings uses shipping-desk-settings) and the what's-new dialog
  * is printed in admin_footer, outside any wrapper at all. An enumerated list of
  * wrapper-scoped class names missed every one of those cases, which is why "Save Boxes" -
  * submit_button() markup with no plugin class of its own - kept core's 3px corners and its

@@ -33,6 +33,8 @@ delete_option( 'shipping_desk_complete_order_on_label' );
     delete_option( 'shipping_desk_printnode_api_key' );
     delete_option( 'shipping_desk_printnode_printer_id' );
     delete_option( 'shipping_desk_print_mode' );
+    delete_option( 'shipping_desk_print_reference' );
+    delete_option( 'shipping_desk_print_reference_text' );
     delete_option( 'shipping_desk_reship_send_completed_email' );
     delete_option( 'shipping_desk_delete_data_on_uninstall' );
     delete_option( 'shipping_desk_legacy_migrated' );
