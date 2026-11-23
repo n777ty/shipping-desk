@@ -366,6 +366,13 @@ class Shipping_Desk_Labels {
         $total_weight = isset( $_POST['total_weight'] ) ? floatval( $_POST['total_weight'] ) : 0.0;
         $box          = $this->sanitize_box_input( isset( $_POST['box'] ) ? $_POST['box'] : [] );
 
+        // A manual box has no stored dimensions: a missing one means the request did not come
+        // from the Manual panel, so refuse rather than buy against a zero-dimension parcel.
+        $box_key = isset( $_POST['box_key'] ) ? sanitize_text_field( wp_unslash( $_POST['box_key'] ) ) : '';
+        if ( 'manual' === $box_key && $this->box_dimensions_missing( $box ) ) {
+            wp_send_json_error( [ 'message' => __( 'Enter the box length, width and height.', 'shipping-desk' ) ], 400 );
+        }
+
         // One purchase per order at a time. "Already purchased" below reads meta that is only
         // written after the provider has answered, which can take half a minute: without this a
         // double click or a second tab passes that check too, and the provider is paid twice.
@@ -709,6 +716,14 @@ class Shipping_Desk_Labels {
             $box          = $this->sanitize_box_input( isset( $entry['box'] ) ? $entry['box'] : [] );
             $rate         = isset( $entry['rate'] ) ? $this->parse_rate_input( $entry['rate'] ) : [];
 
+            // A manual box carries its dimensions with the entry; if they are missing the run
+            // did not come from the Manual panel, so skip rather than buy a zero-dimension parcel.
+            $box_key = isset( $entry['box_key'] ) ? sanitize_text_field( $entry['box_key'] ) : '';
+            if ( 'manual' === $box_key && $this->box_dimensions_missing( $box ) ) {
+                $skipped[ $order_id ] = __( 'Enter the box length, width and height.', 'shipping-desk' );
+                continue;
+            }
+
             // The same lock a single purchase takes, so a batch and a click on one order cannot
             // both buy. Taken before the order is loaded, for the reason given above.
             if ( $order_id && ! $this->purchase_lock()->acquire( $order_id ) ) {
@@ -908,6 +923,24 @@ class Shipping_Desk_Labels {
         }
 
         return $box;
+    }
+
+    /**
+     * True when a box is missing one of the three dimensions a parcel is priced on.
+     *
+     * Only the manual path can be missing them - a saved box always has all three - so this
+     * says whether a Manual purchase really came from the panel with its dimensions filled in.
+     *
+     * @param array<string,float> $box Box as sanitize_box_input() returns it.
+     * @return bool
+     */
+    protected function box_dimensions_missing( $box ) {
+        foreach ( [ 'length', 'width', 'height' ] as $dimension ) {
+            if ( ! isset( $box[ $dimension ] ) || (float) $box[ $dimension ] <= 0 ) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

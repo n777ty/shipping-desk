@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-22T00:57:01+00:00\n"
+"POT-Creation-Date: 2026-11-23T17:14:31+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: shipping-desk\n"
@@ -441,6 +441,15 @@ msgstr ""
 msgid "Enter an API key and save, then refresh printers."
 msgstr ""
 
+#: includes/class-labels.php:373
+#: includes/class-labels.php:723
+msgid "Enter the box length, width and height."
+msgstr ""
+
+#: includes/class-plugin.php:1186
+msgid "Enter the box length, width and height before getting rates."
+msgstr ""
+
 #: includes/class-plugin.php:1700
 msgid "Enter the EasyPost shipment id from the order note."
 msgstr ""
@@ -663,6 +672,10 @@ msgstr ""
 
 #: includes/class-plugin.php:2206
 msgid "Look up on"
+msgstr ""
+
+#: includes/class-orders-screen.php:321
+msgid "Manual..."
 msgstr ""
 
 #: includes/class-plugin.php:2150

@@ -432,15 +432,37 @@
     white-space: nowrap;
 }
 /* Column widths are percentage-based so the table scales with any screen
-   resolution. Ratios approximate the previous 1600px design:
+   resolution. Ratios approximate a 1600px screen:
    customer 200px, totals 100px, method 120px,
-   box/weight 176px, services 200px, rates 380px, actions flexible. */
+   box/weight 208px, services 192px, rates 380px, actions flexible.
+   Box is a touch wider than Services on purpose: it holds the Manual dimension
+   inputs, and Services (a select or two) reads the same with 1% less. */
 .shipping-desk-table .shipping-desk-rates { width: 23.75%; }
 .shipping-desk-table .shipping-desk-method { width: 7.5%; }
 .shipping-desk-table .shipping-desk-order-totals { width: 6.25%; }
-.shipping-desk-table .shipping-desk-services-column { width: 14%; }
+.shipping-desk-table .shipping-desk-services-column { width: 12%; }
 .shipping-desk-table .shipping-desk-order-customer { width: 12.5%; }
-.shipping-desk-table .shipping-desk-box-column { width: 9.5%; }
+.shipping-desk-table .shipping-desk-box-column { width: 13%; }
+
+/*
+ * Manual box dimensions: hidden until "Manual..." is chosen in the Box dropdown, then a row
+ * of three small inputs. The generic number rule already gives them the 30px height, the 6px
+ * corners and the 12px type; this only narrows them enough to sit three across the column.
+ */
+.shipping-desk-box-column .shipping-desk-manual-dimensions {
+    display: none;
+    gap: 4px;
+    margin-top: 8px;
+}
+.shipping-desk-box-column .shipping-desk-manual-dimensions.is-visible { display: flex; }
+
+.shipping-desk-screen input[type="number"].shipping-desk-manual-dimension {
+    flex: 1 1 0;
+    width: 100%;
+    min-width: 0;
+    padding: 0 6px;
+    font-size: 11px;
+}
 
 .shipping-desk-box-weight-row {
     display: flex;

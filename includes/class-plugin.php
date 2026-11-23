@@ -525,8 +525,8 @@ class Shipping_Desk_Plugin {
         if ( strpos( (string) $hook, 'shipping-desk' ) === false ) {
             return;
         }
-        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.7.0' );
-        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.7.0', true );
+        wp_enqueue_style( 'shipping-desk-admin', $this->url . 'admin/css/admin.css', [], '1.8.0' );
+        wp_enqueue_script( 'shipping-desk-admin', $this->url . 'admin/js/admin.js', [ 'jquery' ], '1.8.0', true );
         wp_localize_script( 'shipping-desk-admin', 'ShippingDesk', [
             'ajaxurl'     => admin_url( 'admin-ajax.php' ),
             'bulkNonce'   => wp_create_nonce( 'shipping_desk_bulk_buy' ),
@@ -1174,6 +1174,22 @@ class Shipping_Desk_Plugin {
         }
 
         $box = ( isset( $_POST['box'] ) && is_array( $_POST['box'] ) ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['box'] ) ) : [];
+
+        // A manual box is typed per order, with no stored dimensions behind it to fall back on,
+        // so all three must be present before anything is quoted. A saved box never reaches
+        // here missing a dimension, so this only guards the one-off path.
+        $box_key = isset( $_POST['box_key'] ) ? sanitize_text_field( wp_unslash( $_POST['box_key'] ) ) : '';
+        if ( 'manual' === $box_key ) {
+            foreach ( [ 'length', 'width', 'height' ] as $dimension ) {
+                if ( ! isset( $box[ $dimension ] ) || (float) $box[ $dimension ] <= 0 ) {
+                    wp_send_json_error(
+                        [ 'message' => __( 'Enter the box length, width and height before getting rates.', 'shipping-desk' ) ],
+                        400
+                    );
+                }
+            }
+        }
+
         $total_weight = isset( $_POST['total_weight'] ) ? floatval( $_POST['total_weight'] ) : 0.0;
         if ( $total_weight <= 0 ) {
             $total_weight = Shipping_Desk_Helpers::get_order_items_weight_oz( $order );

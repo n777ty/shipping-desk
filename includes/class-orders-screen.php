@@ -317,7 +317,21 @@ class Shipping_Desk_Orders_Screen {
                                     esc_attr( $idx ), esc_attr( $box['length'] ?? 0 ), esc_attr( $box['width'] ?? 0 ), esc_attr( $box['height'] ?? 0 ), esc_attr( $box['weight'] ?? 0 ),
                                     esc_html( $box['name'] ?? ( 'Box ' . ( $idx + 1 ) ) ) );
                             endforeach; ?>
+                            <?php // Last on purpose: the one-off case, below every saved box. ?>
+                            <option value="manual"><?php esc_html_e( 'Manual...', 'shipping-desk' ); ?></option>
                         </select>
+                        <?php
+                        /*
+                         * Shown only while "Manual..." is chosen (see .is-visible in admin.css).
+                         * Three inputs, not a stored box: one-off dimensions are typed here and
+                         * never saved to Box Settings. The weight row below stays the whole total.
+                         */
+                        ?>
+                        <div class="shipping-desk-manual-dimensions">
+                            <input type="number" step="0.01" min="0" class="shipping-desk-manual-dimension" data-dimension="length" placeholder="L" aria-label="<?php esc_attr_e( 'Length (in)', 'shipping-desk' ); ?>" title="<?php esc_attr_e( 'Length (in)', 'shipping-desk' ); ?>" />
+                            <input type="number" step="0.01" min="0" class="shipping-desk-manual-dimension" data-dimension="width" placeholder="W" aria-label="<?php esc_attr_e( 'Width (in)', 'shipping-desk' ); ?>" title="<?php esc_attr_e( 'Width (in)', 'shipping-desk' ); ?>" />
+                            <input type="number" step="0.01" min="0" class="shipping-desk-manual-dimension" data-dimension="height" placeholder="H" aria-label="<?php esc_attr_e( 'Height (in)', 'shipping-desk' ); ?>" title="<?php esc_attr_e( 'Height (in)', 'shipping-desk' ); ?>" />
+                        </div>
                         <div class="shipping-desk-box-weight-row">
                             <label class="shipping-desk-weight-label" for="shipping-desk-weight-<?php echo esc_attr( $order_id ); ?>"><?php esc_html_e( 'Weight', 'shipping-desk' ); ?></label>
                             <input type="number" step="0.01" min="0" id="shipping-desk-weight-<?php echo esc_attr( $order_id ); ?>" class="shipping-desk-total-weight" value="<?php echo esc_attr( number_format( $items_weight, 2, '.', '' ) ); ?>" title="<?php esc_attr_e( 'Calculated from items and box weight; edit to override', 'shipping-desk' ); ?>" />

@@ -2,9 +2,64 @@
 (function ($) {
     'use strict';
 
+    /*
+     * One-off boxes: the dropdown's "Manual…" entry, whose dimensions are typed per order.
+     * The sentinel stands in for a box key; saved boxes are numeric, so it cannot collide.
+     */
+    var MANUAL_BOX = 'manual';
+
+    function isManualBox($row) {
+        return $row.find('.shipping-desk-box-select').val() === MANUAL_BOX;
+    }
+
+    /**
+     * The three typed dimensions, or null while any of them is missing or not positive.
+     *
+     * Null is deliberate: callers treat it exactly like "no box selected", so a half-filled
+     * Manual row cannot be quoted or bought.
+     */
+    function getManualDimensions($row) {
+        var dims = { length: 0, width: 0, height: 0 };
+        var complete = true;
+        $row.find('.shipping-desk-manual-dimension').each(function () {
+            var key = $(this).data('dimension');
+            var val = parseFloat($(this).val());
+            if (!(val > 0)) {
+                complete = false;
+            }
+            dims[key] = val > 0 ? val : 0;
+        });
+        return complete ? dims : null;
+    }
+
+    /** Show the dimension inputs only while "Manual…" is the chosen box. */
+    function toggleManualDimensions($row) {
+        var $wrap = $row.find('.shipping-desk-manual-dimensions');
+        if ($wrap.length) {
+            $wrap.toggleClass('is-visible', isManualBox($row));
+        }
+    }
+
+    /** Put stored dimensions back into the inputs, used when a row is hydrated from quotes. */
+    function fillManualDimensions($row, box) {
+        if (!box) return;
+        $row.find('.shipping-desk-manual-dimension').each(function () {
+            var key = $(this).data('dimension');
+            if (typeof box[key] !== 'undefined' && box[key] !== null && box[key] !== '') {
+                $(this).val(parseFloat(box[key]).toFixed(2));
+            }
+        });
+    }
+
     function getBoxData($row) {
         var $sel = $row.find('.shipping-desk-box-select');
         if (!$sel.val()) return null;
+        if ($sel.val() === MANUAL_BOX) {
+            var dims = getManualDimensions($row);
+            if (!dims) return null;
+            // No tare for a one-off: the Weight field stays the whole total, editable.
+            return { length: dims.length, width: dims.width, height: dims.height, weight: 0 };
+        }
         var opt = $sel.find('option:selected');
         return {
             length: parseFloat(opt.data('length')) || 0,
@@ -12,6 +67,15 @@
             height: parseFloat(opt.data('height')) || 0,
             weight: parseFloat(opt.data('weight')) || 0
         };
+    }
+
+    /** Why this row cannot be quoted or bought yet, or '' when it can. */
+    function getBoxError($row) {
+        if (isManualBox($row) && !getManualDimensions($row)) {
+            return 'Enter the box length, width and height.';
+        }
+        if (!getBoxData($row)) return 'Please select a box.';
+        return '';
     }
 
     function syncSelectAll($table) {
@@ -431,8 +495,17 @@
 
     $(document).on('change', '.shipping-desk-box-select', function () {
         var $row = $(this).closest('tr');
+        toggleManualDimensions($row);
         updateTotalWeight($row);
         resetRates($row, 'Box changed. Get rates to refresh quotes.');
+    });
+
+    /*
+     * Typing a manual dimension is a box change: the parcel the quotes were priced for is
+     * not this one any more, so the stored prices are cleared exactly as for the dropdown.
+     */
+    $(document).on('change input', '.shipping-desk-manual-dimension', function () {
+        resetRates($(this).closest('tr'), 'Box changed. Get rates to refresh quotes.');
     });
 
     $(document).on('change', '.shipping-desk-total-weight', function () {
@@ -892,6 +965,10 @@
         if (inputs.box_key) {
             $row.find('.shipping-desk-box-select').val(String(inputs.box_key));
         }
+        // A Manual row brings its panel and its dimensions back: the record already carries
+        // the box it was priced with, so a reload looks like the moment of quoting.
+        toggleManualDimensions($row);
+        fillManualDimensions($row, inputs.box);
         if (typeof inputs.weight !== 'undefined' && inputs.weight !== null && inputs.weight !== '') {
             $row.find('.shipping-desk-total-weight').val(parseFloat(inputs.weight).toFixed(2));
         }
@@ -942,6 +1019,12 @@
             hydrateRow($(this));
         });
 
+        // The browser can restore a select's value on a refresh (bfcache), which would leave
+        // "Manual…" chosen with its inputs still hidden. Re-derive the panel once, on load.
+        $('.shipping-desk-box-select').each(function () {
+            toggleManualDimensions($(this).closest('tr'));
+        });
+
         // Every row can say what its Insurance value costs, whether or not it has quotes.
         $('.shipping-desk-table tbody tr').each(function () {
             refreshLiabilityEstimate($(this));
@@ -955,7 +1038,7 @@
         var nonce = $row.data('nonce');
         var box = getBoxData($row);
         if (!box) {
-            def.reject({ orderId: orderId, message: 'Please select a box.' });
+            def.reject({ orderId: orderId, message: getBoxError($row) });
             return def.promise();
         }
         var totalWeight = parseFloat($row.find('.shipping-desk-total-weight').val());
@@ -1202,14 +1285,13 @@
 
     function getPurchaseError($row) {
         if (!$row.data('selected-rate')) return 'Please get rates and select a rate first.';
-        if (!getBoxData($row)) return 'Please select a box.';
-        return '';
+        return getBoxError($row);
     }
 
     function handlePurchaseSuccess($row, $btn) {
         $row.attr('data-has-label', '1').attr('data-label-refunded', '0');
         $row.removeData('selected-rate');
-        $row.find('.shipping-desk-box-select, .shipping-desk-total-weight, .shipping-desk-liability-amount, .shipping-desk-signature-confirmation, .shipping-desk-rate-choice, .shipping-desk-service-select').prop('disabled', true);
+        $row.find('.shipping-desk-box-select, .shipping-desk-manual-dimension, .shipping-desk-total-weight, .shipping-desk-liability-amount, .shipping-desk-signature-confirmation, .shipping-desk-rate-choice, .shipping-desk-service-select').prop('disabled', true);
 
         var $actions = $btn.closest('td');
         $actions.empty();
@@ -1260,6 +1342,9 @@
             // cannot name them. JSON for the same reason as orders_json below.
             rate: JSON.stringify(selectedRate),
             vas: vasFields,
+            // The dropdown value as well as the box: it lets the server tell a Manual box
+            // (whose dimensions must be present) from a saved one.
+            box_key: $row.find('.shipping-desk-box-select').val() || '',
             total_weight: totalWeight > 0 ? totalWeight : null
         });
         request.done(function (resp) {
@@ -1472,7 +1557,7 @@
             $selected.each(function () {
                 var $row = $(this).closest('tr');
                 if (!getBoxData($row)) {
-                    rateErrors.push('Order #' + $row.data('order-id') + ': select a box first.');
+                    rateErrors.push('Order #' + $row.data('order-id') + ': ' + getBoxError($row));
                 }
             });
             if (rateErrors.length) {
@@ -1587,6 +1672,7 @@
                 rate:         selectedRate || null,
                 vas:          vasFields,
                 box:          getBoxData($row),
+                box_key:      $row.find('.shipping-desk-box-select').val() || '',
                 total_weight: parseFloat($row.find('.shipping-desk-total-weight').val()) || 0
             });
         });

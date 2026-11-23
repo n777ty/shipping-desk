@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
 WC requires at least: 7.0
-Stable tag: 1.7.0
+Stable tag: 1.8.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,11 @@ Yes. The plugin declares HPOS compatibility and reads and writes order data thro
 3. Printable label options, including PrintNode.
 
 == Changelog ==
+
+= 1.8.0 =
+* New: an option to enter a one-off box by hand. The Box dropdown on the orders screen now ends with "Manual...", which reveals Length, Width and Height fields for that order only; the shipment is rated and labelled on those dimensions, and nothing is added to Box Settings. Leave a dimension blank and Get Rates and Buy Label say so instead of quoting an incomplete parcel.
+* Note: for a manual box the Weight field is the whole total - there is no box weight to add, so the item weight is shown and can be typed over. Saved box presets are unchanged and still add their own weight.
+* Changed: the Box column is a little wider (13%, was 9.5%) and Services a little narrower (12%, was 14%) to fit the three fields. Nothing else moves on a normal screen.
 
 = 1.7.0 =
 * New: choose what is printed in the carrier's reference field on the label - the order number (default), the customer's ship-to name, or a fixed piece of your own text (up to 30 characters). One setting covers browser and server printing and every provider, and it travels with your settings export/import.

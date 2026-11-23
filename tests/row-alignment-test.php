@@ -154,6 +154,18 @@ row_same(
 	'no single-class control rule is left to be silently outranked'
 );
 
+// The manual dimension inputs belong to the Box column and are revealed only on demand, so
+// they need a rule of their own - but one that still names the element and the attribute and
+// is scoped to the screen, exactly like the boxes and the weight field beside them.
+row_check(
+	false !== strpos( $css, '.shipping-desk-screen input[type="number"].shipping-desk-manual-dimension' ),
+	'the manual dimension inputs are named with the screen scope and the element, so core cannot outrank them'
+);
+row_check(
+	false !== strpos( $css, '.shipping-desk-box-column .shipping-desk-manual-dimensions.is-visible' ),
+	'and the panel that holds them is revealed by an explicit class'
+);
+
 echo "\n[the columns still line up]\n";
 
 $top = row_css_rule( $css, ".shipping-desk-table .shipping-desk-box-column,\n.shipping-desk-table .shipping-desk-services-column" );

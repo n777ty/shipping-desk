@@ -58,7 +58,7 @@ that caused it.
 
 ## Development
 
-No Composer, no PHPUnit: twenty-three standalone checks that run anywhere PHP runs.
+No Composer, no PHPUnit: twenty-four standalone checks that run anywhere PHP runs.
 
 ```bash
 php tests/address-apply-test.php
@@ -72,6 +72,7 @@ php tests/helpers-test.php
 php tests/label-actions-test.php
 php tests/input-style-test.php
 php tests/lookup-test.php
+php tests/manual-box-test.php
 php tests/orders-screen-test.php
 php tests/rate-column-test.php
 php tests/purchase-lock-test.php
